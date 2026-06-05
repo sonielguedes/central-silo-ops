@@ -96,14 +96,23 @@ export const CompanyService = new (class extends BaseService<Company> {
   }
 
   private withGeneratedUrls<T extends Partial<Company>>(item: T): T {
+    const apiPort = item.apiPort ? Number(item.apiPort) : item.apiPort;
+    const mqttPort = item.mqttPort ? Number(item.mqttPort) : item.mqttPort;
+    const domain = item.domain
+      ? item.domain.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split('/')[0].split(':')[0]
+      : item.domain;
+
     return {
       ...item,
-      apiBaseUrl: item.apiPort ? `https://api.siloops.com.br:${item.apiPort}` : item.apiBaseUrl,
-      mqttUrl: item.mqttPort ? `mqtt.siloops.com.br:${item.mqttPort}` : item.mqttUrl,
+      domain,
+      apiPort,
+      mqttPort,
+      apiBaseUrl: apiPort ? `https://api.siloops.com.br:${apiPort}` : item.apiBaseUrl,
+      mqttUrl: mqttPort ? `mqtt.siloops.com.br:${mqttPort}` : item.mqttUrl,
     };
   }
 
-  private async assertUniqueInstanceConfig(item: Partial<Company>, currentId?: string) {
+  async assertUniqueInstanceConfig(item: Partial<Company>, currentId?: string) {
     const all = await this.getAllGlobal();
     const active = all.filter(c => c.id !== currentId && c.entityStatus !== 'ARQUIVADO');
 
@@ -129,6 +138,18 @@ export const CompanyService = new (class extends BaseService<Company> {
     }
   }
 
+  private async assertUniquePorts(item: Partial<Company>, currentId?: string) {
+    const all = await this.getAllGlobal();
+    const active = all.filter(c => c.id !== currentId && c.entityStatus !== 'ARQUIVADO');
+    const apiPort = item.apiPort ? Number(item.apiPort) : undefined;
+    const mqttPort = item.mqttPort ? Number(item.mqttPort) : undefined;
+
+    if (!apiPort || apiPort < 1 || apiPort > 65535) throw new Error('Porta API invalida.');
+    if (!mqttPort || mqttPort < 1 || mqttPort > 65535) throw new Error('Porta MQTT invalida.');
+    if (active.some(c => Number(c.apiPort) === apiPort)) throw new Error('Porta API já está em uso por outra empresa.');
+    if (active.some(c => Number(c.mqttPort) === mqttPort)) throw new Error('Porta MQTT já está em uso por outra empresa.');
+  }
+
   private async syncCompanyStorage(company: Company) {
     if (typeof window === 'undefined') return;
 
@@ -150,7 +171,7 @@ export const CompanyService = new (class extends BaseService<Company> {
       companyToken: await this.getUniqueCompanyToken(undefined, item.companyToken),
     };
 
-    await this.assertUniqueInstanceConfig(itemWithToken);
+    await this.assertUniquePorts(itemWithToken);
     await this.assertUniqueCompanyToken(itemWithToken);
     const created = await super.create(this.withGeneratedUrls(itemWithToken));
     try {
@@ -171,13 +192,22 @@ export const CompanyService = new (class extends BaseService<Company> {
       companyToken: await this.getUniqueCompanyToken(id, updateData.companyToken || current.companyToken),
     });
 
-    await this.assertUniqueInstanceConfig(nextData, id);
+    await this.assertUniquePorts({ ...current, ...nextData }, id);
     await this.assertUniqueCompanyToken(nextData, id);
     await this.syncCompanyStorage({ ...current, ...nextData });
     return super.update(id, nextData);
   }
 
   async regenerateCompanyToken(id: string): Promise<Company | undefined> {
+    const current = (await this.getAllGlobal()).find(c => c.id === id);
+    if (!current) throw new Error('Registro nao encontrado');
+
+    if (typeof window !== 'undefined') {
+      const persisted = await this.persistCompanyTokenOnServer(current, true);
+      await super.update(id, persisted);
+      return persisted;
+    }
+
     const companyToken = await this.getUniqueCompanyToken(id);
     return this.update(id, { companyToken });
   }
@@ -189,6 +219,13 @@ export const CompanyService = new (class extends BaseService<Company> {
     if (!current) throw new Error('Registro nao encontrado');
     if (current.companyToken) return current;
     if (!Number(current.apiPort)) throw new Error('apiPort is required');
+    await this.assertUniquePorts(current, id);
+
+    if (typeof window !== 'undefined') {
+      const persisted = await this.persistCompanyTokenOnServer(current, false);
+      await super.update(id, persisted);
+      return persisted;
+    }
 
     const companyToken = await this.getUniqueCompanyToken(id);
     return this.update(id, {
@@ -197,6 +234,33 @@ export const CompanyService = new (class extends BaseService<Company> {
       mqttPort: current.mqttPort ? Number(current.mqttPort) : current.mqttPort,
       companyToken,
     });
+  }
+
+  private async persistCompanyTokenOnServer(company: Company, regenerate: boolean): Promise<Company> {
+    const response = await fetch('/api/admin/companies/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        regenerate,
+        company: {
+          ...company,
+          tenantId: company.tenantId || company.id,
+          apiPort: Number(company.apiPort),
+          mqttPort: Number(company.mqttPort),
+          status: company.status || 'ATIVO',
+          apiBaseUrl: company.apiPort ? `https://api.siloops.com.br:${Number(company.apiPort)}` : company.apiBaseUrl,
+          mqttUrl: company.mqttPort ? `mqtt.siloops.com.br:${Number(company.mqttPort)}` : company.mqttUrl,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ error: 'Falha ao persistir token no servidor.' }));
+      throw new Error(body.error || 'Falha ao persistir token no servidor.');
+    }
+
+    const body = await response.json() as { company: Company };
+    return body.company;
   }
 })('companies', INITIAL_COMPANIES);
 
@@ -264,10 +328,25 @@ export const EquipmentService = new (class extends BaseService<Equipment> {
   private async syncMobileStorage(equipment: Equipment): Promise<void> {
     if (typeof window === 'undefined') return;
 
+    const payload = {
+      ...equipment,
+      equipmentId: equipment.id,
+      fleetCode: equipment.code,
+      name: `${equipment.brand} ${equipment.code}`,
+      type: equipment.typeId,
+      tenantId: equipment.tenantId,
+      status: equipment.status,
+      mobileEnabled: equipment.mobileEnabled,
+      mobileToken: equipment.mobileToken,
+    };
+
     const response = await fetch('/api/mobile/equipment', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(equipment),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Silo-Tenant': equipment.tenantId,
+      },
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
