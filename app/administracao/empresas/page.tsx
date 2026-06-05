@@ -52,6 +52,7 @@ function EmpresasPage() {
     handleSubmit,
     reset,
     watch,
+    getValues,
     formState: { errors, isSubmitting }
   } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
@@ -59,8 +60,10 @@ function EmpresasPage() {
 
   const apiPort = watch('apiPort');
   const mqttPort = watch('mqttPort');
-  const generatedApiBaseUrl = apiPort ? `https://api.siloops.com.br:${apiPort}` : 'https://api.siloops.com.br:{portaApi}';
-  const generatedMqttUrl = mqttPort ? `mqtt.siloops.com.br:${mqttPort}` : 'mqtt.siloops.com.br:{portaMqtt}';
+  const normalizedApiPort = Number(apiPort || selectedItem?.apiPort || 0);
+  const normalizedMqttPort = Number(mqttPort || selectedItem?.mqttPort || 0);
+  const generatedApiBaseUrl = normalizedApiPort ? `https://api.siloops.com.br:${normalizedApiPort}` : 'https://api.siloops.com.br:{portaApi}';
+  const generatedMqttUrl = normalizedMqttPort ? `mqtt.siloops.com.br:${normalizedMqttPort}` : 'mqtt.siloops.com.br:{portaMqtt}';
   const canRegenerateToken = accessGroup?.id === 'ag-admin' || checkPermission('ALL', 'administrar');
 
   const maskCompanyToken = (token?: string) => {
@@ -191,7 +194,26 @@ function EmpresasPage() {
     if (!selectedItem) return;
 
     try {
-      const updated = await CompanyService.generateMissingCompanyToken(selectedItem.id);
+      const formValues = getValues();
+      const apiPortValue = Number(formValues.apiPort || selectedItem.apiPort);
+      const mqttPortValue = Number(formValues.mqttPort || selectedItem.mqttPort);
+
+      if (!apiPortValue) {
+        alert('Porta API obrigatoria para gerar token.');
+        return;
+      }
+
+      const updated = await CompanyService.generateMissingCompanyToken({
+        ...selectedItem,
+        ...formValues,
+        id: selectedItem.id,
+        tenantId: selectedItem.tenantId,
+        apiPort: apiPortValue,
+        mqttPort: mqttPortValue,
+        apiBaseUrl: `https://api.siloops.com.br:${apiPortValue}`,
+        mqttUrl: mqttPortValue ? `mqtt.siloops.com.br:${mqttPortValue}` : selectedItem.mqttUrl,
+        companyToken: selectedItem.companyToken || formValues.companyToken,
+      });
       if (updated) {
         setSelectedItem(updated);
         upsertCompanyInView(updated);

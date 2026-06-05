@@ -182,13 +182,21 @@ export const CompanyService = new (class extends BaseService<Company> {
     return this.update(id, { companyToken });
   }
 
-  async generateMissingCompanyToken(id: string): Promise<Company | undefined> {
-    const current = (await this.getAllGlobal()).find(c => c.id === id);
+  async generateMissingCompanyToken(companyOrId: string | Company): Promise<Company | undefined> {
+    const incoming = typeof companyOrId === 'string' ? undefined : companyOrId;
+    const id = typeof companyOrId === 'string' ? companyOrId : companyOrId.id;
+    const current = incoming || (await this.getAllGlobal()).find(c => c.id === id);
     if (!current) throw new Error('Registro nao encontrado');
     if (current.companyToken) return current;
+    if (!Number(current.apiPort)) throw new Error('apiPort is required');
 
     const companyToken = await this.getUniqueCompanyToken(id);
-    return this.update(id, { companyToken });
+    return this.update(id, {
+      ...current,
+      apiPort: Number(current.apiPort),
+      mqttPort: current.mqttPort ? Number(current.mqttPort) : current.mqttPort,
+      companyToken,
+    });
   }
 })('companies', INITIAL_COMPANIES);
 
