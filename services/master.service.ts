@@ -131,6 +131,37 @@ export const ImplementService = new BaseService<Implement>('implements', INITIAL
 export const FleetActivityService = new BaseService<FleetActivity>('fleet-activities', INITIAL_FLEET_ACTIVITIES);
 
 export const EquipmentService = new (class extends BaseService<Equipment> {
+  async create(item: Omit<Equipment, keyof import('@/lib/types').BaseEntity>): Promise<Equipment> {
+    const all = await this.getAll(true);
+    if (all.some(e => e.code === item.code && e.entityStatus !== 'ARQUIVADO')) {
+      throw new Error('Código da frota já cadastrado e ativo.');
+    }
+
+    // Generate Mobile Token if enabled
+    if (item.mobileEnabled) {
+      (item as any).mobileToken = Math.random().toString(36).substring(2, 15).toUpperCase();
+    }
+
+    return super.create(item);
+  }
+
+  async update(id: string, updateData: Partial<Equipment>): Promise<Equipment | undefined> {
+    const all = await this.getAll(true);
+    if (updateData.code && all.some(e => e.code === updateData.code && e.id !== id && e.entityStatus !== 'ARQUIVADO')) {
+      throw new Error('Código da frota já cadastrado para outro equipamento ativo.');
+    }
+
+    // Handle token generation if it was just enabled
+    if (updateData.mobileEnabled) {
+      const current = await this.getById(id);
+      if (current && !current.mobileToken) {
+        updateData.mobileToken = Math.random().toString(36).substring(2, 15).toUpperCase();
+      }
+    }
+
+    return super.update(id, updateData);
+  }
+
   async archive(id: string): Promise<boolean> {
     const activeOperations = await OperationService.getAll();
     if (activeOperations.some(op => op.equipmentId === id && ['EM_CURSO', 'PAUSADA'].includes(op.status))) {

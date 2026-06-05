@@ -118,7 +118,7 @@ export interface StopReason extends BaseEntity {
   isActive: boolean;
 }
 
-export type EquipmentStatus = 'ativo' | 'inativo' | 'trabalhando' | 'deslocando' | 'parada' | 'alarme' | 'manutencao' | 'offline';
+export type EquipmentStatus = 'ativo' | 'inativo' | 'trabalhando' | 'deslocando' | 'parada' | 'alarme' | 'manutencao' | 'offline' | 'ATIVO' | 'INATIVO' | 'MANUTENCAO';
 
 export interface Equipment extends BaseEntity {
   code: string;
@@ -134,6 +134,15 @@ export interface Equipment extends BaseEntity {
   lastSignal: string;
   observations?: string;
   icon?: string;
+  // APK Integration Fields
+  mobileEnabled: boolean;
+  mobileToken?: string;
+  lastHeartbeat?: string;
+  lastLocation?: {
+    latitude: number;
+    longitude: number;
+  };
+  activeShiftId?: string;
 }
 
 // --- Fleet Module Masters ---

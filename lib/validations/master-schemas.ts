@@ -141,8 +141,9 @@ export const equipmentSchema = z.object({
   brand: z.string().min(1, 'Fabricante é obrigatório'),
   plateOrSerial: z.string().optional(),
   hourmeter: z.coerce.number().min(0, 'Horímetro não pode ser negativo'),
-  status: z.enum(['ativo', 'inativo', 'trabalhando', 'deslocando', 'parada', 'alarme', 'manutencao', 'offline']),
+  status: z.enum(['ativo', 'inativo', 'trabalhando', 'deslocando', 'parada', 'alarme', 'manutencao', 'offline', 'ATIVO', 'INATIVO', 'MANUTENCAO']),
   observations: z.string().optional(),
+  mobileEnabled: z.boolean().default(false),
 });
 
 export const operatorSchema = z.object({

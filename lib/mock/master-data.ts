@@ -215,6 +215,8 @@ export const INITIAL_EQUIPMENT_TYPES: EquipmentType[] = [
   { ...DEFAULT_AUDIT, id: 'et-2', name: 'TRATOR', category: 'MOTORIZADO', icon: 'Tractor' },
   { ...DEFAULT_AUDIT, id: 'et-3', name: 'CAMINHÃO', category: 'MOTORIZADO', icon: 'Truck' },
   { ...DEFAULT_AUDIT, id: 'et-4', name: 'TRANSBORDO', category: 'IMPLEMENTO', icon: 'Zap' },
+  { ...DEFAULT_AUDIT, id: 'et-5', name: 'CARREGADEIRA', category: 'MOTORIZADO', icon: 'Tractor' },
+  { ...DEFAULT_AUDIT, id: 'et-6', name: 'IMPLEMENTO', category: 'IMPLEMENTO', icon: 'Zap' },
 ];
 
 export const INITIAL_EQUIPMENT_MODELS: EquipmentModel[] = [
@@ -354,16 +356,16 @@ export const INITIAL_IMPLEMENTS: Implement[] = [
 export const INITIAL_FLEET_ACTIVITIES: FleetActivity[] = [];
 
 export const INITIAL_EQUIPMENT: Equipment[] = [
-  { ...DEFAULT_AUDIT, id: 'e-1', code: 'COL-101', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-1', brand: 'John Deere', status: 'trabalhando', hourmeter: 4890, lastSignal: 'Agora' },
-  { ...DEFAULT_AUDIT, id: 'e-2', code: 'COL-102', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-1', brand: 'John Deere', status: 'trabalhando', hourmeter: 3200, lastSignal: 'Agora' },
-  { ...DEFAULT_AUDIT, id: 'e-3', code: 'COL-201', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-2', brand: 'John Deere', status: 'parada', hourmeter: 1500, lastSignal: '5 min' },
-  { ...DEFAULT_AUDIT, id: 'e-4', code: 'TR-301', typeId: 'et-2', modelId: 'em-3', groupId: 'eg-1', brand: 'Case IH', status: 'deslocando', hourmeter: 2100, lastSignal: 'Agora' },
-  { ...DEFAULT_AUDIT, id: 'e-5', code: 'TR-302', typeId: 'et-2', modelId: 'em-3', groupId: 'eg-2', brand: 'Case IH', status: 'trabalhando', hourmeter: 1800, lastSignal: 'Agora' },
-  { ...DEFAULT_AUDIT, id: 'e-6', code: 'CAM-401', typeId: 'et-3', modelId: 'em-2', groupId: 'eg-3', brand: 'Scania', status: 'deslocando', hourmeter: 1240, lastSignal: '1 min' },
-  { ...DEFAULT_AUDIT, id: 'e-7', code: 'CAM-402', typeId: 'et-3', modelId: 'em-2', groupId: 'eg-3', brand: 'Scania', status: 'parada', hourmeter: 980, lastSignal: '12 min' },
-  { ...DEFAULT_AUDIT, id: 'e-8', code: 'COL-103', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-1', brand: 'John Deere', status: 'alarme', hourmeter: 4500, lastSignal: 'Agora' },
-  { ...DEFAULT_AUDIT, id: 'e-9', code: 'TR-303', typeId: 'et-2', modelId: 'em-3', groupId: 'eg-1', brand: 'Case IH', status: 'manutencao', hourmeter: 5100, lastSignal: '45 min' },
-  { ...DEFAULT_AUDIT, id: 'e-10', code: 'CAM-403', typeId: 'et-3', modelId: 'em-2', groupId: 'eg-3', brand: 'Scania', status: 'offline', hourmeter: 2500, lastSignal: '2h' },
+  { ...DEFAULT_AUDIT, id: 'e-1', code: 'COL-101', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-1', brand: 'John Deere', status: 'trabalhando', hourmeter: 4890, lastSignal: 'Agora', mobileEnabled: true, mobileToken: 'TK-COL101' },
+  { ...DEFAULT_AUDIT, id: 'e-2', code: 'COL-102', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-1', brand: 'John Deere', status: 'trabalhando', hourmeter: 3200, lastSignal: 'Agora', mobileEnabled: true, mobileToken: 'TK-COL102' },
+  { ...DEFAULT_AUDIT, id: 'e-3', code: 'COL-201', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-2', brand: 'John Deere', status: 'parada', hourmeter: 1500, lastSignal: '5 min', mobileEnabled: false },
+  { ...DEFAULT_AUDIT, id: 'e-4', code: 'TR-301', typeId: 'et-2', modelId: 'em-3', groupId: 'eg-1', brand: 'Case IH', status: 'deslocando', hourmeter: 2100, lastSignal: 'Agora', mobileEnabled: true, mobileToken: 'TK-TR301' },
+  { ...DEFAULT_AUDIT, id: 'e-5', code: 'TR-302', typeId: 'et-2', modelId: 'em-3', groupId: 'eg-2', brand: 'Case IH', status: 'trabalhando', hourmeter: 1800, lastSignal: 'Agora', mobileEnabled: true, mobileToken: 'TK-TR302' },
+  { ...DEFAULT_AUDIT, id: 'e-6', code: 'CAM-401', typeId: 'et-3', modelId: 'em-2', groupId: 'eg-3', brand: 'Scania', status: 'deslocando', hourmeter: 1240, lastSignal: '1 min', mobileEnabled: true, mobileToken: 'TK-CAM401' },
+  { ...DEFAULT_AUDIT, id: 'e-7', code: 'CAM-402', typeId: 'et-3', modelId: 'em-2', groupId: 'eg-3', brand: 'Scania', status: 'parada', hourmeter: 980, lastSignal: '12 min', mobileEnabled: false },
+  { ...DEFAULT_AUDIT, id: 'e-8', code: 'COL-103', typeId: 'et-1', modelId: 'em-1', groupId: 'eg-1', brand: 'John Deere', status: 'alarme', hourmeter: 4500, lastSignal: 'Agora', mobileEnabled: true, mobileToken: 'TK-COL103' },
+  { ...DEFAULT_AUDIT, id: 'e-9', code: 'TR-303', typeId: 'et-2', modelId: 'em-3', groupId: 'eg-1', brand: 'Case IH', status: 'manutencao', hourmeter: 5100, lastSignal: '45 min', mobileEnabled: false },
+  { ...DEFAULT_AUDIT, id: 'e-10', code: 'CAM-403', typeId: 'et-3', modelId: 'em-2', groupId: 'eg-3', brand: 'Scania', status: 'offline', hourmeter: 2500, lastSignal: '2h', mobileEnabled: false },
 ];
 
 export const INITIAL_OPERATORS: Operator[] = [

@@ -72,6 +72,7 @@ function FleetPage() {
           status: selectedItem.status,
           hourmeter: selectedItem.hourmeter,
           observations: selectedItem.observations || '',
+          mobileEnabled: selectedItem.mobileEnabled || false,
         });
       } else {
         reset({
@@ -85,6 +86,7 @@ function FleetPage() {
           status: 'ativo',
           hourmeter: 0,
           observations: '',
+          mobileEnabled: false,
         });
       }
     } else {
@@ -341,8 +343,49 @@ function FleetPage() {
                     >
                       <option value="ativo">ATIVO</option>
                       <option value="inativo">INATIVO</option>
+                      <option value="manutencao">MANUTENÇÃO</option>
                     </select>
                   </FormField>
+
+                  {/* APK Integration Section */}
+                  <div className="pt-6 border-t border-[#2d3647] space-y-6">
+                    <div className="flex items-center justify-between bg-[#1a1f3a]/40 p-4 rounded-2xl border border-[#2d3647]">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black uppercase text-white tracking-widest">Comunicação Mobile</span>
+                        <span className="text-[10px] text-muted-foreground font-bold mt-1 uppercase">Habilitar sincronização com APK</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        {...register('mobileEnabled')}
+                        className="w-5 h-5 rounded border-[#2d3647] bg-[#1a1f3a] text-primary focus:ring-primary"
+                      />
+                    </div>
+
+                    {selectedItem?.mobileEnabled && (
+                      <div className="space-y-4">
+                        <div className="bg-[#050812] p-4 rounded-2xl border border-[#2d3647] border-dashed">
+                          <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Token de Acesso Mobile</span>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-sm font-mono font-black text-primary tracking-widest">{selectedItem.mobileToken || 'PENDENTE'}</span>
+                            <button type="button" className="text-[10px] font-black text-white/40 uppercase hover:text-white transition-colors">Copiar</button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-[#1a1f3a]/20 p-3 rounded-xl border border-[#2d3647]">
+                            <span className="text-[9px] text-muted-foreground font-black uppercase block mb-1">Último Heartbeat</span>
+                            <span className="text-[10px] text-white font-bold uppercase">{selectedItem.lastHeartbeat || 'Sem sinal'}</span>
+                          </div>
+                          <div className="bg-[#1a1f3a]/20 p-3 rounded-xl border border-[#2d3647]">
+                            <span className="text-[9px] text-muted-foreground font-black uppercase block mb-1">Localização</span>
+                            <span className="text-[10px] text-white font-bold uppercase">
+                              {selectedItem.lastLocation ? `${selectedItem.lastLocation.latitude.toFixed(4)}, ${selectedItem.lastLocation.longitude.toFixed(4)}` : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   <FormField label="Notas Técnicas" error={errors.observations?.message}>
                     <textarea
