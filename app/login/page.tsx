@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@silo.com');
-  const [password, setPassword] = useState('******');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await login(email);
+      await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Falha na autenticação');

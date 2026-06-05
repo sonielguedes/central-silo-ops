@@ -10,7 +10,7 @@ interface AuthContextType {
   tenant: Company | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string) => Promise<void>;
+  login: (email: string, password?: string) => Promise<void>;
   logout: () => void;
   checkPermission: (module: string, action: string) => boolean;
 }
@@ -56,15 +56,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string) => {
+  const login = async (email: string, password?: string) => {
     setIsLoading(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       // Mock login: find user by email across all tenants for this demo
       const allUsers = await UserService.getAll(true);
-      const foundUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+      const foundUser = allUsers.find(u => u.email.toLowerCase() === normalizedEmail);
 
       if (!foundUser) throw new Error('Usuário não encontrado');
       if (foundUser.status === 'BLOQUEADO') throw new Error('Usuário bloqueado');
+
+      // Password validation for pilot demo
+      if (foundUser.password && foundUser.password !== password) {
+        throw new Error('Senha inválida');
+      }
 
       // Audit Login
       await AuditService.create({
