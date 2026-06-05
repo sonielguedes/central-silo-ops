@@ -1,34 +1,14 @@
-version: '3.8'
-
 services:
   silo-central:
     build: .
     container_name: silo-central-web
-    restart: always
+    restart: unless-stopped
     ports:
       - "3000:3000"
     env_file:
       - .env.production
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
-  nginx:
-    image: nginx:alpine
-    container_name: silo-nginx
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/ssl:ro
-    depends_on:
-      - silo-central
