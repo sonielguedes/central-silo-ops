@@ -18,7 +18,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'apiPort is required' }, { status: 400 });
     }
 
-    const saved = ServerStorage.upsertCompany(company);
+    const saved = ServerStorage.upsertCompany({
+      ...company,
+      tenantId: company.tenantId || company.id,
+      apiPort: Number(company.apiPort),
+      mqttPort: Number(company.mqttPort || 0),
+      status: company.status || 'ATIVO',
+      apiBaseUrl: `https://api.siloops.com.br:${Number(company.apiPort)}`,
+      mqttUrl: company.mqttPort ? `mqtt.siloops.com.br:${Number(company.mqttPort)}` : company.mqttUrl,
+    });
+
+    console.info('[mobile/company] company synced', {
+      tenantId: saved.tenantId,
+      code: saved.code,
+      apiPort: saved.apiPort,
+      mqttPort: saved.mqttPort,
+      status: saved.status,
+      companyToken: saved.companyToken ? `${saved.companyToken.slice(0, 4)}...${saved.companyToken.slice(-4)}` : 'missing',
+    });
+
     return NextResponse.json({
       companyId: saved.id,
       tenantId: saved.tenantId,

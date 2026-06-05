@@ -59,16 +59,24 @@ export class ServerStorage {
     return Number.isInteger(parsed) ? parsed : undefined;
   }
 
+  static resolveApiPort(headers?: Headers): number | undefined {
+    const forwardedPort = Number(headers?.get('x-forwarded-port'));
+    if (Number.isInteger(forwardedPort) && forwardedPort > 0) return forwardedPort;
+
+    return (
+      this.getPortFromHost(headers?.get('x-forwarded-host') || null) ||
+      this.getPortFromHost(headers?.get('host') || null)
+    );
+  }
+
   static resolveTenantId(headers?: Headers): string {
     const tenantFromProxy = headers?.get('x-silo-tenant')?.trim();
     if (tenantFromProxy) return tenantFromProxy;
 
-    const apiPort =
-      this.getPortFromHost(headers?.get('x-forwarded-host') || null) ||
-      this.getPortFromHost(headers?.get('host') || null);
+    const apiPort = this.resolveApiPort(headers);
 
     if (apiPort) {
-      const company = this.loadCompanies().find(c => c.apiPort === apiPort);
+      const company = this.loadCompanies().find(c => Number(c.apiPort) === apiPort);
       if (company) return company.id;
     }
 
@@ -94,6 +102,18 @@ export class ServerStorage {
     return this.resolveTenantId(headers);
   }
 
+  static getCompanyByTenantId(tenantId: string): Company | undefined {
+    return this.loadCompanies().find(c => c.id === tenantId || c.tenantId === tenantId);
+  }
+
+  static getCompanyByApiPort(apiPort: number): Company | undefined {
+    return this.loadCompanies().find(c => Number(c.apiPort) === apiPort);
+  }
+
+  static getCompanies(): Company[] {
+    return this.loadCompanies();
+  }
+
   private static isTenantMobileActive(tenantId: string): boolean {
     if (tenantId === DEFAULT_TENANT_ID && TENANT_STATUS) return TENANT_STATUS === 'ATIVO';
 
@@ -105,15 +125,24 @@ export class ServerStorage {
     const all = this.loadCompanies();
     const companiesFile = this.getCompaniesFile();
     const timestamp = new Date().toISOString();
-    const index = all.findIndex(c => c.id === input.id || c.code.toLowerCase() === input.code.toLowerCase());
+    const index = all.findIndex(c =>
+      c.id === input.id ||
+      c.tenantId === input.tenantId ||
+      c.code.toLowerCase() === input.code.toLowerCase()
+    );
     const current = index >= 0 ? all[index] : undefined;
+    const apiPort = Number(input.apiPort || current?.apiPort || 0);
+    const mqttPort = Number(input.mqttPort || current?.mqttPort || 0);
     const company: Company = {
       ...current,
       ...input,
       tenantId: input.tenantId || current?.tenantId || input.id,
       companyToken: input.companyToken || current?.companyToken,
-      apiBaseUrl: input.apiPort ? `https://api.siloops.com.br:${input.apiPort}` : input.apiBaseUrl || current?.apiBaseUrl,
-      mqttUrl: input.mqttPort ? `mqtt.siloops.com.br:${input.mqttPort}` : input.mqttUrl || current?.mqttUrl,
+      apiPort,
+      mqttPort,
+      apiBaseUrl: apiPort ? `https://api.siloops.com.br:${apiPort}` : input.apiBaseUrl || current?.apiBaseUrl,
+      mqttUrl: mqttPort ? `mqtt.siloops.com.br:${mqttPort}` : input.mqttUrl || current?.mqttUrl,
+      status: input.status || current?.status || 'ATIVO',
       updatedAt: timestamp,
     };
 

@@ -203,6 +203,11 @@ function EmpresasPage() {
         return;
       }
 
+      if (!mqttPortValue) {
+        alert('Porta MQTT obrigatoria para gerar token.');
+        return;
+      }
+
       const updated = await CompanyService.generateMissingCompanyToken({
         ...selectedItem,
         ...formValues,

@@ -1,11 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 
+const maskToken = (token?: string) => {
+  if (!token) return 'missing';
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
+};
+
 export async function GET(req: NextRequest) {
   const fleetCode = req.nextUrl.searchParams.get('fleetCode');
-  const companyToken = req.nextUrl.searchParams.get('companyToken') || req.headers.get('x-company-token') || undefined;
+  const companyToken = (req.nextUrl.searchParams.get('companyToken') || req.headers.get('x-company-token') || undefined)?.trim();
+  const apiPort = ServerStorage.resolveApiPort(req.headers);
   const tenantId = ServerStorage.resolveTenantId(req.headers);
   const requestedTenantId = req.nextUrl.searchParams.get('tenantId') || req.headers.get('x-tenant-id');
+  const expectedCompany = ServerStorage.getCompanyByTenantId(tenantId);
+
+  console.info('[mobile/equipment/lookup] company validation', {
+    apiPort,
+    tenantId,
+    companyFound: !!expectedCompany,
+    expectedCompanyToken: maskToken(expectedCompany?.companyToken),
+    receivedCompanyToken: maskToken(companyToken),
+  });
 
   if (!fleetCode) {
     return NextResponse.json({ error: 'fleetCode is required' }, { status: 400 });
