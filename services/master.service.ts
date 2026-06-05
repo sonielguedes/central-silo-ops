@@ -9,6 +9,7 @@ import {
   StopReason,
   Supply,
   SyncEvent,
+  MobileSyncEventInput,
   Alert,
   INITIAL_EQUIPMENT,
   INITIAL_OPERATORS,
@@ -67,6 +68,41 @@ export { BaseService };
 export const CompanyService = new (class extends BaseService<Company> {
   async getAllGlobal(): Promise<Company[]> {
     return this.data.filter(c => c.entityStatus !== 'ARQUIVADO');
+  }
+
+  private withGeneratedUrls<T extends Partial<Company>>(item: T): T {
+    return {
+      ...item,
+      apiBaseUrl: item.apiPort ? `https://api.siloops.com.br:${item.apiPort}` : item.apiBaseUrl,
+      mqttUrl: item.mqttPort ? `mqtt.siloops.com.br:${item.mqttPort}` : item.mqttUrl,
+    };
+  }
+
+  private async assertUniqueInstanceConfig(item: Partial<Company>, currentId?: string) {
+    const all = await this.getAllGlobal();
+    const active = all.filter(c => c.id !== currentId && c.entityStatus !== 'ARQUIVADO');
+
+    if (item.code && active.some(c => c.code.toLowerCase() === item.code!.toLowerCase())) {
+      throw new Error('Código interno já cadastrado para outra instância.');
+    }
+
+    if (item.apiPort && active.some(c => c.apiPort === item.apiPort)) {
+      throw new Error('Porta API já cadastrada para outra instância.');
+    }
+
+    if (item.mqttPort && active.some(c => c.mqttPort === item.mqttPort)) {
+      throw new Error('Porta MQTT já cadastrada para outra instância.');
+    }
+  }
+
+  async create(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<Company> {
+    await this.assertUniqueInstanceConfig(item);
+    return super.create(this.withGeneratedUrls(item));
+  }
+
+  async update(id: string, updateData: Partial<Company>): Promise<Company | undefined> {
+    await this.assertUniqueInstanceConfig(updateData, id);
+    return super.update(id, this.withGeneratedUrls(updateData));
   }
 })('companies', INITIAL_COMPANIES);
 
@@ -131,6 +167,21 @@ export const ImplementService = new BaseService<Implement>('implements', INITIAL
 export const FleetActivityService = new BaseService<FleetActivity>('fleet-activities', INITIAL_FLEET_ACTIVITIES);
 
 export const EquipmentService = new (class extends BaseService<Equipment> {
+  private async syncMobileStorage(equipment: Equipment): Promise<void> {
+    if (typeof window === 'undefined') return;
+
+    const response = await fetch('/api/mobile/equipment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(equipment),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ error: 'Falha ao sincronizar storage mobile.' }));
+      throw new Error(body.error || 'Falha ao sincronizar storage mobile.');
+    }
+  }
+
   async create(item: Omit<Equipment, keyof import('@/lib/types').BaseEntity>): Promise<Equipment> {
     const all = await this.getAll(true);
     if (all.some(e => e.code === item.code && e.entityStatus !== 'ARQUIVADO')) {
@@ -142,7 +193,14 @@ export const EquipmentService = new (class extends BaseService<Equipment> {
       (item as any).mobileToken = Math.random().toString(36).substring(2, 15).toUpperCase();
     }
 
-    return super.create(item);
+    const created = await super.create(item);
+    try {
+      await this.syncMobileStorage(created);
+    } catch (error) {
+      await super.archive(created.id);
+      throw error;
+    }
+    return created;
   }
 
   async update(id: string, updateData: Partial<Equipment>): Promise<Equipment | undefined> {
@@ -159,7 +217,12 @@ export const EquipmentService = new (class extends BaseService<Equipment> {
       }
     }
 
-    return super.update(id, updateData);
+    const current = await this.getById(id);
+    if (!current) throw new Error('Registro nÃ£o encontrado');
+
+    await this.syncMobileStorage({ ...current, ...updateData });
+    const updated = await super.update(id, updateData);
+    return updated;
   }
 
   async archive(id: string): Promise<boolean> {
@@ -211,7 +274,51 @@ export const OperationService = new (class extends BaseService<Operation> {
 })('operations', INITIAL_OPERATIONS);
 
 export const SupplyService = new BaseService<Supply>('supplies', INITIAL_SUPPLIES);
-export const SyncService = new BaseService<SyncEvent>('sync_events', INITIAL_SYNC_EVENTS);
+class MobileEventValidationError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = 'MobileEventValidationError';
+    this.statusCode = statusCode;
+  }
+}
+
+export const SyncService = new (class extends BaseService<SyncEvent> {
+  async create(item: Omit<SyncEvent, keyof import('@/lib/types').BaseEntity>): Promise<SyncEvent> {
+    if (item.origin === 'APK') {
+      return this.createMobileEvent(item as MobileSyncEventInput);
+    }
+
+    return super.create(item);
+  }
+
+  async createMobileEvent(item: MobileSyncEventInput): Promise<SyncEvent> {
+    const fleetCode = item.payload?.fleetCode?.trim();
+    const mobileToken = item.payload?.mobileToken?.trim();
+
+    if (!fleetCode || !mobileToken) {
+      throw new MobileEventValidationError('Payload mobile inválido: fleetCode e mobileToken são obrigatórios.', 400);
+    }
+
+    const equipment = (await EquipmentService.getAll(true)).find(e => e.code === fleetCode);
+
+    if (!equipment) {
+      throw new MobileEventValidationError('Frota não encontrada.', 404);
+    }
+
+    const isActiveEquipment = equipment.entityStatus === 'ATIVO' && ['ATIVO', 'ativo'].includes(equipment.status);
+    if (!isActiveEquipment || !equipment.mobileEnabled) {
+      throw new MobileEventValidationError('Frota inativa ou sem mobileEnabled.', 403);
+    }
+
+    if (!equipment.mobileToken || equipment.mobileToken !== mobileToken) {
+      throw new MobileEventValidationError('mobileToken inválido.', 403);
+    }
+
+    return super.create(item);
+  }
+})('sync_events', INITIAL_SYNC_EVENTS);
 export const AlertService = new BaseService<Alert>('alerts', INITIAL_ALERTS);
 
 // --- P1 Services ---

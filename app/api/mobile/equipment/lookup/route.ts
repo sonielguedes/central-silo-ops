@@ -14,13 +14,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Frota não cadastrada.' }, { status: 404 });
   }
 
-  if (equipment.entityStatus !== 'ATIVO') {
-    return NextResponse.json({ error: 'Frota inativa.' }, { status: 403 });
-  }
-
-  if (!equipment.mobileEnabled) {
-    return NextResponse.json({ error: 'Acesso mobile desabilitado para esta frota.' }, { status: 403 });
-  }
+  const validation = ServerStorage.validateMobileEquipment(equipment, equipment.mobileToken);
+  if (!validation.ok) return NextResponse.json({ error: validation.error }, { status: validation.status });
 
   return NextResponse.json({
     id: equipment.id,
@@ -29,6 +24,6 @@ export async function GET(req: NextRequest) {
     active: equipment.entityStatus === 'ATIVO',
     mobileEnabled: equipment.mobileEnabled,
     mobileToken: equipment.mobileToken,
-    tenantId: equipment.tenantId
+    tenantId: ServerStorage.getTenantId()
   });
 }

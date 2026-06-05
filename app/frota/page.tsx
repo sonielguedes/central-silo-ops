@@ -83,7 +83,7 @@ function FleetPage() {
           profileId: '',
           brand: '',
           plateOrSerial: '',
-          status: 'ativo',
+          status: 'ATIVO',
           hourmeter: 0,
           observations: '',
           mobileEnabled: false,
@@ -341,8 +341,8 @@ function FleetPage() {
                       {...register('status')}
                       className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-2xl p-4 text-sm focus:border-primary outline-none appearance-none text-white font-bold"
                     >
-                      <option value="ativo">ATIVO</option>
-                      <option value="inativo">INATIVO</option>
+                      <option value="ATIVO">ATIVO</option>
+                      <option value="INATIVO">INATIVO</option>
                       <option value="manutencao">MANUTENÇÃO</option>
                     </select>
                   </FormField>

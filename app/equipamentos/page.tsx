@@ -66,6 +66,7 @@ function EquipamentosPage() {
           status: selectedItem.status,
           hourmeter: selectedItem.hourmeter,
           observations: selectedItem.observations || '',
+          mobileEnabled: selectedItem.mobileEnabled || false,
         });
       } else {
         reset({
@@ -74,9 +75,10 @@ function EquipamentosPage() {
           modelId: '',
           brand: '',
           plateOrSerial: '',
-          status: 'offline',
+          status: 'ATIVO',
           hourmeter: 0,
           observations: '',
+          mobileEnabled: false,
         });
       }
     } else {
@@ -367,16 +369,42 @@ function EquipamentosPage() {
                       {...register('status')}
                       className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all appearance-none"
                     >
-                      <option value="ativo">Ativo</option>
-                      <option value="inativo">Inativo</option>
+                      <option value="ATIVO">ATIVO</option>
+                      <option value="INATIVO">INATIVO</option>
+                      <option value="manutencao">MANUTENÇÃO</option>
                       <option value="trabalhando">Trabalhando</option>
                       <option value="deslocando">Deslocando</option>
                       <option value="parada">Parada</option>
                       <option value="alarme">Alarme</option>
-                      <option value="manutencao">Manutenção</option>
                       <option value="offline">Offline</option>
                     </select>
                   </FormField>
+
+                  {/* APK Integration Section */}
+                  <div className="pt-4 border-t border-[#2d3647] space-y-4">
+                    <div className="flex items-center justify-between bg-[#1a1f3a]/40 p-3 rounded-xl border border-[#2d3647]">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black uppercase text-white tracking-widest">Comunicação Mobile</span>
+                        <span className="text-[8px] text-muted-foreground font-bold uppercase">Habilitar APK</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        {...register('mobileEnabled')}
+                        className="w-4 h-4 rounded border-[#2d3647] bg-[#1a1f3a] text-primary focus:ring-primary"
+                      />
+                    </div>
+
+                    {selectedItem?.mobileEnabled && (
+                      <div className="space-y-3">
+                        <div className="bg-[#050812] p-3 rounded-xl border border-[#2d3647] border-dashed">
+                          <span className="text-[8px] text-muted-foreground font-black uppercase tracking-widest">Token Mobile</span>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs font-mono font-black text-primary">{selectedItem.mobileToken || 'PENDENTE'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   <FormField label="Observações" error={errors.observations?.message}>
                     <textarea
