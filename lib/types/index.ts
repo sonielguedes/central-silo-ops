@@ -30,6 +30,10 @@ export interface Company extends BaseEntity {
   corporateName: string;
   cnpj: string;
   domain?: string;
+  apiPort?: number;
+  mqttPort?: number;
+  apiBaseUrl?: string;
+  mqttUrl?: string;
   plan: CompanyPlan;
   status: 'ATIVO' | 'INATIVO';
   observations?: string;
@@ -364,6 +368,16 @@ export interface SyncEvent extends BaseEntity {
   errorMessage?: string;
   attempts: number;
   lastAttempt?: string;
+}
+
+export interface MobileSyncEventPayload {
+  fleetCode: string;
+  mobileToken: string;
+  [key: string]: any;
+}
+
+export interface MobileSyncEventInput extends Omit<SyncEvent, keyof BaseEntity | 'payload'> {
+  payload: MobileSyncEventPayload;
 }
 
 // --- Alerts ---
