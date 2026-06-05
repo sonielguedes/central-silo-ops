@@ -9,7 +9,6 @@ import {
   StopReason,
   Supply,
   SyncEvent,
-  MobileSyncEventInput,
   Alert,
   INITIAL_EQUIPMENT,
   INITIAL_OPERATORS,
@@ -59,6 +58,7 @@ import {
   ChecklistExecution,
   TimelineEvent
 } from '@/lib/mock/master-data';
+import type { MobileSyncEventInput } from '@/lib/types';
 import { BaseService } from './base.service';
 
 // --- Services ---

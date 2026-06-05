@@ -43,6 +43,6 @@
 | 04/06/2024 | v0.1.0-piloto | `lib/types/index.ts`, `lib/validations/master-schemas.ts`, `services/master.service.ts`, `lib/mock/master-data.ts`, `app/frota/page.tsx` | `npm run type-check`, `npm run build` | ✅ SUCESSO | Ajuste no cadastro de equipamentos para integração com APK (Mobile Token e Campos de Telemetria) | **APROVADO** |
 | 05/06/2024 | v0.1.0-piloto | `lib/server-storage.ts`, `app/api/mobile/**/*` | `npm run type-check`, `npm run build` | ✅ SUCESSO | Implementação dos Endpoints Mobile API (Lookup, Batch, Heartbeat, Location, Shift) com persistência server-side. | **APROVADO** |
 | 05/06/2026 | v0.1.0-piloto | `app/administracao/empresas/page.tsx`, `lib/types/index.ts`, `lib/validations/master-schemas.ts`, `services/master.service.ts`, `lib/server-storage.ts`, `docker-compose.yml` | `npm run type-check`, `npm run build` | SUCESSO | Configuracao de portas API/MQTT por instancia, URLs geradas, unicidade de portas/codigo e bloqueio mobile para instancia inativa. | **APROVADO** |
-
+| 05/06/2026 | v0.1.0-piloto | `services/master.service.ts`, `lib/types/index.ts` | `npm run type-check`, `npm run build` | SUCESSO | Correcao da importacao de `MobileSyncEventInput` para `@/lib/types`, mantendo `master-data.ts` restrito a mock/seed. | **APROVADO** |
 ---
 *Gerado automaticamente pelo SILO OPS Audit Tool.*
