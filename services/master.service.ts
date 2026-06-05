@@ -79,7 +79,7 @@ export const CompanyService = new (class extends BaseService<Company> {
         bytes[index] = Math.floor(Math.random() * 256);
       });
     }
-    return `CMP-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+    return `CTK-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
   }
 
   private async getUniqueCompanyToken(currentId?: string, preferredToken?: string): Promise<string> {
@@ -178,6 +178,15 @@ export const CompanyService = new (class extends BaseService<Company> {
   }
 
   async regenerateCompanyToken(id: string): Promise<Company | undefined> {
+    const companyToken = await this.getUniqueCompanyToken(id);
+    return this.update(id, { companyToken });
+  }
+
+  async generateMissingCompanyToken(id: string): Promise<Company | undefined> {
+    const current = (await this.getAllGlobal()).find(c => c.id === id);
+    if (!current) throw new Error('Registro nao encontrado');
+    if (current.companyToken) return current;
+
     const companyToken = await this.getUniqueCompanyToken(id);
     return this.update(id, { companyToken });
   }

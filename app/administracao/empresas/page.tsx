@@ -73,6 +73,12 @@ function EmpresasPage() {
     setVisibleCompanyTokens(current => ({ ...current, [id]: !current[id] }));
   };
 
+  const maskedCompanyTokenLabel = (token?: string) => {
+    void maskCompanyToken;
+    if (!token) return 'Token pendente';
+    return 'CTK-••••••••';
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -133,15 +139,28 @@ function EmpresasPage() {
     }
   };
 
+  const upsertCompanyInView = (company: Company) => {
+    setData(current => {
+      const exists = current.some(item => item.id === company.id);
+      return exists
+        ? current.map(item => item.id === company.id ? company : item)
+        : [company, ...current];
+    });
+  };
+
   const onSubmit = async (formData: CompanyFormData) => {
     try {
+      let saved: Company | undefined;
       if (selectedItem) {
-        await CompanyService.update(selectedItem.id, { ...formData, version: selectedItem.version });
+        saved = await CompanyService.update(selectedItem.id, { ...formData, version: selectedItem.version });
       } else {
-        await CompanyService.create(formData);
+        saved = await CompanyService.create(formData);
+      }
+      if (saved) {
+        setSelectedItem(saved);
+        upsertCompanyInView(saved);
       }
       setIsDrawerOpen(false);
-      loadData();
     } catch (error: any) {
       alert(error.message);
     }
@@ -160,7 +179,23 @@ function EmpresasPage() {
       const updated = await CompanyService.regenerateCompanyToken(selectedItem.id);
       if (updated) {
         setSelectedItem(updated);
-        await loadData();
+        upsertCompanyInView(updated);
+        setVisibleCompanyTokens(current => ({ ...current, [updated.id]: false }));
+      }
+    } catch (error: any) {
+      alert(error.message);
+    }
+  };
+
+  const handleGenerateCompanyToken = async () => {
+    if (!selectedItem) return;
+
+    try {
+      const updated = await CompanyService.generateMissingCompanyToken(selectedItem.id);
+      if (updated) {
+        setSelectedItem(updated);
+        upsertCompanyInView(updated);
+        setVisibleCompanyTokens(current => ({ ...current, [updated.id]: false }));
       }
     } catch (error: any) {
       alert(error.message);
@@ -250,7 +285,7 @@ function EmpresasPage() {
                      <div className="mt-2 flex max-w-full items-center gap-1 rounded-lg border border-[#2d3647] bg-[#050812]/70 px-2 py-1 text-[10px] text-muted-foreground">
                        <KeyRound size={10} className="shrink-0" />
                        <span className="truncate font-mono">
-                         {visibleCompanyTokens[item.id] ? item.companyToken : maskCompanyToken(item.companyToken)}
+                         {visibleCompanyTokens[item.id] ? item.companyToken : maskedCompanyTokenLabel(item.companyToken)}
                        </span>
                        {item.companyToken && (
                          <>
@@ -263,6 +298,9 @@ function EmpresasPage() {
                          </>
                        )}
                      </div>
+                     {item.status === 'ATIVO' && !item.companyToken && (
+                       <p className="text-[10px] font-black uppercase tracking-tight text-red-300">Token obrigatório para APK</p>
+                     )}
                   </div>
 
                   <div className="pt-4 border-t border-[#2d3647] flex items-center justify-between">
@@ -367,7 +405,7 @@ function EmpresasPage() {
                             {selectedItem?.companyToken
                               ? visibleCompanyTokens[selectedItem.id]
                                 ? selectedItem.companyToken
-                                : maskCompanyToken(selectedItem.companyToken)
+                                : maskedCompanyTokenLabel(selectedItem.companyToken)
                               : 'Sera gerado ao salvar'}
                           </p>
                           {selectedItem?.companyToken && (
@@ -391,7 +429,21 @@ function EmpresasPage() {
                             </>
                           )}
                         </div>
-                        {selectedItem && canRegenerateToken && (
+                        {selectedItem?.status === 'ATIVO' && !selectedItem.companyToken && (
+                          <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-300">
+                            Token obrigatório para APK
+                          </p>
+                        )}
+                        {selectedItem && !selectedItem.companyToken && (
+                          <button
+                            type="button"
+                            onClick={handleGenerateCompanyToken}
+                            className="mt-2 flex items-center gap-2 rounded-lg border border-primary/30 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10"
+                          >
+                            <KeyRound size={12} /> Gerar token
+                          </button>
+                        )}
+                        {selectedItem?.companyToken && canRegenerateToken && (
                           <button
                             type="button"
                             onClick={handleRegenerateCompanyToken}
