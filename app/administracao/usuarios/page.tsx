@@ -21,10 +21,8 @@ import {
   X,
   Save,
   Ban,
-  Mail,
   ShieldCheck,
   History,
-  Phone,
   Globe
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -60,6 +58,7 @@ function UsuariosPage() {
           name: selectedItem.name,
           username: selectedItem.username,
           email: selectedItem.email,
+          password: selectedItem.password || '',
           phone: selectedItem.phone || '',
           jobTitle: selectedItem.jobTitle || '',
           accessGroupId: selectedItem.accessGroupId,
@@ -73,6 +72,7 @@ function UsuariosPage() {
           name: '',
           username: '',
           email: '',
+          password: '',
           phone: '',
           jobTitle: '',
           accessGroupId: '',
@@ -248,24 +248,14 @@ function UsuariosPage() {
                     <FormField label="Usuário / Login" error={errors.username?.message} required>
                       <input {...register('username')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-mono" placeholder="joao.silva" />
                     </FormField>
-                    <FormField label="Cargo" error={errors.jobTitle?.message}>
-                      <input {...register('jobTitle')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all" placeholder="Ex: Operador COA" />
+                    <FormField label="Senha (Mín. 6)" error={errors.password?.message}>
+                      <input {...register('password')} type="password" className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all" placeholder="******" />
                     </FormField>
                   </div>
 
-                  <FormField label="E-mail" error={errors.email?.message} required>
-                    <div className="relative">
-                      <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <input {...register('email')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 pl-10 text-sm focus:border-primary outline-none transition-all" placeholder="exemplo@siloops.com" />
-                    </div>
-                  </FormField>
-
                   <div className="grid grid-cols-2 gap-4">
-                    <FormField label="Telefone" error={errors.phone?.message}>
-                      <div className="relative">
-                        <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <input {...register('phone')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 pl-9 text-xs focus:border-primary outline-none transition-all" placeholder="(00) 00000-0000" />
-                      </div>
+                    <FormField label="Cargo" error={errors.jobTitle?.message}>
+                      <input {...register('jobTitle')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all" placeholder="Ex: Operador COA" />
                     </FormField>
                     <FormField label="Status" error={errors.status?.message} required>
                       <select {...register('status')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none">

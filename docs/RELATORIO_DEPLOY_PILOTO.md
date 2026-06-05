@@ -36,5 +36,19 @@
 3.  Executar `docker-compose up -d`.
 4.  Validar `/api/health` em produção.
 
+## 6. Monitoramento e Suporte
+*   **Logs:** Acesso via `docker logs -f silo-ops-central`.
+*   **Alertas:** Notificação via Discord/Telegram em caso de `500` (Error) persistente.
+*   **Suporte N1:** Disponível via canal oficial de monitoramento COA.
+
+## 7. Plano de Contingência
+*   **Rollback:** Comando `docker-compose rollback` ou re-deploy da imagem anterior estável.
+*   **Backup:** Backup diário do banco de dados e volumes configurado.
+*   **Disponibilidade:** SLA de 99.5% esperado para este piloto.
+
+---
+## Conclusão
+O sistema SILO OPS Central encontra-se em estado estável e pronto para a operação piloto. Todos os requisitos críticos da Etapa P0 foram validados.
+
 ---
 *Gerado automaticamente pelo SILO OPS Central Deployment Tool.*

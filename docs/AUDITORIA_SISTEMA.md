@@ -34,4 +34,11 @@
 3.  **App APK:** Conexão final da central com os terminais de bordo.
 
 ---
+## 4. Registro de Validação (Regra Oficial)
+
+| Data | Versão | Arquivos Alterados | Comandos | Resultado | Erros | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 04/06/2024 | v0.1.0-piloto | `auth-context.tsx`, `master-data.ts`, `page.tsx` (login), `master-schemas.ts`, `page.tsx` (usuarios) | `npm run type-check`, `npm run build` | ✅ SUCESSO | Nenhum (após ajuste de imports) | **APROVADO** |
+
+---
 *Gerado automaticamente pelo SILO OPS Audit Tool.*

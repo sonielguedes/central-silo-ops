@@ -87,6 +87,7 @@ export interface User extends BaseEntity {
   accessGroupId: string;
   unitId?: string;
   isADValidated: boolean;
+  password?: string;
   tempPassword?: string;
   requirePasswordChange: boolean;
   status: 'ATIVO' | 'BLOQUEADO';
