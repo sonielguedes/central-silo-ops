@@ -4,14 +4,19 @@ import { Equipment } from '@/lib/types';
 
 export async function POST(req: NextRequest) {
   try {
-    const resolvedTenantId = ServerStorage.resolveTenantId(req.headers);
+    const apiPort = ServerStorage.resolveApiPort(req.headers);
+    const company = apiPort ? ServerStorage.getCompanyByApiPort(apiPort) : undefined;
+    const resolvedTenantId = company?.tenantId || ServerStorage.resolveTenantId(req.headers);
     const body = await req.json() as Equipment & {
       equipmentId?: string;
       fleetCode?: string;
       name?: string;
       type?: string;
     };
-    const tenantId = body.tenantId || resolvedTenantId;
+
+    // Rule: always use company.tenantId if found via port, otherwise resolve from headers
+    const tenantId = company?.tenantId || resolvedTenantId;
+
     const equipment = {
       ...body,
       id: body.id || body.equipmentId,
@@ -33,10 +38,13 @@ export async function POST(req: NextRequest) {
 
     const saved = ServerStorage.upsertEquipment(equipment, tenantId);
     console.info('[mobile/equipment] equipment synced', {
+      companyId: company?.id,
+      companyTenantId: company?.tenantId,
       tenantId: saved.tenantId,
       equipmentId: saved.id,
       fleetCode: saved.code,
       mobileEnabled: saved.mobileEnabled,
+      status: saved.status,
       mobileToken: saved.mobileToken ? `${saved.mobileToken.slice(0, 4)}...${saved.mobileToken.slice(-4)}` : 'missing',
     });
 

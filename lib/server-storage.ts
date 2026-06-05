@@ -77,7 +77,7 @@ export class ServerStorage {
 
     if (apiPort) {
       const company = this.loadCompanies().find(c => Number(c.apiPort) === apiPort);
-      if (company) return company.id;
+      if (company && company.tenantId) return company.tenantId;
     }
 
     return DEFAULT_TENANT_ID;
@@ -103,11 +103,28 @@ export class ServerStorage {
   }
 
   static getCompanyByTenantId(tenantId: string): Company | undefined {
-    return this.loadCompanies().find(c => c.id === tenantId || c.tenantId === tenantId);
+    return this.loadCompanies().find(c => c.tenantId === tenantId);
   }
 
   static getCompanyByApiPort(apiPort: number): Company | undefined {
     return this.loadCompanies().find(c => Number(c.apiPort) === apiPort);
+  }
+
+  static validateMobileCompanyRecord(company: Company | undefined, companyToken: string | undefined): {
+    ok: true;
+    company: Company;
+  } | {
+    ok: false;
+    status: 403;
+    error: string;
+  } {
+    if (!company || company.status === 'INATIVO') {
+      return { ok: false, status: 403, error: 'Instancia inativa para uso mobile' };
+    }
+    if (!company.companyToken || company.companyToken !== companyToken) {
+      return { ok: false, status: 403, error: 'companyToken invalido' };
+    }
+    return { ok: true, company };
   }
 
   static getCompanies(): Company[] {
@@ -164,7 +181,7 @@ export class ServerStorage {
     status: 403;
     error: string;
   } {
-    const company = this.loadCompanies().find(c => c.id === tenantId || c.tenantId === tenantId);
+    const company = this.loadCompanies().find(c => c.tenantId === tenantId);
     if (!company?.companyToken || company.companyToken !== companyToken) {
       return { ok: false, status: 403, error: 'companyToken invalido' };
     }
