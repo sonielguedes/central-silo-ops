@@ -34,6 +34,7 @@ export interface Company extends BaseEntity {
   mqttPort?: number;
   apiBaseUrl?: string;
   mqttUrl?: string;
+  companyToken?: string;
   plan: CompanyPlan;
   status: 'ATIVO' | 'INATIVO';
   observations?: string;

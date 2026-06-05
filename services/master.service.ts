@@ -70,6 +70,31 @@ export const CompanyService = new (class extends BaseService<Company> {
     return this.data.filter(c => c.entityStatus !== 'ARQUIVADO');
   }
 
+  private generateCompanyToken(): string {
+    const bytes = new Uint8Array(18);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(bytes);
+    } else {
+      bytes.forEach((_, index) => {
+        bytes[index] = Math.floor(Math.random() * 256);
+      });
+    }
+    return `CMP-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+  }
+
+  private async getUniqueCompanyToken(currentId?: string, preferredToken?: string): Promise<string> {
+    const all = await this.getAllGlobal();
+    if (preferredToken && !all.some(c => c.id !== currentId && c.companyToken === preferredToken)) {
+      return preferredToken;
+    }
+
+    let token = this.generateCompanyToken();
+    while (all.some(c => c.id !== currentId && c.companyToken === token)) {
+      token = this.generateCompanyToken();
+    }
+    return token;
+  }
+
   private withGeneratedUrls<T extends Partial<Company>>(item: T): T {
     return {
       ...item,
@@ -95,14 +120,66 @@ export const CompanyService = new (class extends BaseService<Company> {
     }
   }
 
+  private async assertUniqueCompanyToken(item: Partial<Company>, currentId?: string) {
+    if (!item.companyToken) return;
+
+    const all = await this.getAllGlobal();
+    if (all.some(c => c.id !== currentId && c.entityStatus !== 'ARQUIVADO' && c.companyToken === item.companyToken)) {
+      throw new Error('Token da empresa ja cadastrado para outra instancia.');
+    }
+  }
+
+  private async syncCompanyStorage(company: Company) {
+    if (typeof window === 'undefined') return;
+
+    const response = await fetch('/api/mobile/company', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(company),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ error: 'Falha ao sincronizar Company no storage mobile.' }));
+      throw new Error(body.error || 'Falha ao sincronizar Company no storage mobile.');
+    }
+  }
+
   async create(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<Company> {
-    await this.assertUniqueInstanceConfig(item);
-    return super.create(this.withGeneratedUrls(item));
+    const itemWithToken = {
+      ...item,
+      companyToken: await this.getUniqueCompanyToken(undefined, item.companyToken),
+    };
+
+    await this.assertUniqueInstanceConfig(itemWithToken);
+    await this.assertUniqueCompanyToken(itemWithToken);
+    const created = await super.create(this.withGeneratedUrls(itemWithToken));
+    try {
+      await this.syncCompanyStorage(created);
+    } catch (error) {
+      await super.archive(created.id);
+      throw error;
+    }
+    return created;
   }
 
   async update(id: string, updateData: Partial<Company>): Promise<Company | undefined> {
-    await this.assertUniqueInstanceConfig(updateData, id);
-    return super.update(id, this.withGeneratedUrls(updateData));
+    const current = (await this.getAllGlobal()).find(c => c.id === id);
+    if (!current) throw new Error('Registro nao encontrado');
+
+    const nextData = this.withGeneratedUrls({
+      ...updateData,
+      companyToken: await this.getUniqueCompanyToken(id, updateData.companyToken || current.companyToken),
+    });
+
+    await this.assertUniqueInstanceConfig(nextData, id);
+    await this.assertUniqueCompanyToken(nextData, id);
+    await this.syncCompanyStorage({ ...current, ...nextData });
+    return super.update(id, nextData);
+  }
+
+  async regenerateCompanyToken(id: string): Promise<Company | undefined> {
+    const companyToken = await this.getUniqueCompanyToken(id);
+    return this.update(id, { companyToken });
   }
 })('companies', INITIAL_COMPANIES);
 
