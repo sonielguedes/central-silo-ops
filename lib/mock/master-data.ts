@@ -127,6 +127,7 @@ export const INITIAL_USERS: User[] = [
     email: 'sonieloficial@gmail.com',
     password: 'Sjagro@01',
     accessGroupId: 'ag-admin',
+    jobTitle: 'Diretor de Operações',
     unitId: 'u-sorriso',
     isADValidated: false,
     requirePasswordChange: false,
@@ -140,6 +141,7 @@ export const INITIAL_USERS: User[] = [
     email: 'admin@siloops.com.br',
     password: 'Admin@2026',
     accessGroupId: 'ag-admin',
+    jobTitle: 'Gestor de TI',
     unitId: 'u-sorriso',
     isADValidated: false,
     requirePasswordChange: false,
@@ -153,6 +155,7 @@ export const INITIAL_USERS: User[] = [
     email: 'admin@silo.com',
     password: '123456',
     accessGroupId: 'ag-admin',
+    jobTitle: 'Acesso Demonstrativo',
     unitId: 'u-sorriso',
     isADValidated: false,
     requirePasswordChange: false,
@@ -166,6 +169,7 @@ export const INITIAL_USERS: User[] = [
     email: 'coa@siloops.com.br',
     password: 'Coa@2026',
     accessGroupId: 'ag-supervisor',
+    jobTitle: 'Coordenador Operacional',
     unitId: 'u-sorriso',
     isADValidated: false,
     requirePasswordChange: false,
@@ -179,6 +183,7 @@ export const INITIAL_USERS: User[] = [
     email: 'viewer@siloops.com.br',
     password: 'Viewer@2026',
     accessGroupId: 'ag-visualizador',
+    jobTitle: 'Acesso Consulta',
     unitId: 'u-sorriso',
     isADValidated: false,
     requirePasswordChange: false,
@@ -191,7 +196,7 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     ...DEFAULT_AUDIT,
     id: 'audit-1',
     userId: 'usr-admin-oficial',
-    userName: 'Admin Oficial',
+    userName: 'Administrador SILO OPS',
     module: 'SISTEMA',
     action: 'SEED',
     timestamp: new Date().toISOString(),
@@ -394,19 +399,16 @@ export const INITIAL_ALERTS: Alert[] = [
 ];
 
 export const INITIAL_TELEMETRY: TelemetryData[] = [
-  {
-    ...DEFAULT_AUDIT,
-    id: 'tel-1',
-    equipmentId: 'e-1',
-    timestamp: new Date().toISOString(),
-    latitude: -12.5568,
-    longitude: -55.7229,
-    speed: 4.5,
-    rpm: 2100,
-    operationalStateId: 'os-1',
-    isOnline: true,
-    lastHeartbeat: new Date().toISOString()
-  }
+  { ...DEFAULT_AUDIT, id: 'tel-1', equipmentId: 'e-1', timestamp: new Date().toISOString(), latitude: -12.5550, longitude: -55.7220, speed: 4.5, rpm: 2100, operationalStateId: 'os-1', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-2', equipmentId: 'e-2', timestamp: new Date().toISOString(), latitude: -12.5560, longitude: -55.7240, speed: 5.2, rpm: 2150, operationalStateId: 'os-1', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-3', equipmentId: 'e-3', timestamp: new Date().toISOString(), latitude: -12.5580, longitude: -55.7210, speed: 0.0, rpm: 800, operationalStateId: 'os-5', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-4', equipmentId: 'e-4', timestamp: new Date().toISOString(), latitude: -12.5600, longitude: -55.7250, speed: 12.0, rpm: 1800, operationalStateId: 'os-3', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-5', equipmentId: 'e-5', timestamp: new Date().toISOString(), latitude: -12.5520, longitude: -55.7280, speed: 4.8, rpm: 2120, operationalStateId: 'os-1', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-6', equipmentId: 'e-6', timestamp: new Date().toISOString(), latitude: -12.5650, longitude: -55.7200, speed: 45.0, rpm: 1500, operationalStateId: 'os-3', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-7', equipmentId: 'e-7', timestamp: new Date().toISOString(), latitude: -12.5680, longitude: -55.7230, speed: 0.0, rpm: 0, operationalStateId: 'os-6', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-8', equipmentId: 'e-8', timestamp: new Date().toISOString(), latitude: -12.5540, longitude: -55.7180, speed: 3.2, rpm: 2300, operationalStateId: 'os-1', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-9', equipmentId: 'e-9', timestamp: new Date().toISOString(), latitude: -12.5590, longitude: -55.7270, speed: 0.0, rpm: 0, operationalStateId: 'os-4', isOnline: true, lastHeartbeat: new Date().toISOString() },
+  { ...DEFAULT_AUDIT, id: 'tel-10', equipmentId: 'e-10', timestamp: new Date().toISOString(), latitude: -12.5720, longitude: -55.7150, speed: 0.0, rpm: 0, operationalStateId: 'os-6', isOnline: false, lastHeartbeat: new Date(Date.now() - 7200000).toISOString() },
 ];
 
 export const INITIAL_CHECKLIST_MODELS: ChecklistModel[] = [

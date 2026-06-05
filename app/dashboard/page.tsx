@@ -9,7 +9,7 @@ import { EquipmentTable } from '@/components/dashboard/equipment-table';
 import { RecentAlerts } from '@/components/dashboard/recent-alerts';
 import { ProductivityChart } from '@/components/dashboard/productivity-chart';
 import { SyncPanel } from '@/components/dashboard/sync-panel';
-import { EquipmentService, OperationService, AlertService } from '@/services/master.service';
+import { EquipmentService, OperationService, AlertService, TelemetryService } from '@/services/master.service';
 import { Truck, Play, AlertCircle, PauseCircle, Factory } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
 
@@ -30,8 +30,14 @@ function DashboardPage() {
         AlertService.getAll()
       ]);
 
+      const telemetryData = await Promise.all(
+        eqs.map(e => TelemetryService.getLatestByEquipment(e.id))
+      );
+
+      const onlineCount = telemetryData.filter(t => t?.isOnline).length;
+
       setStats({
-        online: eqs.filter(e => e.status !== 'offline').length,
+        online: onlineCount,
         total: eqs.length,
         activeOps: ops.filter(o => o.status === 'EM_CURSO').length,
         alerts: alerts.filter(a => a.status === 'ATIVO' && a.severity === 'CRITICAL').length,
