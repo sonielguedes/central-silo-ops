@@ -9,12 +9,14 @@ import type {
   EquipmentType,
   Farm,
   Field,
+  FleetActivity,
   Implement,
   Operation,
   OperationalState,
   Operator,
   StopReason,
   TelemetryData,
+  TimelineEvent,
   Unit,
   User,
 } from '@/lib/types';
@@ -100,6 +102,8 @@ export const ChecklistModelService   = makeService<ChecklistModel>('checklist-mo
 export const UserService             = makeService<User>('users');
 export const AccessGroupService      = makeService<AccessGroup>('access-groups');
 export const UnitService             = makeService<Unit>('units');
+export const TimelineService         = makeService<TimelineEvent>('timeline');
+export const FleetActivityService    = makeService<FleetActivity>('fleet-activities');
 export const TelemetryService        = {
   ...makeService<TelemetryData>('telemetry'),
   async getLatestByEquipment(equipmentId: string): Promise<TelemetryData | undefined> {

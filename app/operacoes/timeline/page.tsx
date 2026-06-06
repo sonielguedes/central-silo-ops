@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
-import { TimelineService, EquipmentService, OperatorService } from '@/services/master.service';
+import { TimelineService, EquipmentService, OperatorService } from '@/services/api-service';
 import { TimelineEvent, Equipment, Operator } from '@/lib/types';
 import { withAuth } from '@/components/shared/with-auth';
 import {

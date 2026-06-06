@@ -19,6 +19,8 @@ import {
   INITIAL_USERS,
   INITIAL_ACCESS_GROUPS,
   INITIAL_UNITS,
+  INITIAL_TIMELINE_EVENTS,
+  INITIAL_FLEET_ACTIVITIES,
 } from '@/lib/mock/master-data';
 
 // ── Storage root (same resolver as ServerStorage) ─────────────────────────────
@@ -53,6 +55,8 @@ const SEED_MAP: Record<string, unknown[]> = {
   users:        INITIAL_USERS,
   'access-groups': INITIAL_ACCESS_GROUPS,
   units:        INITIAL_UNITS,
+  timeline:     INITIAL_TIMELINE_EVENTS,
+  'fleet-activities': INITIAL_FLEET_ACTIVITIES,
 };
 
 export const ALLOWED_ENTITIES = Object.keys(SEED_MAP);

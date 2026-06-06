@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
-import { FleetActivityService, EquipmentService, OperationalStateService } from '@/services/master.service';
+import { FleetActivityService, EquipmentService, OperationalStateService } from '@/services/api-service';
 import { FleetActivity, Equipment, OperationalState } from '@/lib/types';
 import {
   RefreshCw,
