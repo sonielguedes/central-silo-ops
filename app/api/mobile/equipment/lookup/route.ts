@@ -8,39 +8,36 @@ const maskToken = (token?: string) => {
 
 export async function GET(req: NextRequest) {
   const fleetCode = req.nextUrl.searchParams.get('fleetCode');
-  const companyToken = (req.nextUrl.searchParams.get('companyToken') || req.headers.get('x-company-token') || undefined)?.trim();
-  const apiPort = ServerStorage.resolveApiPort(req.headers);
-  const companyByPort = apiPort ? ServerStorage.getCompanyByApiPort(apiPort) : undefined;
-  const fallbackTenantId = ServerStorage.resolveTenantId(req.headers);
-  const company = companyByPort || ServerStorage.getCompanyByTenantId(fallbackTenantId);
-  const lookupTenantId = company?.tenantId || fallbackTenantId;
-  const requestedTenantId = req.nextUrl.searchParams.get('tenantId') || req.headers.get('x-tenant-id');
+  const companyToken = (req.headers.get('x-company-token') || req.nextUrl.searchParams.get('companyToken') || undefined)?.trim();
+
+  if (!companyToken) {
+    return NextResponse.json({ error: 'X-Company-Token is required' }, { status: 401 });
+  }
+
+  const company = ServerStorage.getCompanyByToken(companyToken);
+
+  if (!company || company.status === 'INATIVO') {
+    console.warn('[mobile/equipment/lookup] invalid or inactive token', {
+      receivedCompanyToken: maskToken(companyToken),
+    });
+    return NextResponse.json({ error: 'Token invalido ou instancia inativa' }, { status: 403 });
+  }
+
+  const lookupTenantId = company.tenantId;
 
   if (!fleetCode) {
     return NextResponse.json({ error: 'fleetCode is required' }, { status: 400 });
   }
 
-  if (requestedTenantId && requestedTenantId !== lookupTenantId) {
-    return NextResponse.json({ error: 'tenantId invalido para esta porta API' }, { status: 403 });
-  }
-
-  const companyValidation = ServerStorage.validateMobileCompanyRecord(company, companyToken);
-  if (!companyValidation.ok) {
-    return NextResponse.json({ error: companyValidation.error }, { status: companyValidation.status });
-  }
-
   const equipment = ServerStorage.getEquipmentByFleetCode(fleetCode, lookupTenantId);
 
   console.info('[mobile/equipment/lookup] equipment validation', {
-    apiPort,
-    companyId: company?.id,
-    companyTenantId: company?.tenantId,
+    companyId: company.id,
+    companyTenantId: company.tenantId,
     lookupTenantId,
     fleetCode,
     mobileEnabled: equipment?.mobileEnabled,
     status: equipment?.status,
-    companyFound: !!company,
-    expectedCompanyToken: maskToken(company?.companyToken),
     receivedCompanyToken: maskToken(companyToken),
   });
 

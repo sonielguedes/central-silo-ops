@@ -176,6 +176,11 @@ export class ServerStorage {
     return this.loadCompanies().find(c => Number(c.apiPort) === apiPort);
   }
 
+  static getCompanyByToken(token: string): Company | undefined {
+    if (!token) return undefined;
+    return this.loadCompanies().find(c => c.companyToken === token);
+  }
+
   static validateMobileCompanyRecord(company: Company | undefined, companyToken: string | undefined): {
     ok: true;
     company: Company;
