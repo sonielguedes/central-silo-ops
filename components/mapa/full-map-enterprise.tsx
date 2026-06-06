@@ -1,17 +1,43 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, ZoomControl, LayersControl } from 'react-leaflet';
+import React, { useEffect, useState } from 'react';
+import { LayersControl, MapContainer, Marker, Polygon, Popup, TileLayer, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Navigation, Clock, User, MapPin, Gauge, Zap, Tractor, Truck, Loader2 } from 'lucide-react';
+import { Clock, Gauge, Hash, Loader2, Navigation, PauseCircle, Tractor, Truck, User, Zap } from 'lucide-react';
 import { renderToString } from 'react-dom/server';
-import { STATUS_CONFIG } from '@/lib/mock/map-data';
-import { EquipmentService, EquipmentTypeService, OperationService, OperatorService, FarmService, FieldService } from '@/services/master.service';
-import { cn } from '@/lib/utils';
-import { EquipmentLiveState } from '@/lib/types';
+import { EquipmentLiveState, EquipmentOperationalStatus } from '@/lib/types';
 
-// Fix for default marker icons
+const NOT_INFORMED = 'Não informado';
+const GPS_RECENT_MS = 15 * 60 * 1000;
+const HEARTBEAT_RECENT_MS = 3 * 60 * 1000;
+
+const STATUS_CONFIG: Record<Lowercase<EquipmentOperationalStatus>, { label: string; color: string; tailwind: string; text: string }> = {
+  online: { label: 'Online', color: '#3b82f6', tailwind: 'bg-blue-500', text: 'text-blue-500' },
+  operando: { label: 'Operando', color: '#10b981', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  parado: { label: 'Parado', color: '#f97316', tailwind: 'bg-orange-500', text: 'text-orange-500' },
+  finalizado: { label: 'Finalizado', color: '#6b7280', tailwind: 'bg-gray-500', text: 'text-gray-500' },
+  offline: { label: 'Offline', color: '#6b7280', tailwind: 'bg-gray-500', text: 'text-gray-500' },
+};
+
+export type MapCounts = {
+  online: number;
+  operando: number;
+  parado: number;
+  offline: number;
+  staleGps: number;
+  staleHeartbeat: number;
+};
+
+export type LiveMapItem = EquipmentLiveState & {
+  id: string;
+  code: string;
+  pos: [number, number] | null;
+  typeIcon: 'Tractor' | 'Truck' | 'Zap' | 'Navigation';
+  displayOperator: string;
+  displayOperation: string;
+};
+
 const DefaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -20,13 +46,59 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const createMachineIcon = (iconName: string, statusKey: string, id: string) => {
-  const color = (STATUS_CONFIG as any)[statusKey.toLowerCase()]?.color || '#6b7280';
+const hasValidPosition = (item: EquipmentLiveState): item is EquipmentLiveState & { latitude: number; longitude: number } =>
+  Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
 
-  const TypeIcon = iconName === 'Tractor' ? Tractor :
-                   iconName === 'Truck' ? Truck :
-                   iconName === 'Zap' ? Zap : Navigation;
+const isRecent = (value: string | undefined, thresholdMs: number) => {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && Date.now() - time <= thresholdMs;
+};
 
+const formatDateTime = (value?: string) => {
+  if (!value) return NOT_INFORMED;
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) return NOT_INFORMED;
+  return time.toLocaleString('pt-BR');
+};
+
+const formatValue = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return NOT_INFORMED;
+  return String(value);
+};
+
+const getTypeIcon = (type?: string): LiveMapItem['typeIcon'] => {
+  const normalized = (type || '').toUpperCase();
+  if (normalized.includes('TRATOR') || normalized.includes('COLH')) return 'Tractor';
+  if (normalized.includes('CAM') || normalized.includes('TRUCK')) return 'Truck';
+  if (normalized.includes('CARREG') || normalized.includes('PA ')) return 'Zap';
+  return 'Navigation';
+};
+
+const getStatus = (status: EquipmentOperationalStatus) => STATUS_CONFIG[status.toLowerCase() as Lowercase<EquipmentOperationalStatus>] || STATUS_CONFIG.offline;
+
+const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
+  ...item,
+  id: item.equipmentId,
+  code: item.fleetCode || item.equipmentId,
+  pos: hasValidPosition(item) ? [item.latitude, item.longitude] : null,
+  typeIcon: getTypeIcon(item.type),
+  displayOperator: formatValue(item.currentOperator || item.operatorName),
+  displayOperation: formatValue(item.currentOperation || item.operationName),
+});
+
+export const buildLiveMapCounts = (items: EquipmentLiveState[]): MapCounts => ({
+  online: items.filter(i => i.status === 'ONLINE').length,
+  operando: items.filter(i => i.status === 'OPERANDO').length,
+  parado: items.filter(i => i.status === 'PARADO').length,
+  offline: items.filter(i => i.status === 'OFFLINE' || i.status === 'FINALIZADO').length,
+  staleGps: items.filter(i => !isRecent(i.lastGpsAt, GPS_RECENT_MS)).length,
+  staleHeartbeat: items.filter(i => !isRecent(i.lastHeartbeatAt, HEARTBEAT_RECENT_MS)).length,
+});
+
+const createMachineIcon = (iconName: LiveMapItem['typeIcon'], statusKey: EquipmentOperationalStatus, id: string) => {
+  const color = getStatus(statusKey).color;
+  const TypeIcon = iconName === 'Tractor' ? Tractor : iconName === 'Truck' ? Truck : iconName === 'Zap' ? Zap : Navigation;
   const html = renderToString(
     <div className="relative flex flex-col items-center">
       <div className="relative w-12 h-14 flex items-center justify-center">
@@ -48,79 +120,46 @@ const createMachineIcon = (iconName: string, statusKey: string, id: string) => {
     </div>
   );
 
-  return L.divIcon({
-    className: 'silo-machine-icon',
-    html: html,
-    iconSize: [48, 64],
-    iconAnchor: [24, 56],
-  });
+  return L.divIcon({ className: 'silo-machine-icon', html, iconSize: [48, 64], iconAnchor: [24, 56] });
 };
 
-export default function FullMapEnterprise() {
-  const [fleet, setFleet] = useState<any[]>([]);
+export default function FullMapEnterprise({ onFleetUpdate }: { onFleetUpdate?: (data: { fleet: LiveMapItem[]; counts: MapCounts }) => void }) {
+  const [fleet, setFleet] = useState<LiveMapItem[]>([]);
   const [loading, setLoading] = useState(true);
   const farmCenter: [number, number] = [-12.5568, -55.7229];
 
-  async function loadFleetData() {
+  const loadFleetData = React.useCallback(async () => {
     try {
-      const [eqs, types, ops, oprs, farms, fields, resLive] = await Promise.all([
-        EquipmentService.getAll(),
-        EquipmentTypeService.getAll(),
-        OperationService.getAll(),
-        OperatorService.getAll(),
-        FarmService.getAll(),
-        FieldService.getAll(),
-        fetch('/api/equipamentos/status').then(r => r.json()).catch(() => [])
-      ]);
-
-      const liveMap = new Map((resLive as EquipmentLiveState[]).map(s => [s.equipmentId, s]));
-
-      const items = eqs.map((eq) => {
-        const live = liveMap.get(eq.id);
-        const type = types.find(t => t.id === eq.typeId);
-        const op = ops.find(o => o.equipmentId === eq.id && o.status === 'EM_CURSO');
-        const opr = oprs.find(o => o.id === (op?.operatorId || eq.currentOperatorId));
-        const farm = farms.find(f => f.id === op?.farmId);
-        const field = fields.find(f => f.id === op?.fieldId);
-
-        const status = live?.status || eq.status;
-        const lat = live?.latitude;
-        const lng = live?.longitude;
-
-        return {
-          ...eq,
-          status,
-          typeIcon: type?.icon,
-          typeName: type?.name,
-          operatorName: live?.currentOperator || opr?.name || 'Não Identificado',
-          operationName: live?.currentOperation || op?.type || 'Sem Operação',
-          farmName: farm?.name || '-',
-          fieldName: field?.code || '-',
-          speed: live?.speed || 0,
-          pos: (lat && lng) ? [lat, lng] : null,
-          isOnline: status !== 'OFFLINE' && status !== 'FINALIZADO',
-          lastSignal: live?.lastGpsAt || live?.lastHeartbeatAt || eq.lastSignal,
-          lastGpsAt: live?.lastGpsAt,
-          lastHeartbeatAt: live?.lastHeartbeatAt
-        };
-      }).filter(item => item.pos !== null); // Requirement: if no lat/lng, don't render
+      const response = await fetch('/api/equipamentos/status', { cache: 'no-store' });
+      const liveFleet = response.ok ? await response.json() : [];
+      const source = Array.isArray(liveFleet) ? liveFleet as EquipmentLiveState[] : [];
+      const items = source.map(normalizeLiveItem);
+      const markersCount = items.filter(item => item.pos !== null).length;
+      const counts = buildLiveMapCounts(source);
 
       setFleet(items);
+      onFleetUpdate?.({ fleet: items, counts });
+      console.info(`[map-ui] fetched count=${source.length}`);
+      console.info(`[map-ui] sidebar count=${items.length}`);
+      console.info(`[map-ui] markers count=${markersCount}`);
+    } catch (error) {
+      console.error('[map-ui] failed to fetch live fleet', error);
+      setFleet([]);
+      onFleetUpdate?.({ fleet: [], counts: buildLiveMapCounts([]) });
+    } finally {
       setLoading(false);
-    } catch (e) {
-      console.error('Failed to load fleet data', e);
     }
-  }
+  }, [onFleetUpdate]);
 
   useEffect(() => {
     loadFleetData();
     const interval = setInterval(loadFleetData, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadFleetData]);
 
   const fieldsPolygons = [
     { name: 'Talhão 12', coords: [[-12.551, -55.730], [-12.551, -55.715], [-12.560, -55.715], [-12.560, -55.730]] as [number, number][] },
-    { name: 'Talhão 14', coords: [[-12.561, -55.715], [-12.561, -55.730], [-12.570, -55.730], [-12.570, -55.715]] as [number, number][] }
+    { name: 'Talhão 14', coords: [[-12.561, -55.715], [-12.561, -55.730], [-12.570, -55.730], [-12.570, -55.715]] as [number, number][] },
   ];
 
   if (loading) return <div className="flex-1 bg-[#050812] flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>;
@@ -136,60 +175,50 @@ export default function FullMapEnterprise() {
             <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{y}/{x}{r}.png" />
           </LayersControl.BaseLayer>
           <LayersControl.Overlay checked name="Talhões">
-             {fieldsPolygons.map((f) => (
-                <Polygon key={f.name} positions={f.coords} pathOptions={{ color: '#10b981', weight: 1.5, fillOpacity: 0.08, dashArray: '10, 10' }} />
-             ))}
+            {fieldsPolygons.map(field => (
+              <Polygon key={field.name} positions={field.coords} pathOptions={{ color: '#10b981', weight: 1.5, fillOpacity: 0.08, dashArray: '10, 10' }} />
+            ))}
           </LayersControl.Overlay>
         </LayersControl>
 
-        {fleet.map((machine) => (
-          <Marker key={machine.id} position={machine.pos} icon={createMachineIcon(machine.typeIcon, machine.status, machine.code)}>
-            <Popup className="silo-enterprise-popup" minWidth={260}>
-              <div className="bg-[#0a0e27] text-white p-4 rounded-xl border border-[#2d3647] font-sans shadow-2xl">
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#2d3647]/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-lg" style={{ backgroundColor: ((STATUS_CONFIG as any)[machine.status.toLowerCase()] || STATUS_CONFIG.offline).color }}>
-                      {machine.typeIcon === 'Tractor' ? <Tractor size={20} /> : machine.typeIcon === 'Truck' ? <Truck size={20} /> : <Zap size={20} />}
+        {fleet.filter(machine => machine.pos).map(machine => {
+          const status = getStatus(machine.status);
+          return (
+            <Marker key={machine.id} position={machine.pos!} icon={createMachineIcon(machine.typeIcon, machine.status, machine.code)}>
+              <Popup className="silo-enterprise-popup" minWidth={280}>
+                <div className="bg-[#0a0e27] text-white p-4 rounded-xl border border-[#2d3647] font-sans shadow-2xl">
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#2d3647]/50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-lg" style={{ backgroundColor: status.color }}>
+                        {machine.typeIcon === 'Tractor' ? <Tractor size={20} /> : machine.typeIcon === 'Truck' ? <Truck size={20} /> : machine.typeIcon === 'Zap' ? <Zap size={20} /> : <Navigation size={20} />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-base font-black italic tracking-tighter leading-none uppercase">{machine.code}</span>
+                        <span className="text-[9px] uppercase text-muted-foreground font-bold tracking-widest">{formatValue(machine.type || machine.name)}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-base font-black italic tracking-tighter leading-none uppercase">{machine.code}</span>
-                      <span className="text-[9px] uppercase text-muted-foreground font-bold tracking-widest">{machine.typeName}</span>
+                    <div className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase border" style={{ color: status.color, borderColor: `${status.color}40`, backgroundColor: `${status.color}10` }}>
+                      {status.label}
                     </div>
                   </div>
-                  <div className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase border" style={{ color: ((STATUS_CONFIG as any)[machine.status.toLowerCase()] || STATUS_CONFIG.offline).color, borderColor: `${((STATUS_CONFIG as any)[machine.status.toLowerCase()] || STATUS_CONFIG.offline).color}40`, backgroundColor: `${((STATUS_CONFIG as any)[machine.status.toLowerCase()] || STATUS_CONFIG.offline).color}10` }}>
-                    {((STATUS_CONFIG as any)[machine.status.toLowerCase()] || STATUS_CONFIG.offline).label}
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-y-4 gap-x-6 mb-4">
-                  <PopupDetail icon={<User size={12} />} label="Operador" value={machine.operatorName} />
-                  <PopupDetail icon={<Zap size={12} />} label="Operação" value={machine.operationName} />
-                  <PopupDetail icon={<Gauge size={12} />} label="Velocidade" value={`${machine.speed || 0} km/h`} />
-                  <PopupDetail icon={<Clock size={12} />} label="Horímetro" value={`${machine.hourmeter}h`} />
-                  <PopupDetail icon={<MapPin size={12} />} label="Fazenda" value={machine.farmName} />
-                  <PopupDetail icon={<Navigation size={12} />} label="Talhão" value={machine.fieldName} />
-                </div>
-
-                <div className="pt-3 border-t border-[#2d3647]/50 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-1.5 h-1.5 rounded-full", machine.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]")}></div>
-                      <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Último GPS</span>
-                    </div>
-                    <span className="text-[9px] text-white font-black uppercase">{machine.lastGpsAt ? new Date(machine.lastGpsAt).toLocaleTimeString() : '-'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-1.5 h-1.5 rounded-full", machine.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]")}></div>
-                      <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Último Heartbeat</span>
-                    </div>
-                    <span className="text-[9px] text-white font-black uppercase">{machine.lastHeartbeatAt ? new Date(machine.lastHeartbeatAt).toLocaleTimeString() : '-'}</span>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-6 mb-4">
+                    <PopupDetail icon={<Hash size={12} />} label="Frota" value={machine.code} />
+                    <PopupDetail icon={<Navigation size={12} />} label="Status" value={status.label} />
+                    <PopupDetail icon={<Gauge size={12} />} label="Velocidade" value={machine.speed === undefined ? NOT_INFORMED : `${machine.speed} km/h`} />
+                    <PopupDetail icon={<Clock size={12} />} label="Último GPS" value={formatDateTime(machine.lastGpsAt)} />
+                    <PopupDetail icon={<Clock size={12} />} label="Último heartbeat" value={formatDateTime(machine.lastHeartbeatAt)} />
+                    <PopupDetail icon={<Hash size={12} />} label="Journey ID" value={formatValue(machine.journeyId)} />
+                    <PopupDetail icon={<User size={12} />} label="Operador" value={machine.displayOperator} />
+                    <PopupDetail icon={<Zap size={12} />} label="Operação" value={machine.displayOperation} />
+                    <PopupDetail icon={<Gauge size={12} />} label="Horímetro" value={machine.hourmeter === undefined ? NOT_INFORMED : `${machine.hourmeter}h`} />
+                    <PopupDetail icon={<PauseCircle size={12} />} label="Parada" value={formatValue(machine.stopReason)} />
                   </div>
                 </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+              </Popup>
+            </Marker>
+          );
+        })}
 
         <ZoomControl position="bottomright" />
       </MapContainer>
@@ -205,14 +234,14 @@ export default function FullMapEnterprise() {
   );
 }
 
-function PopupDetail({ icon, label, value }: any) {
+function PopupDetail({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground font-black uppercase tracking-tighter">
         <span className="text-primary">{icon}</span>
         {label}
       </div>
-      <div className="text-[11px] font-bold text-white truncate max-w-[100px] uppercase">{value}</div>
+      <div className="text-[11px] font-bold text-white truncate max-w-[120px] uppercase">{value}</div>
     </div>
   );
 }

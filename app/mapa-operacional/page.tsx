@@ -14,14 +14,33 @@ import {
   MoreVertical,
   Menu,
   X as CloseIcon,
-  AlertTriangle,
-  HelpCircle
+  Tractor,
+  Truck,
+  Zap,
+  Navigation
 } from 'lucide-react';
-import { MAP_KPIS, FLEET_DATA, STATUS_CONFIG, MACHINE_TYPES } from '@/lib/mock/map-data';
 import { cn } from '@/lib/utils';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useSidebar } from '@/lib/context/sidebar-context';
 import { withAuth } from '@/components/shared/with-auth';
+import type { LiveMapItem, MapCounts } from '@/components/mapa/full-map-enterprise';
+
+const STATUS_CONFIG = {
+  online: { label: 'Online', tailwind: 'bg-blue-500', text: 'text-blue-500' },
+  operando: { label: 'Operando', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  parado: { label: 'Parado', tailwind: 'bg-orange-500', text: 'text-orange-500' },
+  finalizado: { label: 'Finalizado', tailwind: 'bg-gray-500', text: 'text-gray-500' },
+  offline: { label: 'Offline', tailwind: 'bg-gray-500', text: 'text-gray-500' },
+};
+
+const EMPTY_COUNTS: MapCounts = {
+  online: 0,
+  operando: 0,
+  parado: 0,
+  offline: 0,
+  staleGps: 0,
+  staleHeartbeat: 0,
+};
 
 const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
   ssr: false,
@@ -41,6 +60,22 @@ const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
 function MapaOperacionalPage() {
   const { toggle } = useSidebar();
   const [isFleetSidebarOpen, setIsFleetSidebarOpen] = React.useState(true);
+  const [fleetData, setFleetData] = React.useState<LiveMapItem[]>([]);
+  const [counts, setCounts] = React.useState<MapCounts>(EMPTY_COUNTS);
+
+  const handleFleetUpdate = React.useCallback((data: { fleet: LiveMapItem[]; counts: MapCounts }) => {
+    setFleetData(data.fleet);
+    setCounts(data.counts);
+  }, []);
+
+  const kpis = [
+    { label: 'Online', value: String(counts.online), color: 'text-blue-500' },
+    { label: 'Operando', value: String(counts.operando), color: 'text-emerald-500' },
+    { label: 'Parado', value: String(counts.parado), color: 'text-orange-500' },
+    { label: 'Offline', value: String(counts.offline), color: 'text-gray-400' },
+    { label: 'Sem GPS recente', value: String(counts.staleGps), color: 'text-amber-500' },
+    { label: 'Sem heartbeat', value: String(counts.staleHeartbeat), color: 'text-red-500' },
+  ];
 
   return (
     <div className="flex h-screen bg-[#050812] text-white overflow-hidden font-sans selection:bg-primary/30">
@@ -75,7 +110,7 @@ function MapaOperacionalPage() {
 
         {/* KPIs Operacionais */}
         <div className="grid grid-cols-3 gap-2 p-4 bg-[#050812]/50">
-          {MAP_KPIS.map((kpi) => (
+          {kpis.map((kpi) => (
             <div key={kpi.label} className="bg-[#1a1f3a]/30 border border-[#2d3647] p-3 rounded-xl flex flex-col items-center group hover:border-primary/30 transition-all cursor-pointer">
               <span className="text-[9px] text-muted-foreground uppercase font-black tracking-tighter mb-1 group-hover:text-primary transition-colors">{kpi.label}</span>
               <span className={cn("text-2xl font-black italic tracking-tighter leading-none", kpi.color)}>{kpi.value}</span>
@@ -108,12 +143,22 @@ function MapaOperacionalPage() {
         <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-6 space-y-3">
           <div className="flex items-center justify-between py-2 sticky top-0 bg-[#0a0e27] z-10 mb-1">
              <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Frota Ativa</h3>
-             <span className="text-[10px] text-primary font-black uppercase">{FLEET_DATA.length} UNIDADES</span>
+             <span className="text-[10px] text-primary font-black uppercase">{fleetData.length} UNIDADES</span>
           </div>
 
-          {FLEET_DATA.map((machine) => (
-            <EquipmentMapCard key={machine.id} machine={machine} />
-          ))}
+          {fleetData.length > 0 ? (
+            fleetData.map((machine) => (
+              <EquipmentMapCard key={machine.id} machine={machine} />
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-[#1a1f3a]/20 border border-[#2d3647] rounded-2xl border-dashed">
+              <div className="w-12 h-12 bg-[#1a1f3a] rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                <LayoutGrid size={20} />
+              </div>
+              <p className="text-[11px] font-black uppercase text-white mb-1">Nenhuma frota real online</p>
+              <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">Aguardando sinais de GPS ou Heartbeat via APK para iniciar o monitoramento.</p>
+            </div>
+          )}
         </div>
 
         {/* Footer Sidebar */}
@@ -153,10 +198,12 @@ function MapaOperacionalPage() {
 
             <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden md:flex">
               <div className="flex flex-col">
-                <span className="text-white">04 JUN 2024</span>
-                <span className="text-[8px] text-primary">TERÇA-FEIRA</span>
+                <span className="text-white uppercase">{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                <span className="text-[8px] text-primary uppercase">{new Date().toLocaleDateString('pt-BR', { weekday: 'long' })}</span>
               </div>
-              <span className="text-xl italic text-white font-black tracking-tighter">14:55:10</span>
+              <span className="text-xl italic text-white font-black tracking-tighter">
+                {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
             </div>
           </div>
 
@@ -187,7 +234,7 @@ function MapaOperacionalPage() {
         </header>
 
         {/* Mapa Real */}
-        <FullMap />
+        <FullMap onFleetUpdate={handleFleetUpdate} />
 
         {/* Float Controls Layer Switcher */}
         <div className="absolute bottom-8 right-8 flex flex-col gap-3 z-[1400]">
@@ -198,32 +245,30 @@ function MapaOperacionalPage() {
            </div>
         </div>
 
-        {/* Overlay Alarmes Ativos */}
-        <div className="absolute top-24 right-8 w-80 space-y-3 z-[1300] pointer-events-none">
-           <div className="bg-red-500/10 border border-red-500/50 backdrop-blur-xl rounded-2xl p-4 flex items-center gap-4 shadow-2xl animate-in slide-in-from-right duration-500 pointer-events-auto cursor-pointer hover:bg-red-500/20 transition-all group">
-              <div className="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
-                <AlertTriangle size={24} />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-black italic tracking-tighter text-white uppercase leading-none">614004</span>
-                  <span className="text-[9px] font-black text-red-500 uppercase">Agora</span>
-                </div>
-                <p className="text-[10px] text-red-500/80 font-black uppercase tracking-tight leading-tight">RPM MÁXIMA MOTOR</p>
-                <p className="text-[8px] text-white/40 font-bold uppercase mt-1">CARREGADEIRA • FRENTE 03</p>
-              </div>
-           </div>
-        </div>
-
       </main>
     </div>
   );
 }
 
-function EquipmentMapCard({ machine }: { machine: typeof FLEET_DATA[0] }) {
-  const status = STATUS_CONFIG[machine.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
-  const machineType = MACHINE_TYPES[machine.type as keyof typeof MACHINE_TYPES];
-  const TypeIcon = machineType?.icon || HelpCircle;
+const NOT_INFORMED = 'Não informado';
+
+const formatLiveTime = (value?: string) => {
+  if (!value) return NOT_INFORMED;
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) return NOT_INFORMED;
+  return time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatLiveValue = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return NOT_INFORMED;
+  return String(value);
+};
+
+function EquipmentMapCard({ machine }: { machine: LiveMapItem }) {
+  const status = STATUS_CONFIG[machine.status.toLowerCase() as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
+  const TypeIcon = machine.typeIcon === 'Tractor' ? Tractor :
+                   machine.typeIcon === 'Truck' ? Truck :
+                   machine.typeIcon === 'Zap' ? Zap : Navigation;
 
   return (
     <div className="group relative flex items-center gap-4 p-4 bg-[#1a1f3a]/30 border border-[#2d3647] rounded-2xl hover:border-primary/50 hover:bg-[#1a1f3a]/50 transition-all cursor-pointer shadow-lg overflow-hidden">
@@ -241,14 +286,14 @@ function EquipmentMapCard({ machine }: { machine: typeof FLEET_DATA[0] }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-black italic text-white tracking-tighter leading-none group-hover:text-primary transition-colors">{machine.id}</span>
+            <span className="text-sm font-black italic text-white tracking-tighter leading-none group-hover:text-primary transition-colors">{machine.code}</span>
             <div className="h-3 w-[1px] bg-white/10"></div>
-            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">{machine.type}</span>
+            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">{formatLiveValue(machine.type || machine.name)}</span>
           </div>
-          <span className="text-[8px] text-muted-foreground font-bold uppercase">{machine.lastSignal}</span>
+          <span className="text-[8px] text-muted-foreground font-bold uppercase">{formatLiveTime(machine.lastHeartbeatAt || machine.lastGpsAt)}</span>
         </div>
 
-        <p className="text-[10px] text-white/60 font-bold uppercase truncate mb-1 tracking-tight">{machine.operation}</p>
+        <p className="text-[10px] text-white/60 font-bold uppercase truncate mb-1 tracking-tight">{machine.displayOperation}</p>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
@@ -257,7 +302,7 @@ function EquipmentMapCard({ machine }: { machine: typeof FLEET_DATA[0] }) {
           </div>
           <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold">
              <Clock size={10} />
-             <span>{machine.hourmeter}</span>
+             <span>{machine.hourmeter === undefined ? NOT_INFORMED : `${machine.hourmeter}h`}</span>
           </div>
         </div>
       </div>

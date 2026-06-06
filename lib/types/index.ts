@@ -460,21 +460,29 @@ export interface OperationalMessage extends BaseEntity {
 
 // --- Live Fleet State ---
 
-export type EquipmentLiveStatus = 'ONLINE' | 'OPERANDO' | 'PARADO' | 'FINALIZADO' | 'OFFLINE';
+export type EquipmentOperationalStatus = 'ONLINE' | 'OPERANDO' | 'PARADO' | 'FINALIZADO' | 'OFFLINE';
+export type EquipmentLiveStatus = EquipmentOperationalStatus;
 
 export interface EquipmentLiveState {
   equipmentId: string;
   fleetCode: string;
   tenantId: string;
-  status: EquipmentLiveStatus;
+  status: EquipmentOperationalStatus;
   latitude?: number;
   longitude?: number;
   speed?: number;
   accuracy?: number;
   lastGpsAt?: string;
   lastHeartbeatAt?: string;
+  journeyId?: string;
   currentOperation?: string;
   currentOperator?: string;
+  operationName?: string;
+  operatorName?: string;
+  hourmeter?: number;
+  stopReason?: string;
+  type?: string;
+  name?: string;
   updatedAt: string;
 }
 

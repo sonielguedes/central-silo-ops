@@ -96,7 +96,7 @@ export class ServerStorage {
         return { ...s, status: 'OFFLINE' as const };
       }
       return s;
-    }).filter(s => s.latitude !== undefined && s.longitude !== undefined);
+    });
 
     const statusWeight = { 'OPERANDO': 0, 'ONLINE': 1, 'PARADO': 2, 'FINALIZADO': 3, 'OFFLINE': 4 };
     return fleet.sort((a, b) => (statusWeight[a.status] || 99) - (statusWeight[b.status] || 99));
