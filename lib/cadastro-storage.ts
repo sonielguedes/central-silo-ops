@@ -15,6 +15,7 @@ import {
   INITIAL_OPERATIONAL_STATES,
   INITIAL_ALERTS,
   INITIAL_TELEMETRY,
+  INITIAL_CHECKLIST_MODELS,
 } from '@/lib/mock/master-data';
 
 // ── Storage root (same resolver as ServerStorage) ─────────────────────────────
@@ -45,6 +46,7 @@ const SEED_MAP: Record<string, unknown[]> = {
   estados:      INITIAL_OPERATIONAL_STATES,
   alerts:       INITIAL_ALERTS,
   telemetry:    INITIAL_TELEMETRY,
+  'checklist-models': INITIAL_CHECKLIST_MODELS,
 };
 
 export const ALLOWED_ENTITIES = Object.keys(SEED_MAP);

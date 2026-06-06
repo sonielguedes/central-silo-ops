@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
-import { ChecklistModelService, EquipmentTypeService } from '@/services/master.service';
+import { ChecklistModelService, EquipmentTypeService } from '@/services/api-service';
 import { ChecklistModel, EquipmentType } from '@/lib/types';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';

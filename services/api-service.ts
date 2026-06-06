@@ -1,5 +1,6 @@
 import type {
   Alert,
+  ChecklistModel,
   Equipment,
   EquipmentGroup,
   EquipmentModel,
@@ -92,6 +93,7 @@ export const OperationService        = {
   },
 };
 export const AlertService            = makeService<Alert>('alerts');
+export const ChecklistModelService   = makeService<ChecklistModel>('checklist-models');
 export const TelemetryService        = {
   ...makeService<TelemetryData>('telemetry'),
   async getLatestByEquipment(equipmentId: string): Promise<TelemetryData | undefined> {
