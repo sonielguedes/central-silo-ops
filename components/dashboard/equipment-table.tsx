@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Truck, ChevronRight, MoreHorizontal, Play, Navigation, PauseCircle, WifiOff, AlertTriangle, Tractor, Zap, HardHat, Loader2, Radio } from 'lucide-react';
-import { EquipmentService, TelemetryService, EquipmentTypeService } from '@/services/master.service';
+import { EquipmentService, TelemetryService, EquipmentTypeService } from '@/services/api-service';
 import { Equipment, TelemetryData, EquipmentType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 

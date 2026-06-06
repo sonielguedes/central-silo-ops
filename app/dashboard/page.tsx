@@ -9,7 +9,7 @@ import { EquipmentTable } from '@/components/dashboard/equipment-table';
 import { RecentAlerts } from '@/components/dashboard/recent-alerts';
 import { ProductivityChart } from '@/components/dashboard/productivity-chart';
 import { SyncPanel } from '@/components/dashboard/sync-panel';
-import { EquipmentService, OperationService, AlertService, TelemetryService } from '@/services/master.service';
+import { EquipmentService, OperationService, AlertService, TelemetryService } from '@/services/api-service';
 import { Truck, Play, AlertCircle, PauseCircle, Factory } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
 
