@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
-import { EquipmentProfileService } from '@/services/master.service';
+import { EquipmentProfileService } from '@/services/api-service';
 import { EquipmentProfile } from '@/lib/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';

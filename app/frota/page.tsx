@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { EquipmentService, EquipmentTypeService, EquipmentModelService, EquipmentGroupService, OperatorService } from '@/services/master.service';
+import { EquipmentService, EquipmentTypeService, EquipmentModelService, EquipmentGroupService, OperatorService } from '@/services/api-service';
 import { Equipment, EquipmentType, EquipmentModel, EquipmentGroup, Operator } from '@/lib/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';

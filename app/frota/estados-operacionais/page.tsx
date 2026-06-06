@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
-import { OperationalStateService } from '@/services/master.service';
+import { OperationalStateService } from '@/services/api-service';
 import { OperationalState } from '@/lib/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -99,7 +99,7 @@ export default function OperationalStatesPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const result = await OperationalStateService.getAll(true); // Include archived for internal filter handling
+    const result = await OperationalStateService.getAll(); // Include archived for internal filter handling
     setData(result);
     setLoading(false);
   };
