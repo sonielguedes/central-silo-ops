@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { INITIAL_COMPANIES, INITIAL_EQUIPMENT } from './mock/master-data';
-import { Company, Equipment, EquipmentLiveState } from './types';
+import { Company, Equipment, EquipmentLiveState, TrailPoint } from './types';
 
 const DEFAULT_TENANT_ID = process.env.SILO_TENANT_ID || 'silo-ops-001';
 const TENANT_STATUS = process.env.SILO_TENANT_STATUS;
@@ -48,10 +48,64 @@ export class ServerStorage {
     return path.join(this.getTenantDir(tenantId), 'live-state.json');
   }
 
+  private static sanitizeLiveStateItem(item: EquipmentLiveState): EquipmentLiveState {
+    const sanitized: EquipmentLiveState = { ...item };
+    const hourmeterKeys: Array<keyof EquipmentLiveState> = [
+      'hourmeter',
+      'hourmeterInitial',
+      'hourmeterStart',
+      'hourmeterCurrent',
+      'hourmeterFinal',
+      'hourmeterEnd',
+    ];
+
+    hourmeterKeys.forEach((key) => {
+      const value = sanitized[key];
+      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+        delete sanitized[key];
+      }
+    });
+
+    if (typeof sanitized.totalHourmeter !== 'number' || !Number.isFinite(sanitized.totalHourmeter) || sanitized.totalHourmeter < 0) {
+      delete sanitized.totalHourmeter;
+    }
+
+    if (sanitized.hourmeterEnd !== undefined && sanitized.hourmeterStart === undefined) {
+      sanitized.hourmeterInconsistent = true;
+      sanitized.hourmeterInconsistencyReason = sanitized.hourmeterInconsistencyReason || 'hourmeterEnd sem hourmeterStart valido';
+    }
+
+    if (
+      sanitized.hourmeterEnd !== undefined &&
+      sanitized.hourmeterStart !== undefined &&
+      sanitized.hourmeterEnd < sanitized.hourmeterStart
+    ) {
+      delete sanitized.hourmeterEnd;
+      sanitized.hourmeterInconsistent = true;
+      sanitized.hourmeterInconsistencyReason = 'hourmeterEnd menor que hourmeterStart';
+    }
+
+    if (
+      sanitized.hourmeterCurrent !== undefined &&
+      sanitized.hourmeterStart !== undefined &&
+      sanitized.hourmeterCurrent < sanitized.hourmeterStart
+    ) {
+      delete sanitized.hourmeterCurrent;
+    }
+
+    return sanitized;
+  }
+
   private static loadLiveState(tenantId: string): EquipmentLiveState[] {
     const file = this.getLiveStateFile(tenantId);
     if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, 'utf-8'));
+      const raw = JSON.parse(fs.readFileSync(file, 'utf-8')) as EquipmentLiveState[];
+      const sanitized = raw.map(item => this.sanitizeLiveStateItem(item));
+      if (JSON.stringify(raw) !== JSON.stringify(sanitized)) {
+        fs.writeFileSync(file, JSON.stringify(sanitized, null, 2));
+        console.info(`[live-state] sanitized tenantId=${tenantId} count=${sanitized.length}`);
+      }
+      return sanitized;
     }
     return [];
   }
@@ -60,25 +114,59 @@ export class ServerStorage {
     const all = this.loadLiveState(tenantId);
     const now = new Date().toISOString();
     const index = all.findIndex(s => s.equipmentId === equipmentId);
+    const current = index >= 0 ? all[index] : undefined;
+    const hourmeterKeys = new Set(['hourmeter', 'hourmeterInitial', 'hourmeterStart', 'hourmeterCurrent', 'hourmeterFinal', 'hourmeterEnd', 'totalHourmeter']);
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([key, value]) => {
+        if (value === undefined || value === null || value === '') return false;
+        if (!hourmeterKeys.has(key)) return true;
+        if (typeof value !== 'number' || !Number.isFinite(value)) return false;
+        if (key === 'totalHourmeter') return value >= 0;
+        if (value <= 0) return false;
+        if (key === 'hourmeterCurrent' && current?.hourmeterStart && value < current.hourmeterStart) return false;
+        if (key === 'hourmeterEnd' && current?.hourmeterStart && value < current.hourmeterStart) return false;
+        return true;
+      })
+    ) as Partial<EquipmentLiveState>;
 
     let state: EquipmentLiveState;
     if (index >= 0) {
-      state = { ...all[index], ...updates, updatedAt: now };
+      state = this.sanitizeLiveStateItem({ ...all[index], ...cleanUpdates, updatedAt: now });
       all[index] = state;
     } else {
-      state = {
+      state = this.sanitizeLiveStateItem({
         equipmentId,
         fleetCode,
         tenantId,
         status: 'ONLINE',
         updatedAt: now,
-        ...updates
-      } as EquipmentLiveState;
+        ...cleanUpdates
+      } as EquipmentLiveState);
       all.push(state);
     }
 
     fs.writeFileSync(this.getLiveStateFile(tenantId), JSON.stringify(all, null, 2));
     console.info(`[live-state] updated fleetCode=${fleetCode} status=${state.status}`);
+    const operationalUpdated = [
+      'operatorRegistration',
+      'operatorName',
+      'currentOperator',
+      'operationCode',
+      'operationName',
+      'currentOperation',
+      'implementCode',
+      'hourmeterCurrent',
+      'stopCode',
+      'stopDescription',
+      'stopReason'
+    ].some(key => Object.prototype.hasOwnProperty.call(cleanUpdates, key));
+    if (operationalUpdated) {
+      console.info(`[live-state] operational fields updated fleetCode=${fleetCode}`);
+    }
+    const hourmeterUpdated = Array.from(hourmeterKeys).some(key => Object.prototype.hasOwnProperty.call(cleanUpdates, key));
+    if (hourmeterUpdated) {
+      console.info(`[live-state] hourmeter updated fleetCode=${fleetCode}`);
+    }
     return state;
   }
 
@@ -372,6 +460,47 @@ export class ServerStorage {
       all[index] = { ...all[index], ...updates, tenantId, updatedAt: new Date().toISOString() };
       fs.writeFileSync(this.getEquipmentFile(tenantId), JSON.stringify(all, null, 2));
     }
+  }
+
+  // ── Trail ────────────────────────────────────────────────────────────────────
+  private static getTrailDir(tenantId: string): string {
+    const dir = path.join(this.getTenantDir(tenantId), 'trails');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  private static getTrailFile(tenantId: string, journeyId: string): string {
+    const safe = journeyId.replace(/[^\w]/g, '_').replace(/-/g,'_');
+    return path.join(this.getTrailDir(tenantId), safe + '.json');
+  }
+
+  static saveTrailPoint(tenantId: string, point: TrailPoint): boolean {
+    if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) return false;
+    if (point.latitude === 0 && point.longitude === 0) return false;
+    if (!point.timestamp) return false;
+
+    const file   = this.getTrailFile(tenantId, point.journeyId);
+    const pts: TrailPoint[] = fs.existsSync(file)
+      ? JSON.parse(fs.readFileSync(file, 'utf-8')) : [];
+
+    const isDup = pts.some((p: TrailPoint) =>
+      p.timestamp === point.timestamp &&
+      p.latitude  === point.latitude  &&
+      p.longitude === point.longitude
+    );
+    if (isDup) return false;
+
+    pts.push(point);
+    pts.sort((a: TrailPoint, b: TrailPoint) => a.timestamp.localeCompare(b.timestamp));
+    fs.writeFileSync(file, JSON.stringify(pts, null, 2));
+    console.info('[trail] saved point fleetCode=' + point.fleetCode + ' journeyId=' + point.journeyId);
+    return true;
+  }
+
+  static getTrail(tenantId: string, journeyId: string): TrailPoint[] {
+    const file = this.getTrailFile(tenantId, journeyId);
+    if (!fs.existsSync(file)) return [];
+    return JSON.parse(fs.readFileSync(file, 'utf-8')) as TrailPoint[];
   }
 
   static saveEvent(event: Omit<MobileEvent, 'receivedAt' | 'tenantId'>, tenantId = DEFAULT_TENANT_ID): 'SYNCED' | 'DUPLICATE' {
