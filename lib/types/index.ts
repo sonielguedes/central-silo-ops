@@ -458,6 +458,22 @@ export interface OperationalMessage extends BaseEntity {
   retryCount: number;
 }
 
+// --- Trail ---
+export interface TrailPoint {
+  tenantId: string;
+  fleetCode: string;
+  equipmentId: string;
+  journeyId: string;
+  latitude: number;
+  longitude: number;
+  speed?: number;
+  accuracy?: number;
+  timestamp: string;
+  status?: string;
+  operatorRegistration?: string;
+  operationCode?: string;
+}
+
 // --- Live Fleet State ---
 
 export type EquipmentOperationalStatus = 'ONLINE' | 'OPERANDO' | 'PARADO' | 'FINALIZADO' | 'OFFLINE';
@@ -499,10 +515,17 @@ export interface EquipmentLiveState {
   hourmeterStart?: number;
   /** Horimetro atual (campo canonico da API) */
   hourmeterCurrent?: number;
+  /** Origem do horimetro: MANUAL, CAN ou CELULAR */
+  hourmeterSource?: 'MANUAL' | 'CAN' | 'CELULAR' | string;
   /** Horimetro ao final da jornada */
   hourmeterFinal?: number;
   /** Horimetro final (campo canonico da API) */
   hourmeterEnd?: number;
+  /** Diferenca total de horimetro na jornada */
+  totalHourmeter?: number;
+  /** Sinaliza inconsistencia recebida no fechamento */
+  hourmeterInconsistent?: boolean;
+  hourmeterInconsistencyReason?: string;
   stopReason?: string;
   /** Descricao da parada (campo canonico da API) */
   stopDescription?: string;
@@ -520,5 +543,3 @@ export interface EquipmentLiveState {
   name?: string;
   updatedAt: string;
 }
-
-
