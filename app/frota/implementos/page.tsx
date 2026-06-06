@@ -8,7 +8,7 @@ import { ImplementService, EquipmentTypeService, EquipmentModelService } from '@
 import { Implement, EquipmentType, EquipmentModel } from '@/lib/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { implementSchema, ImplementFormData } from '@/lib/validations/master-schemas';
+import { z } from 'zod';
 import { FormField } from '@/components/shared/form-field';
 import {
   Plus,
@@ -24,6 +24,15 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+const implementDrawerSchema = z.object({
+  code: z.string().min(1, 'Codigo e obrigatorio'),
+  name: z.string().min(2, 'Nome e obrigatorio'),
+  typeId: z.string().min(1, 'Tipo e obrigatorio'),
+  modelId: z.string().min(1, 'Modelo e obrigatorio'),
+});
+
+type ImplementDrawerFormData = z.infer<typeof implementDrawerSchema>;
+
 export default function ImplementsPage() {
   const [data, setData] = useState<Implement[]>([]);
   const [types, setTypes] = useState<EquipmentType[]>([]);
@@ -32,40 +41,78 @@ export default function ImplementsPage() {
   const [search, setSearch] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Implement | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ImplementFormData>({
-    resolver: zodResolver(implementSchema),
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ImplementDrawerFormData>({
+    resolver: zodResolver(implementDrawerSchema),
   });
 
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
     if (isDrawerOpen) {
-      if (selectedItem) reset(selectedItem);
+      setFeedback(null);
+      if (selectedItem) {
+        reset({
+          code: selectedItem.code ?? '',
+          name: selectedItem.name ?? '',
+          typeId: selectedItem.typeId ?? '',
+          modelId: selectedItem.modelId ?? '',
+        });
+      }
       else reset({ code: '', name: '', typeId: '', modelId: '' });
     }
   }, [selectedItem, reset, isDrawerOpen]);
 
   const loadData = async () => {
     setLoading(true);
-    const [implementsRes, t, m] = await Promise.all([
-      ImplementService.getAll(),
-      EquipmentTypeService.getAll(),
-      EquipmentModelService.getAll()
-    ]);
-    setData(implementsRes);
-    setTypes(t);
-    setModels(m);
-    setLoading(false);
+    try {
+      const [implementsRes, t, m] = await Promise.all([
+        ImplementService.getAll(),
+        EquipmentTypeService.getAll(),
+        EquipmentModelService.getAll()
+      ]);
+      console.info(`[implementos] fetch count=${implementsRes.length}`);
+      setData(implementsRes);
+      setTypes(t);
+      setModels(m);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const onSubmit = async (formData: ImplementFormData) => {
+  const onSubmit = async (formData: ImplementDrawerFormData) => {
+    const typeName = types.find(item => item.id === formData.typeId)?.name ?? formData.typeId;
+    const modelName = models.find(item => item.id === formData.modelId)?.name ?? formData.modelId;
+    const payload = {
+      code: formData.code.trim().toUpperCase(),
+      name: formData.name.trim().toUpperCase(),
+      type: typeName,
+      model: modelName,
+      status: 'ATIVO',
+      entityStatus: 'ATIVO',
+    };
+
     try {
-      if (selectedItem) await ImplementService.update(selectedItem.id, formData);
-      else await ImplementService.create(formData);
+      console.info('[implementos] create payload=', payload);
+      const saved = selectedItem
+        ? await ImplementService.update(selectedItem.id, payload)
+        : await ImplementService.create(payload);
+      console.info(`[implementos] create success id=${saved?.id}`);
+      const implementsRes = await ImplementService.getAll();
+      console.info(`[implementos] fetch count=${implementsRes.length}`);
+      setData(implementsRes);
+      reset({ code: '', name: '', typeId: '', modelId: '' });
+      setFeedback({ type: 'success', message: 'Implemento salvo com sucesso' });
       setIsDrawerOpen(false);
-      loadData();
-    } catch (error: any) { alert(error.message); }
+      setSelectedItem(null);
+    } catch (error) {
+      console.error('[implementos] create failed', error);
+      setFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Falha ao salvar implemento',
+      });
+    }
   };
 
   const filteredData = data.filter(item => item.name.toLowerCase().includes(search.toLowerCase()) || item.code.toLowerCase().includes(search.toLowerCase()));
@@ -79,6 +126,17 @@ export default function ImplementsPage() {
           <PageHeader title="Implementos Agrícolas" description="Cadastro de Acoplamentos, Plataformas e Acessórios">
             <button onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg"><Plus size={16} strokeWidth={3} /> Novo Implemento</button>
           </PageHeader>
+
+          {feedback && (
+            <div className={cn(
+              "mb-4 rounded-2xl border px-4 py-3 text-xs font-bold uppercase tracking-wider",
+              feedback.type === 'success'
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                : "border-red-500/30 bg-red-500/10 text-red-300"
+            )}>
+              {feedback.message}
+            </div>
+          )}
 
           <div className="mb-6 relative w-full max-w-md">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -105,10 +163,10 @@ export default function ImplementsPage() {
                   <div className="mt-4 pt-3 border-t border-[#2d3647] flex items-center justify-between">
                      <span className={cn(
                         "text-[9px] font-black uppercase flex items-center gap-1.5",
-                        item.status === 'DISPONIVEL' ? "text-emerald-500" : item.status === 'VINCULADO' ? "text-blue-500" : "text-red-400"
+                        (item.status === 'DISPONIVEL' || (item.status as string) === 'ATIVO') ? "text-emerald-500" : item.status === 'VINCULADO' ? "text-blue-500" : "text-red-400"
                      )}>
-                        {item.status === 'DISPONIVEL' ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
-                        {item.status}
+                        {(item.status === 'DISPONIVEL' || (item.status as string) === 'ATIVO') ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+                        {item.status ?? item.entityStatus ?? 'ATIVO'}
                      </span>
                      <button className="text-[10px] text-primary font-black uppercase hover:underline">Vincular</button>
                   </div>
@@ -128,6 +186,11 @@ export default function ImplementsPage() {
                 <button onClick={() => setIsDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
              </div>
              <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+                {feedback?.type === 'error' && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-red-300">
+                    {feedback.message}
+                  </div>
+                )}
                 <FormField label="Código de Identificação" error={errors.code?.message} required><input {...register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none uppercase font-bold" /></FormField>
                 <FormField label="Nome / Descritivo" error={errors.name?.message} required><input {...register('name')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                 <div className="grid grid-cols-2 gap-4">
