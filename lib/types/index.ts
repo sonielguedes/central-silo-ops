@@ -479,8 +479,16 @@ export interface EquipmentLiveState {
   currentOperator?: string;
   operationName?: string;
   operatorName?: string;
+  /** Matrícula do operador */
+  registration?: string;
   hourmeter?: number;
+  /** Horímetro no início da jornada */
+  hourmeterInitial?: number;
+  /** Horímetro ao final da jornada */
+  hourmeterFinal?: number;
   stopReason?: string;
+  /** Código da parada atual (ex: PAR-01) */
+  stopCode?: string;
   type?: string;
   name?: string;
   updatedAt: string;
