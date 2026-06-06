@@ -481,18 +481,44 @@ export interface EquipmentLiveState {
   operatorName?: string;
   /** Matrícula do operador */
   registration?: string;
+  /** Matrícula do operador (campo canônico da API) */
+  operatorRegistration?: string;
+  /** Código da operação atual */
+  operationCode?: string;
+  /** Centro de custo */
+  costCenter?: string;
+  /** Ordem de serviço */
+  workOrder?: string;
+  /** Código do implemento acoplado */
+  implementCode?: string;
+
   hourmeter?: number;
-  /** Horímetro no início da jornada */
+  /** Horimetro no inicio da jornada */
   hourmeterInitial?: number;
-  /** Horímetro ao final da jornada */
+  /** Horimetro inicial (campo canonico da API) */
+  hourmeterStart?: number;
+  /** Horimetro atual (campo canonico da API) */
+  hourmeterCurrent?: number;
+  /** Horimetro ao final da jornada */
   hourmeterFinal?: number;
+  /** Horimetro final (campo canonico da API) */
+  hourmeterEnd?: number;
   stopReason?: string;
-  /** Código da parada atual (ex: PAR-01) */
+  /** Descricao da parada (campo canonico da API) */
+  stopDescription?: string;
+  /** Codigo da parada atual (ex: PAR-01) */
   stopCode?: string;
+  /** Timestamp de inicio da parada atual */
+  stopStartedAt?: string;
+  /** Duracao da parada em segundos */
+  stopDurationSeconds?: number;
+  /** Timestamp de inicio do status atual */
+  statusStartedAt?: string;
+  /** Duracao do status atual em segundos */
+  statusDurationSeconds?: number;
   type?: string;
   name?: string;
   updatedAt: string;
 }
-
 
 
