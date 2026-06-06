@@ -1,5 +1,6 @@
 import type {
   Alert,
+  AccessGroup,
   ChecklistModel,
   Equipment,
   EquipmentGroup,
@@ -14,6 +15,8 @@ import type {
   Operator,
   StopReason,
   TelemetryData,
+  Unit,
+  User,
 } from '@/lib/types';
 
 const TENANT_ID =
@@ -94,6 +97,9 @@ export const OperationService        = {
 };
 export const AlertService            = makeService<Alert>('alerts');
 export const ChecklistModelService   = makeService<ChecklistModel>('checklist-models');
+export const UserService             = makeService<User>('users');
+export const AccessGroupService      = makeService<AccessGroup>('access-groups');
+export const UnitService             = makeService<Unit>('units');
 export const TelemetryService        = {
   ...makeService<TelemetryData>('telemetry'),
   async getLatestByEquipment(equipmentId: string): Promise<TelemetryData | undefined> {

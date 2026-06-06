@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
-import { UserService, AccessGroupService, UnitService } from '@/services/master.service';
+import { UserService, AccessGroupService, UnitService } from '@/services/api-service';
 import { User, AccessGroup, Unit } from '@/lib/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';

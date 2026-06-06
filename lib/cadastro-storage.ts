@@ -16,6 +16,9 @@ import {
   INITIAL_ALERTS,
   INITIAL_TELEMETRY,
   INITIAL_CHECKLIST_MODELS,
+  INITIAL_USERS,
+  INITIAL_ACCESS_GROUPS,
+  INITIAL_UNITS,
 } from '@/lib/mock/master-data';
 
 // ── Storage root (same resolver as ServerStorage) ─────────────────────────────
@@ -47,6 +50,9 @@ const SEED_MAP: Record<string, unknown[]> = {
   alerts:       INITIAL_ALERTS,
   telemetry:    INITIAL_TELEMETRY,
   'checklist-models': INITIAL_CHECKLIST_MODELS,
+  users:        INITIAL_USERS,
+  'access-groups': INITIAL_ACCESS_GROUPS,
+  units:        INITIAL_UNITS,
 };
 
 export const ALLOWED_ENTITIES = Object.keys(SEED_MAP);
