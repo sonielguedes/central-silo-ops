@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
+import { EquipmentLiveStatus } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
+    // Strict fleetCode check
+    const bodyFleetCode = header.fleetCode || events[0]?.data?.fleetCode;
+    if (bodyFleetCode && bodyFleetCode !== validation.equipment.code) {
+      return NextResponse.json({ error: 'fleetCode divergente' }, { status: 403 });
+    }
+
     const results = events.map((event: any) => {
       if (event.data?.mobileToken && event.data.mobileToken !== validation.equipment.mobileToken) {
         return { offlineId: event.uuid, status: 'REJECTED', reason: 'Token invalido' };
@@ -73,9 +80,14 @@ export async function POST(req: NextRequest) {
 
     // Update Live State based on batch events
     const lastLocation = [...events].reverse().find(e => e.type === 'LOCATION' || e.type === 'GPS');
-    const lastStatus = [...events].reverse().find(e => ['WORK_STARTED', 'STOP_REASON', 'PARADA_DETECTADA', 'JOURNEY_END', 'HEARTBEAT'].includes(e.type));
+    const lastStatusEvent = [...events].reverse().find(e =>
+      ['WORK_STARTED', 'FSM_TRABALHO', 'STOP_REASON', 'PARADA', 'JOURNEY_END', 'HEARTBEAT', 'JOURNEY_START'].includes(e.type)
+    );
 
-    const liveUpdates: any = { lastHeartbeatAt: new Date().toISOString() };
+    const liveUpdates: any = {
+      updatedAt: new Date().toISOString()
+    };
+
     if (lastLocation) {
       liveUpdates.latitude = lastLocation.data.latitude;
       liveUpdates.longitude = lastLocation.data.longitude;
@@ -83,14 +95,30 @@ export async function POST(req: NextRequest) {
       liveUpdates.accuracy = lastLocation.data.accuracy;
       liveUpdates.lastGpsAt = new Date(lastLocation.timestamp).toISOString();
     }
-    if (lastStatus) {
-      if (lastStatus.type === 'WORK_STARTED') liveUpdates.status = 'OPERANDO';
-      else if (['STOP_REASON', 'PARADA_DETECTADA'].includes(lastStatus.type)) liveUpdates.status = 'PARADO';
-      else if (lastStatus.type === 'JOURNEY_END') liveUpdates.status = 'FINALIZADO';
-      else liveUpdates.status = 'ONLINE';
 
-      if (lastStatus.data?.operationName) liveUpdates.currentOperation = lastStatus.data.operationName;
-      if (lastStatus.data?.operatorName) liveUpdates.currentOperator = lastStatus.data.operatorName;
+    const hasHeartbeat = events.some(e => e.type === 'HEARTBEAT');
+    if (hasHeartbeat) {
+      liveUpdates.lastHeartbeatAt = new Date().toISOString();
+    }
+
+    if (lastStatusEvent) {
+      let liveStatus: EquipmentLiveStatus = 'ONLINE';
+
+      if (['WORK_STARTED', 'FSM_TRABALHO'].includes(lastStatusEvent.type)) {
+        liveStatus = 'OPERANDO';
+      } else if (['STOP_REASON', 'PARADA'].includes(lastStatusEvent.type)) {
+        liveStatus = 'PARADO';
+      } else if (lastStatusEvent.type === 'JOURNEY_END') {
+        liveStatus = 'OFFLINE';
+      } else if (lastStatusEvent.type === 'JOURNEY_START' || lastStatusEvent.type === 'HEARTBEAT') {
+        liveStatus = 'ONLINE';
+      }
+
+      liveUpdates.status = liveStatus;
+
+      if (lastStatusEvent.data?.operationName) liveUpdates.currentOperation = lastStatusEvent.data.operationName;
+      if (lastStatusEvent.data?.operatorName) liveUpdates.currentOperator = lastStatusEvent.data.operatorName;
+      if (lastStatusEvent.data?.journeyId) liveUpdates.journeyId = lastStatusEvent.data.journeyId;
     }
 
     ServerStorage.updateLiveState(tenantId, validation.equipment.id, validation.equipment.code, liveUpdates);

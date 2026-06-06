@@ -73,11 +73,12 @@ export class ServerStorage {
         status: 'ONLINE',
         updatedAt: now,
         ...updates
-      };
+      } as EquipmentLiveState;
       all.push(state);
     }
 
     fs.writeFileSync(this.getLiveStateFile(tenantId), JSON.stringify(all, null, 2));
+    console.info(`[live-state] updated fleetCode=${fleetCode} status=${state.status}`);
     return state;
   }
 
@@ -86,7 +87,7 @@ export class ServerStorage {
     const now = Date.now();
     const OFFLINE_TIMEOUT_MS = 120 * 1000;
 
-    return all.map(s => {
+    const fleet = all.map(s => {
       const hb = s.lastHeartbeatAt ? new Date(s.lastHeartbeatAt).getTime() : 0;
       const gps = s.lastGpsAt ? new Date(s.lastGpsAt).getTime() : 0;
       const lastSignal = Math.max(hb, gps);
@@ -95,7 +96,10 @@ export class ServerStorage {
         return { ...s, status: 'OFFLINE' as const };
       }
       return s;
-    });
+    }).filter(s => s.latitude !== undefined && s.longitude !== undefined);
+
+    const statusWeight = { 'OPERANDO': 0, 'ONLINE': 1, 'PARADO': 2, 'FINALIZADO': 3, 'OFFLINE': 4 };
+    return fleet.sort((a, b) => (statusWeight[a.status] || 99) - (statusWeight[b.status] || 99));
   }
 
 

@@ -7,8 +7,9 @@ import 'leaflet/dist/leaflet.css';
 import { Navigation, Clock, User, MapPin, Gauge, Zap, Tractor, Truck, Loader2 } from 'lucide-react';
 import { renderToString } from 'react-dom/server';
 import { STATUS_CONFIG } from '@/lib/mock/map-data';
-import { EquipmentService, TelemetryService, EquipmentTypeService, OperationService, OperatorService, FarmService, FieldService } from '@/services/master.service';
+import { EquipmentService, EquipmentTypeService, OperationService, OperatorService, FarmService, FieldService } from '@/services/master.service';
 import { cn } from '@/lib/utils';
+import { EquipmentLiveState } from '@/lib/types';
 
 // Fix for default marker icons
 const DefaultIcon = L.icon({
@@ -60,42 +61,61 @@ export default function FullMapEnterprise() {
   const [loading, setLoading] = useState(true);
   const farmCenter: [number, number] = [-12.5568, -55.7229];
 
-  useEffect(() => {
-    async function loadData() {
-      const [eqs, types, ops, oprs, farms, fields] = await Promise.all([
+  async function loadFleetData() {
+    try {
+      const [eqs, types, ops, oprs, farms, fields, resLive] = await Promise.all([
         EquipmentService.getAll(),
         EquipmentTypeService.getAll(),
         OperationService.getAll(),
         OperatorService.getAll(),
         FarmService.getAll(),
-        FieldService.getAll()
+        FieldService.getAll(),
+        fetch('/api/equipamentos/status').then(r => r.json()).catch(() => [])
       ]);
 
-      const items = await Promise.all(eqs.map(async (eq) => {
-        const tel = await TelemetryService.getLatestByEquipment(eq.id);
+      const liveMap = new Map((resLive as EquipmentLiveState[]).map(s => [s.equipmentId, s]));
+
+      const items = eqs.map((eq) => {
+        const live = liveMap.get(eq.id);
         const type = types.find(t => t.id === eq.typeId);
         const op = ops.find(o => o.equipmentId === eq.id && o.status === 'EM_CURSO');
         const opr = oprs.find(o => o.id === (op?.operatorId || eq.currentOperatorId));
         const farm = farms.find(f => f.id === op?.farmId);
         const field = fields.find(f => f.id === op?.fieldId);
 
+        const status = live?.status || eq.status;
+        const lat = live?.latitude;
+        const lng = live?.longitude;
+
         return {
           ...eq,
-          telemetry: tel,
+          status,
           typeIcon: type?.icon,
           typeName: type?.name,
-          operatorName: opr?.name || 'Não Identificado',
-          operationName: op?.type || 'Sem Operação',
+          operatorName: live?.currentOperator || opr?.name || 'Não Identificado',
+          operationName: live?.currentOperation || op?.type || 'Sem Operação',
           farmName: farm?.name || '-',
           fieldName: field?.code || '-',
-          pos: tel ? [tel.latitude, tel.longitude] : farmCenter
+          speed: live?.speed || 0,
+          pos: (lat && lng) ? [lat, lng] : null,
+          isOnline: status !== 'OFFLINE' && status !== 'FINALIZADO',
+          lastSignal: live?.lastGpsAt || live?.lastHeartbeatAt || eq.lastSignal,
+          lastGpsAt: live?.lastGpsAt,
+          lastHeartbeatAt: live?.lastHeartbeatAt
         };
-      }));
+      }).filter(item => item.pos !== null); // Requirement: if no lat/lng, don't render
 
       setFleet(items);
       setLoading(false);
+    } catch (e) {
+      console.error('Failed to load fleet data', e);
     }
-    loadData();
+  }
+
+  useEffect(() => {
+    loadFleetData();
+    const interval = setInterval(loadFleetData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const fieldsPolygons = [
@@ -144,18 +164,27 @@ export default function FullMapEnterprise() {
                 <div className="grid grid-cols-2 gap-y-4 gap-x-6 mb-4">
                   <PopupDetail icon={<User size={12} />} label="Operador" value={machine.operatorName} />
                   <PopupDetail icon={<Zap size={12} />} label="Operação" value={machine.operationName} />
-                  <PopupDetail icon={<Gauge size={12} />} label="Velocidade" value={`${machine.telemetry?.speed || 0} km/h`} />
+                  <PopupDetail icon={<Gauge size={12} />} label="Velocidade" value={`${machine.speed || 0} km/h`} />
                   <PopupDetail icon={<Clock size={12} />} label="Horímetro" value={`${machine.hourmeter}h`} />
                   <PopupDetail icon={<MapPin size={12} />} label="Fazenda" value={machine.farmName} />
                   <PopupDetail icon={<Navigation size={12} />} label="Talhão" value={machine.fieldName} />
                 </div>
 
-                <div className="pt-3 border-t border-[#2d3647]/50 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                     <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", machine.telemetry?.isOnline ? "bg-emerald-500" : "bg-red-500")}></div>
-                     <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Último Sinal</span>
+                <div className="pt-3 border-t border-[#2d3647]/50 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-1.5 h-1.5 rounded-full", machine.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]")}></div>
+                      <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Último GPS</span>
+                    </div>
+                    <span className="text-[9px] text-white font-black uppercase">{machine.lastGpsAt ? new Date(machine.lastGpsAt).toLocaleTimeString() : '-'}</span>
                   </div>
-                  <span className="text-[10px] text-white font-black uppercase">{machine.lastSignal}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-1.5 h-1.5 rounded-full", machine.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]")}></div>
+                      <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Último Heartbeat</span>
+                    </div>
+                    <span className="text-[9px] text-white font-black uppercase">{machine.lastHeartbeatAt ? new Date(machine.lastHeartbeatAt).toLocaleTimeString() : '-'}</span>
+                  </div>
                 </div>
               </div>
             </Popup>
