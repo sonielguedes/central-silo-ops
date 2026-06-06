@@ -82,7 +82,15 @@ export const EquipmentModelService   = makeService<EquipmentModel>('modelos');
 export const EquipmentGroupService   = makeService<EquipmentGroup>('grupos');
 export const EquipmentProfileService = makeService<EquipmentProfile>('perfis');
 export const OperationalStateService = makeService<OperationalState>('estados');
-export const OperationService        = makeService<Operation>('operacoes');
+export const OperationService        = {
+  ...makeService<Operation>('operacoes'),
+  async startOperation(id: string): Promise<Operation | undefined> {
+    return this.update(id, { status: 'EM_CURSO' });
+  },
+  async finishOperation(id: string): Promise<Operation | undefined> {
+    return this.update(id, { status: 'FINALIZADA', end: new Date().toISOString() });
+  },
+};
 export const AlertService            = makeService<Alert>('alerts');
 export const TelemetryService        = {
   ...makeService<TelemetryData>('telemetry'),
