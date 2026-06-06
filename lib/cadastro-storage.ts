@@ -27,9 +27,8 @@ const resolveStorageDir = () => {
 
 const DATA_ROOT = resolveStorageDir();
 
-// ── Seed map — which INITIAL_* array to use for each entity ───────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SEED_MAP: Record<string, any[]> = {
+// ── Seed map — unknown[] keeps heterogeneous entity arrays typed safely
+const SEED_MAP: Record<string, unknown[]> = {
   equipamentos: INITIAL_EQUIPMENT,
   operadores:   INITIAL_OPERATORS,
   fazendas:     INITIAL_FARMS,
@@ -46,8 +45,16 @@ const SEED_MAP: Record<string, any[]> = {
 
 export const ALLOWED_ENTITIES = Object.keys(SEED_MAP);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyRecord = Record<string, any>;
+// ── StorageItem: typed base with index signature for entity-specific fields ───
+interface StorageItem {
+  id?: string;
+  tenantId?: string;
+  entityStatus?: string;
+  deletedAt?: string;
+  version?: number;
+  history?: Array<{ timestamp: string; action: string }>;
+  [key: string]: unknown;
+}
 
 // ── CadastroStorage ───────────────────────────────────────────────────────────
 export class CadastroStorage {
@@ -61,42 +68,41 @@ export class CadastroStorage {
     return path.join(this.getDir(tenantId), 'cadastro-' + entity + '.json');
   }
 
-  private static readAll(tenantId: string, entity: string): AnyRecord[] {
+  private static readAll(tenantId: string, entity: string): StorageItem[] {
     const file = this.getFile(tenantId, entity);
     if (!fs.existsSync(file)) {
-      // Seed with INITIAL_* data (replace tenantId so isolation works)
-      const seed = (SEED_MAP[entity] || []).map((item: AnyRecord) => ({
-        ...item,
+      const seed = (SEED_MAP[entity] || []).map((item) => ({
+        ...(item as StorageItem),
         tenantId,
       }));
       fs.writeFileSync(file, JSON.stringify(seed, null, 2));
       console.info('[storage-api] entity=' + entity + ' action=seed tenantId=' + tenantId + ' count=' + seed.length);
       return seed;
     }
-    return JSON.parse(fs.readFileSync(file, 'utf-8')) as AnyRecord[];
+    return JSON.parse(fs.readFileSync(file, 'utf-8')) as StorageItem[];
   }
 
-  private static writeAll(tenantId: string, entity: string, data: AnyRecord[]): void {
+  private static writeAll(tenantId: string, entity: string, data: StorageItem[]): void {
     fs.writeFileSync(this.getFile(tenantId, entity), JSON.stringify(data, null, 2));
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────
-  static getAll(tenantId: string, entity: string): AnyRecord[] {
+  static getAll(tenantId: string, entity: string): StorageItem[] {
     return this.readAll(tenantId, entity).filter(
       (item) => item.entityStatus !== 'ARQUIVADO' && !item.deletedAt
     );
   }
 
-  static getById(tenantId: string, entity: string, id: string): AnyRecord | undefined {
+  static getById(tenantId: string, entity: string, id: string): StorageItem | undefined {
     return this.readAll(tenantId, entity).find(
       (item) => item.id === id && item.tenantId === tenantId
     );
   }
 
-  static create(tenantId: string, entity: string, body: AnyRecord): AnyRecord {
-    const all   = this.readAll(tenantId, entity);
-    const now   = new Date().toISOString();
-    const newItem: AnyRecord = {
+  static create(tenantId: string, entity: string, body: StorageItem): StorageItem {
+    const all = this.readAll(tenantId, entity);
+    const now = new Date().toISOString();
+    const newItem: StorageItem = {
       ...body,
       id:           Math.random().toString(36).substring(2, 11),
       tenantId,
@@ -112,22 +118,22 @@ export class CadastroStorage {
     return newItem;
   }
 
-  static update(tenantId: string, entity: string, id: string, body: AnyRecord): AnyRecord | null {
+  static update(tenantId: string, entity: string, id: string, body: StorageItem): StorageItem | null {
     const all   = this.readAll(tenantId, entity);
     const index = all.findIndex((item) => item.id === id && item.tenantId === tenantId);
     if (index === -1) return null;
 
     const current = all[index];
     const now     = new Date().toISOString();
-    const updated: AnyRecord = {
+    const updated: StorageItem = {
       ...current,
       ...body,
       id,
       tenantId,
       updatedAt: now,
-      version:   (current.version || 1) + 1,
+      version:   (current.version ?? 0) + 1,
       history: [
-        ...(current.history || []),
+        ...(current.history ?? []),
         { timestamp: now, action: 'ATUALIZACAO' },
       ],
     };
