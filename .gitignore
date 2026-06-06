@@ -29,6 +29,10 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# SILO Data Persistence
+data/
+*.local.json
+
 # IDE
 .idea
 .vscode

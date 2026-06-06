@@ -1,14 +1,65 @@
 services:
-  silo-central:
+  silo-piloto:
     build: .
-    container_name: silo-central-web
+    container_name: silo-piloto-web
     restart: unless-stopped
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env.production
-    logging:
+    environment:
+      SILO_TENANT_ID: silo-ops-001
+      SILO_TENANT_STATUS: ATIVO
+      NEXT_PUBLIC_SILO_TENANT_ID: silo-ops-001
+      SILO_DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "3000"
+    logging: &default-logging
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+  silo-cliente-02:
+    build: .
+    container_name: silo-cliente-02-web
+    restart: unless-stopped
+    environment:
+      SILO_TENANT_ID: cliente-02
+      SILO_TENANT_STATUS: ATIVO
+      NEXT_PUBLIC_SILO_TENANT_ID: cliente-02
+      SILO_DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "3000"
+    logging: *default-logging
+
+  silo-cliente-03:
+    build: .
+    container_name: silo-cliente-03-web
+    restart: unless-stopped
+    environment:
+      SILO_TENANT_ID: cliente-03
+      SILO_TENANT_STATUS: ATIVO
+      NEXT_PUBLIC_SILO_TENANT_ID: cliente-03
+      SILO_DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "3000"
+    logging: *default-logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: silo-nginx
+    restart: unless-stopped
+    depends_on:
+      - silo-piloto
+      - silo-cliente-02
+      - silo-cliente-03
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+      - "3003:3003"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    logging: *default-logging

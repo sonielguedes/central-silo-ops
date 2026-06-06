@@ -1,11 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 import { INITIAL_COMPANIES, INITIAL_EQUIPMENT } from './mock/master-data';
-import { Company, Equipment } from './types';
+import { Company, Equipment, EquipmentLiveState } from './types';
 
 const DEFAULT_TENANT_ID = process.env.SILO_TENANT_ID || 'silo-ops-001';
 const TENANT_STATUS = process.env.SILO_TENANT_STATUS;
-const DATA_ROOT = process.env.SILO_DATA_DIR || path.join(process.cwd(), 'data-storage');
+
+const resolveStorageDir = () => {
+  const dir = process.env.SILO_STORAGE_DIR || process.env.SILO_DATA_DIR || (process.env.NODE_ENV === 'production' ? '/app/data' : './data');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+};
+
+const DATA_ROOT = resolveStorageDir();
+let storageLogDone = false;
 
 export interface MobileEvent {
   offlineId: string;
@@ -27,16 +37,72 @@ export class ServerStorage {
   }
 
   private static getEquipmentFile(tenantId: string): string {
-    return path.join(this.getTenantDir(tenantId), 'equipment.json');
+    return path.join(this.getTenantDir(tenantId), 'equipments.json');
   }
 
   private static getEventsFile(tenantId: string): string {
-    return path.join(this.getTenantDir(tenantId), 'events.json');
+    return path.join(this.getTenantDir(tenantId), 'mobile-events.json');
   }
 
+  private static getLiveStateFile(tenantId: string): string {
+    return path.join(this.getTenantDir(tenantId), 'live-state.json');
+  }
+
+  private static loadLiveState(tenantId: string): EquipmentLiveState[] {
+    const file = this.getLiveStateFile(tenantId);
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, 'utf-8'));
+    }
+    return [];
+  }
+
+  static updateLiveState(tenantId: string, equipmentId: string, fleetCode: string, updates: Partial<EquipmentLiveState>): EquipmentLiveState {
+    const all = this.loadLiveState(tenantId);
+    const now = new Date().toISOString();
+    const index = all.findIndex(s => s.equipmentId === equipmentId);
+
+    let state: EquipmentLiveState;
+    if (index >= 0) {
+      state = { ...all[index], ...updates, updatedAt: now };
+      all[index] = state;
+    } else {
+      state = {
+        equipmentId,
+        fleetCode,
+        tenantId,
+        status: 'ONLINE',
+        updatedAt: now,
+        ...updates
+      };
+      all.push(state);
+    }
+
+    fs.writeFileSync(this.getLiveStateFile(tenantId), JSON.stringify(all, null, 2));
+    return state;
+  }
+
+  static getLiveFleet(tenantId: string): EquipmentLiveState[] {
+    const all = this.loadLiveState(tenantId);
+    const now = Date.now();
+    const OFFLINE_TIMEOUT_MS = 120 * 1000;
+
+    return all.map(s => {
+      const hb = s.lastHeartbeatAt ? new Date(s.lastHeartbeatAt).getTime() : 0;
+      const gps = s.lastGpsAt ? new Date(s.lastGpsAt).getTime() : 0;
+      const lastSignal = Math.max(hb, gps);
+
+      if (s.status !== 'OFFLINE' && lastSignal > 0 && (now - lastSignal) > OFFLINE_TIMEOUT_MS) {
+        return { ...s, status: 'OFFLINE' as const };
+      }
+      return s;
+    });
+  }
+
+
   private static getCompaniesFile(): string {
-    if (!fs.existsSync(DATA_ROOT)) {
-      fs.mkdirSync(DATA_ROOT, { recursive: true });
+    if (!storageLogDone) {
+      console.info(`[ServerStorage] using storage dir: ${DATA_ROOT}`);
+      storageLogDone = true;
     }
     return path.join(DATA_ROOT, 'companies.json');
   }
