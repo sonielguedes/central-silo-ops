@@ -50,7 +50,9 @@ export class ServerStorage {
 
   private static sanitizeLiveStateItem(item: EquipmentLiveState): EquipmentLiveState {
     const sanitized: EquipmentLiveState = { ...item };
-    const hourmeterKeys: Array<keyof EquipmentLiveState> = [
+
+    // 1. Numeric hourmeter fields: must be finite > 0
+    const numericHourmeterKeys: Array<keyof EquipmentLiveState> = [
       'hourmeter',
       'hourmeterInitial',
       'hourmeterStart',
@@ -58,33 +60,24 @@ export class ServerStorage {
       'hourmeterFinal',
       'hourmeterEnd',
     ];
-
-    hourmeterKeys.forEach((key) => {
+    numericHourmeterKeys.forEach((key) => {
       const value = sanitized[key];
       if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
         delete sanitized[key];
       }
     });
 
+    // 2. totalHourmeter: finite >= 0
     if (typeof sanitized.totalHourmeter !== 'number' || !Number.isFinite(sanitized.totalHourmeter) || sanitized.totalHourmeter < 0) {
       delete sanitized.totalHourmeter;
     }
 
-    if (sanitized.hourmeterEnd !== undefined && sanitized.hourmeterStart === undefined) {
-      sanitized.hourmeterInconsistent = true;
-      sanitized.hourmeterInconsistencyReason = sanitized.hourmeterInconsistencyReason || 'hourmeterEnd sem hourmeterStart valido';
+    // 3. hourmeterSource: must be a non-empty string — cleans up null/empty residuals
+    if (!sanitized.hourmeterSource || typeof sanitized.hourmeterSource !== 'string' || !sanitized.hourmeterSource.trim()) {
+      delete sanitized.hourmeterSource;
     }
 
-    if (
-      sanitized.hourmeterEnd !== undefined &&
-      sanitized.hourmeterStart !== undefined &&
-      sanitized.hourmeterEnd < sanitized.hourmeterStart
-    ) {
-      delete sanitized.hourmeterEnd;
-      sanitized.hourmeterInconsistent = true;
-      sanitized.hourmeterInconsistencyReason = 'hourmeterEnd menor que hourmeterStart';
-    }
-
+    // 4. hourmeterCurrent must not regress below hourmeterStart
     if (
       sanitized.hourmeterCurrent !== undefined &&
       sanitized.hourmeterStart !== undefined &&
@@ -92,6 +85,34 @@ export class ServerStorage {
     ) {
       delete sanitized.hourmeterCurrent;
     }
+
+    // 5. Re-evaluate inconsistency from scratch.
+    //    Always clear first so stale flags from previous journeys never bleed through.
+    //    Only mark inconsistent when an actual violation is detected now.
+    delete sanitized.hourmeterInconsistent;
+    delete sanitized.hourmeterInconsistencyReason;
+
+    if (sanitized.hourmeterEnd !== undefined && sanitized.hourmeterStart === undefined) {
+      // End present but no valid start
+      sanitized.hourmeterInconsistent = true;
+      sanitized.hourmeterInconsistencyReason = 'hourmeterEnd sem hourmeterStart valido';
+    } else if (
+      sanitized.hourmeterEnd !== undefined &&
+      sanitized.hourmeterStart !== undefined &&
+      sanitized.hourmeterEnd < sanitized.hourmeterStart
+    ) {
+      // End < Start: remove the invalid end value
+      delete sanitized.hourmeterEnd;
+      sanitized.hourmeterInconsistent = true;
+      sanitized.hourmeterInconsistencyReason = 'hourmeterEnd menor que hourmeterStart';
+    } else if (
+      typeof sanitized.totalHourmeter === 'number' &&
+      sanitized.totalHourmeter < 0
+    ) {
+      sanitized.hourmeterInconsistent = true;
+      sanitized.hourmeterInconsistencyReason = 'totalHourmeter negativo';
+    }
+    // No violation → hourmeterInconsistent remains absent (clean state)
 
     return sanitized;
   }
@@ -129,9 +150,23 @@ export class ServerStorage {
       })
     ) as Partial<EquipmentLiveState>;
 
+    // When a new journey starts (hourmeterStart is being updated), clear stale end-of-journey
+    // fields from the existing record. Without this, a residual hourmeterEnd from a previous
+    // journey would be carried forward and re-trigger the end<start inconsistency check
+    // against the new hourmeterStart.
+    const isNewJourneyStart = cleanUpdates.hourmeterStart !== undefined;
+
     let state: EquipmentLiveState;
     if (index >= 0) {
-      state = this.sanitizeLiveStateItem({ ...all[index], ...cleanUpdates, updatedAt: now });
+      let base: Record<string, unknown> = { ...all[index] };
+      if (isNewJourneyStart) {
+        delete base.hourmeterEnd;
+        delete base.hourmeterFinal;
+        delete base.hourmeterInconsistent;
+        delete base.hourmeterInconsistencyReason;
+        delete base.totalHourmeter;
+      }
+      state = this.sanitizeLiveStateItem({ ...base, ...cleanUpdates, updatedAt: now } as EquipmentLiveState);
       all[index] = state;
     } else {
       state = this.sanitizeLiveStateItem({

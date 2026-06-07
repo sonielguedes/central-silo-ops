@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
-import { EquipmentLiveStatus } from '@/lib/types';
+import { EquipmentLiveState, EquipmentLiveStatus, TrailPoint } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +18,68 @@ function fsmToStatus(state: string): EquipmentLiveStatus {
   return 'ONLINE';
 }
 
+const hasValidValue = (value: unknown) => value !== undefined && value !== null && value !== '';
+
+function putIfValid(target: Record<string, unknown>, key: string, value: unknown) {
+  if (hasValidValue(value)) target[key] = value;
+}
+
+const asNumber = (value: unknown): number | undefined => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const asValidHourmeter = (value: unknown): number | undefined => {
+  const parsed = asNumber(value);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
+};
+
+const asString = (value: unknown): string | undefined => {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+};
+
+interface MobileBatchEvent {
+  uuid: string;
+  type: string;
+  timestamp: string | number | Date;
+  data?: Record<string, unknown>;
+}
+
+interface MobileBatchHeader {
+  machineId?: string;
+  tenantId?: string;
+  mobileToken?: string;
+  fleetCode?: string;
+}
+
+interface MobileBatchBody {
+  header?: MobileBatchHeader;
+  tenantId?: string;
+  events?: MobileBatchEvent[];
+}
+
+function applyOperationalFields(target: Record<string, unknown>, data: Record<string, unknown>) {
+  const operatorRegistration = data.operatorRegistration ?? data.registration ?? data.operatorId;
+  const operatorName = data.operatorName ?? data.currentOperator;
+  const operationCode = data.operationCode;
+  const operationName = data.operationName ?? data.currentOperation;
+  const implementCode = data.implementCode;
+  const hourmeterCurrent = asValidHourmeter(data.hourmeterCurrent ?? data.hourmeter);
+
+  putIfValid(target, 'operatorRegistration', operatorRegistration);
+  putIfValid(target, 'registration', operatorRegistration);
+  putIfValid(target, 'operatorName', operatorName);
+  putIfValid(target, 'currentOperator', operatorName);
+  putIfValid(target, 'operationCode', operationCode);
+  putIfValid(target, 'operationName', operationName);
+  putIfValid(target, 'currentOperation', operationName);
+  putIfValid(target, 'costCenter', data.costCenter);
+  putIfValid(target, 'workOrder', data.workOrder);
+  putIfValid(target, 'implementCode', implementCode);
+  putIfValid(target, 'journeyId', data.journeyId);
+  putIfValid(target, 'hourmeterSource', data.hourmeterSource);
+  putIfValid(target, 'hourmeterCurrent', hourmeterCurrent);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const companyToken = (req.headers.get('x-company-token') || undefined)?.trim();
@@ -31,7 +93,7 @@ export async function POST(req: NextRequest) {
     }
 
     const tenantId = company.tenantId;
-    const body = await req.json();
+    const body = await req.json() as MobileBatchBody;
     const { header, events } = body;
 
     if (!header || !header.machineId || !Array.isArray(events)) {
@@ -44,7 +106,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'tenantId divergente do token' }, { status: 403 });
     }
 
-    const mobileToken = header.mobileToken || events[0]?.data?.mobileToken;
+    const firstEventData = events[0]?.data;
+    const mobileToken = header.mobileToken || (typeof firstEventData?.mobileToken === 'string' ? firstEventData.mobileToken : undefined);
     const equipment = ServerStorage.getEquipmentById(header.machineId, tenantId);
     const validation = ServerStorage.validateMobileEquipment(equipment, mobileToken, tenantId, companyToken);
 
@@ -56,12 +119,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
-    const bodyFleetCode = header.fleetCode || events[0]?.data?.fleetCode;
+    const firstFleetCode = typeof firstEventData?.fleetCode === 'string' ? firstEventData.fleetCode : undefined;
+    const bodyFleetCode = header.fleetCode || firstFleetCode;
     if (bodyFleetCode && bodyFleetCode !== validation.equipment.code) {
       return NextResponse.json({ error: 'fleetCode divergente' }, { status: 403 });
     }
 
-    const results = events.map((event: any) => {
+    const results = events.map((event) => {
       if (event.data?.mobileToken && event.data.mobileToken !== validation.equipment.mobileToken) {
         return { offlineId: event.uuid, status: 'REJECTED', reason: 'Token invalido' };
       }
@@ -90,47 +154,75 @@ export async function POST(req: NextRequest) {
 
       switch (event.type) {
         case 'JOURNEY_START': {
-          if (d.journeyId)            liveUpdates.journeyId            = d.journeyId;
-          if (d.operatorName)         liveUpdates.operatorName         = d.operatorName;
-          if (d.operatorName)         liveUpdates.currentOperator      = d.operatorName;
-          if (d.operatorRegistration) liveUpdates.operatorRegistration = d.operatorRegistration;
-          if (d.registration)         liveUpdates.operatorRegistration = d.registration;
-          if (d.operationCode)        liveUpdates.operationCode        = d.operationCode;
-          if (d.operationName)        liveUpdates.operationName        = d.operationName;
-          if (d.operationName)        liveUpdates.currentOperation     = d.operationName;
-          if (d.costCenter)           liveUpdates.costCenter           = d.costCenter;
-          if (d.workOrder)            liveUpdates.workOrder            = d.workOrder;
-          if (d.implementCode)        liveUpdates.implementCode        = d.implementCode;
-          const hStart = d.hourmeterStart ?? d.hourmeter;
+          applyOperationalFields(liveUpdates, d);
+          const hStart = asValidHourmeter(d.hourmeterStart ?? d.hourmeter);
           if (hStart != null) { liveUpdates.hourmeterStart = hStart; liveUpdates.hourmeterCurrent = hStart; }
+          // Persist hourmeterSource explicitly — applyOperationalFields handles it via putIfValid,
+          // but an explicit set here guarantees it even if the field arrives outside the data envelope.
+          const srcStart = asString(d.hourmeterSource);
+          if (srcStart) liveUpdates.hourmeterSource = srcStart;
           liveUpdates.statusStartedAt = ts;
           liveUpdates.status = 'ONLINE';
           break;
         }
         case 'LOCATION':
         case 'GPS': {
-          if (d.latitude  != null) liveUpdates.latitude  = d.latitude;
-          if (d.longitude != null) liveUpdates.longitude = d.longitude;
-          if (d.speed     != null) liveUpdates.speed     = d.speed;
-          if (d.accuracy  != null) liveUpdates.accuracy  = d.accuracy;
+          applyOperationalFields(liveUpdates, d);
+          const latitude = asNumber(d.latitude);
+          const longitude = asNumber(d.longitude);
+          const speed = asNumber(d.speed);
+          const accuracy = asNumber(d.accuracy);
+          if (latitude  != null) liveUpdates.latitude  = latitude;
+          if (longitude != null) liveUpdates.longitude = longitude;
+          if (speed     != null) liveUpdates.speed     = speed;
+          if (accuracy  != null) liveUpdates.accuracy  = accuracy;
           liveUpdates.lastGpsAt = ts;
+          const srcGps = asString(d.hourmeterSource);
+          if (srcGps) liveUpdates.hourmeterSource = srcGps;
           if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
+          // Save trail point
+          const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
+          if (jId && latitude != null && longitude != null) {
+            const trailPoint: TrailPoint = {
+              tenantId,
+              fleetCode: validation.equipment.code,
+              equipmentId: validation.equipment.id,
+              journeyId: jId,
+              latitude,
+              longitude,
+              speed,
+              accuracy,
+              timestamp: ts,
+              status:    (liveUpdates.status as string) || 'ONLINE',
+              operatorRegistration: (liveUpdates.operatorRegistration as string | undefined),
+              operationCode:        (liveUpdates.operationCode as string | undefined),
+            };
+            ServerStorage.saveTrailPoint(tenantId, trailPoint);
+          }
           break;
         }
         case 'HEARTBEAT': {
+          applyOperationalFields(liveUpdates, d);
           liveUpdates.lastHeartbeatAt = now;
-          if (d.latitude  != null) liveUpdates.latitude  = d.latitude;
-          if (d.longitude != null) liveUpdates.longitude = d.longitude;
-          if (d.speed     != null) liveUpdates.speed     = d.speed;
-          if (d.accuracy  != null) liveUpdates.accuracy  = d.accuracy;
-          if (d.latitude  != null) liveUpdates.lastGpsAt = ts;
-          const hCurr = d.hourmeterCurrent ?? d.hourmeter;
+          const latitude = asNumber(d.latitude);
+          const longitude = asNumber(d.longitude);
+          const speed = asNumber(d.speed);
+          const accuracy = asNumber(d.accuracy);
+          if (latitude  != null) liveUpdates.latitude  = latitude;
+          if (longitude != null) liveUpdates.longitude = longitude;
+          if (speed     != null) liveUpdates.speed     = speed;
+          if (accuracy  != null) liveUpdates.accuracy  = accuracy;
+          if (latitude  != null) liveUpdates.lastGpsAt = ts;
+          const hCurr = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
           if (hCurr != null) liveUpdates.hourmeterCurrent = hCurr;
+          const srcHb = asString(d.hourmeterSource);
+          if (srcHb) liveUpdates.hourmeterSource = srcHb;
           if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
           break;
         }
         case 'FSM_TRANSITION': {
-          const toState = d.toState || d.state || '';
+          applyOperationalFields(liveUpdates, d);
+          const toState = asString(d.toState) || asString(d.state) || '';
           liveUpdates.status = fsmToStatus(toState);
           if (d.operationCode) liveUpdates.operationCode = d.operationCode;
           if (d.operationName) { liveUpdates.operationName = d.operationName; liveUpdates.currentOperation = d.operationName; }
@@ -143,6 +235,7 @@ export async function POST(req: NextRequest) {
         case 'WORK_STATUS':
         case 'WORK_STARTED':
         case 'FSM_TRABALHO': {
+          applyOperationalFields(liveUpdates, d);
           liveUpdates.status = 'OPERANDO';
           if (d.operationCode) liveUpdates.operationCode = d.operationCode;
           if (d.operationName || d.name) {
@@ -154,17 +247,33 @@ export async function POST(req: NextRequest) {
         }
         case 'STOP_REASON':
         case 'PARADA': {
+          applyOperationalFields(liveUpdates, d);
           liveUpdates.status = 'PARADO';
           if (d.stopCode || d.code)        liveUpdates.stopCode        = d.stopCode || d.code;
           if (d.stopDescription || d.description || d.reason)
             liveUpdates.stopDescription = d.stopDescription || d.description || d.reason;
-          liveUpdates.stopStartedAt = d.startedAt || ts;
-          if (d.durationSeconds != null) liveUpdates.stopDurationSeconds = d.durationSeconds;
+          if (d.stopDescription || d.description || d.reason)
+            liveUpdates.stopReason = d.stopDescription || d.description || d.reason;
+          liveUpdates.stopStartedAt = d.stopStartedAt || d.startedAt || ts;
+          if (d.stopDurationSeconds != null || d.durationSeconds != null) liveUpdates.stopDurationSeconds = d.stopDurationSeconds ?? d.durationSeconds;
           break;
         }
         case 'JOURNEY_END': {
-          const hEnd = d.hourmeterEnd ?? d.hourmeter;
-          if (hEnd != null) liveUpdates.hourmeterEnd = hEnd;
+          applyOperationalFields(liveUpdates, d);
+          const hStart = asValidHourmeter(d.hourmeterStart ?? d.hourmeterStartValue);
+          const hEnd = asValidHourmeter(d.hourmeterEnd ?? d.hourmeter);
+          if (hStart != null && hEnd != null && hEnd < hStart) {
+            // Flag the inconsistency — sanitizeLiveStateItem will also re-validate on write
+            liveUpdates.hourmeterInconsistent = true;
+            liveUpdates.hourmeterInconsistencyReason = 'hourmeterEnd menor que hourmeterStart';
+            console.warn(`[Hourmeter] inconsistent fleetCode=${validation.equipment.code} start=${hStart} end=${hEnd}`);
+          }
+          if (hStart != null) liveUpdates.hourmeterStart = hStart;
+          if (hEnd != null && (hStart == null || hEnd >= hStart)) liveUpdates.hourmeterEnd = hEnd;
+          const total = asNumber(d.totalHourmeter);
+          if (total != null && total >= 0) liveUpdates.totalHourmeter = total;
+          const srcEnd = asString(d.hourmeterSource);
+          if (srcEnd) liveUpdates.hourmeterSource = srcEnd;
           liveUpdates.status = 'OFFLINE';
           liveUpdates.statusStartedAt = ts;
           break;
@@ -175,16 +284,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Heartbeat presence = at least ONLINE
-    const hasHeartbeat = events.some((e: any) => e.type === 'HEARTBEAT');
+    const hasHeartbeat = events.some((e) => e.type === 'HEARTBEAT');
     if (hasHeartbeat && !liveUpdates.lastHeartbeatAt) {
       liveUpdates.lastHeartbeatAt = now;
     }
+
+    const loggedHourmeter = liveUpdates.hourmeterCurrent ?? liveUpdates.hourmeterEnd ?? liveUpdates.hourmeterStart ?? 'missing';
+    console.info(`[batch-operational] fleetCode=${validation.equipment.code} operator=${String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing')} operation=${String(liveUpdates.operationName || liveUpdates.operationCode || 'missing')} hourmeter=${String(loggedHourmeter)}`);
+    console.info(`[Hourmeter] source=${String(liveUpdates.hourmeterSource || 'missing')}`);
+    console.info(`[Hourmeter] start=${String(liveUpdates.hourmeterStart ?? 'missing')}`);
+    console.info(`[Hourmeter] current=${String(liveUpdates.hourmeterCurrent ?? 'missing')}`);
+    console.info(`[Hourmeter] end=${String(liveUpdates.hourmeterEnd ?? 'missing')}`);
 
     ServerStorage.updateLiveState(
       tenantId,
       validation.equipment.id,
       validation.equipment.code,
-      liveUpdates as any
+      liveUpdates as Partial<EquipmentLiveState>
     );
 
     return NextResponse.json({ results, tenantId });
