@@ -78,6 +78,12 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   putIfValid(target, 'workOrder', data.workOrder);
   putIfValid(target, 'implementCode', implementCode);
   putIfValid(target, 'implementName', implementName);
+  // Stop fields: ONLY from explicit stopCode/stopDescription — no generic fallbacks.
+  // Using data.code or data.description as fallback would overwrite a valid stopCode
+  // when other events (LOCATION, FSM_TRANSITION) pass through applyOperationalFields.
+  putIfValid(target, 'stopCode', data.stopCode);
+  putIfValid(target, 'stopDescription', data.stopDescription ?? data.stopReason);
+  putIfValid(target, 'stopReason', data.stopDescription ?? data.stopReason);
   putIfValid(target, 'journeyId', data.journeyId);
   putIfValid(target, 'hourmeterSource', data.hourmeterSource);
   putIfValid(target, 'hourmeterCurrent', hourmeterCurrent);
@@ -101,15 +107,23 @@ function enrichOperationalFields(
     }
   }
 
-  // Operation: code → name (from 'estados' operational-state catalog)
+  // Operation: operationCode → operationName (from 'operacoes' catalog)
+  // Match by 'code' field first, then 'type' field (legacy seed data uses type).
+  // Only uses found.name — never falls back to type/code as name.
   const opCode = asString(updates.operationCode);
   if (opCode && !asString(updates.operationName)) {
-    const estados = CadastroStorage.getAll(tenantId, 'estados') as Array<Record<string, unknown>>;
-    const found = estados.find(e => asString(e.code) === opCode);
-    if (found && asString(found.name)) {
-      updates.operationName    = found.name;
-      updates.currentOperation = found.name;
-      console.info('[operational-fields] enriched operation=' + String(found.name) + ' code=' + opCode);
+    const ops2 = CadastroStorage.getAll(tenantId, 'operacoes') as Array<Record<string, unknown>>;
+    console.info('[operational-fields] lookup operacoes count=' + ops2.length + ' opCode=' + opCode);
+    const found = ops2.find(o => asString(o.code) === opCode || asString(o.type) === opCode);
+    const opName = found ? asString(found.name) : undefined;
+    if (opName) {
+      updates.operationName    = opName;
+      updates.currentOperation = opName;
+      console.info('[operational-fields] enriched operation=' + opName + ' code=' + opCode);
+    } else if (found) {
+      console.warn('[operational-fields] operacoes item found for code=' + opCode + ' but name is empty — fields: ' + Object.keys(found).join(','));
+    } else {
+      console.warn('[operational-fields] operacoes: no item found for code=' + opCode);
     }
   }
 
@@ -124,15 +138,19 @@ function enrichOperationalFields(
     }
   }
 
-  // Stop reason: code → description
-  const stopCode = asString(updates.stopCode);
-  if (stopCode && !asString(updates.stopDescription)) {
+  // Stop reason: stopCode → stopDescription. stopCode always persists regardless of lookup result.
+  const stopCodeEnrich = asString(updates.stopCode);
+  if (stopCodeEnrich && !asString(updates.stopDescription)) {
     const paradas = CadastroStorage.getAll(tenantId, 'paradas') as Array<Record<string, unknown>>;
-    const found = paradas.find(p => asString(p.code) === stopCode);
-    if (found && asString(found.description)) {
-      updates.stopDescription = found.description;
-      updates.stopReason      = found.description;
-      console.info('[operational-fields] enriched stop=' + String(found.description) + ' code=' + stopCode);
+    const found = paradas.find(p => asString(p.code) === stopCodeEnrich);
+    const stopDesc = found ? (asString(found.description) || asString(found.name)) : undefined;
+    if (stopDesc) {
+      updates.stopDescription = stopDesc;
+      updates.stopReason      = stopDesc;
+      console.info('[operational-fields] enriched stop=' + stopDesc + ' code=' + stopCodeEnrich);
+    } else {
+      // No catalog match or empty description — stopCode stays intact, stopDescription left absent
+      console.warn('[operational-fields] paradas: no description found for code=' + stopCodeEnrich + ' (stopCode preserved)');
     }
   }
 }
