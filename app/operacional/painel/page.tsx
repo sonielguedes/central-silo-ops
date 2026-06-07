@@ -93,6 +93,11 @@ const fmtTime = (v?: string): string => {
 const fv = (v: unknown): string =>
   (v === null || v === undefined || v === '') ? 'Nao informado' : String(v);
 
+const hasOpenStop = (item: EquipmentLiveState): boolean =>
+  Boolean(item.stopCode || item.stopDescription || (item as unknown as Record<string, unknown>)['stopReason']) &&
+  !(item as unknown as Record<string, unknown>)['stopEndedAt'] &&
+  item.status !== 'FINALIZADO';
+
 const fmtHM = (h: number | null | undefined): string => {
   if (h == null || !Number.isFinite(h)) return 'N/A';
   const hrs = Math.floor(h);
@@ -166,7 +171,7 @@ function PainelOperacionalPage() {
   const kpis = useMemo(() => {
     const total     = items.length;
     const operando  = items.filter(i => i.status === 'OPERANDO').length;
-    const parado    = items.filter(i => i.status === 'PARADO').length;
+    const parado    = items.filter(i => hasOpenStop(i)).length;
     const offline   = items.filter(i => i.status === 'OFFLINE' || i.status === 'FINALIZADO').length;
     const noGps     = items.filter(i => !isRecent(i.lastGpsAt, GPS_RECENT_MS)).length;
     const noHb      = items.filter(i => !isRecent(i.lastHeartbeatAt, HB_RECENT_MS)).length;
