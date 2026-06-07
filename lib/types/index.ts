@@ -472,6 +472,8 @@ export interface TrailPoint {
   status?: string;
   operatorRegistration?: string;
   operationCode?: string;
+  /** Horímetro no instante do ponto (quando disponível) */
+  hourmeterCurrent?: number;
 }
 
 // --- Live Fleet State ---

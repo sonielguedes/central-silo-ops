@@ -166,7 +166,8 @@ export async function POST(req: NextRequest) {
           break;
         }
         case 'LOCATION':
-        case 'GPS': {
+        case 'GPS':
+        case 'GPS_POINT': {
           applyOperationalFields(liveUpdates, d);
           const latitude = asNumber(d.latitude);
           const longitude = asNumber(d.longitude);
@@ -180,22 +181,24 @@ export async function POST(req: NextRequest) {
           const srcGps = asString(d.hourmeterSource);
           if (srcGps) liveUpdates.hourmeterSource = srcGps;
           if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
-          // Save trail point
+          // Save trail point (rejected if lat/lng invalid, 0/0, ts or journeyId absent)
           const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
+          const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
           if (jId && latitude != null && longitude != null) {
             const trailPoint: TrailPoint = {
               tenantId,
-              fleetCode: validation.equipment.code,
-              equipmentId: validation.equipment.id,
-              journeyId: jId,
+              fleetCode:            validation.equipment.code,
+              equipmentId:          validation.equipment.id,
+              journeyId:            jId,
               latitude,
               longitude,
               speed,
               accuracy,
-              timestamp: ts,
-              status:    (liveUpdates.status as string) || 'ONLINE',
+              timestamp:            ts,
+              status:               (liveUpdates.status as string) || 'ONLINE',
               operatorRegistration: (liveUpdates.operatorRegistration as string | undefined),
               operationCode:        (liveUpdates.operationCode as string | undefined),
+              hourmeterCurrent:     hCurrGps,
             };
             ServerStorage.saveTrailPoint(tenantId, trailPoint);
           }

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  LayersControl, MapContainer, Marker, Polygon,
+  LayersControl, MapContainer, Marker, Polygon, Polyline,
   Popup, TileLayer, ZoomControl, useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
@@ -10,13 +10,12 @@ import 'leaflet/dist/leaflet.css';
 import {
   Activity, AlertTriangle, CheckCircle2, Clock,
   Gauge, Hash, Loader2, MapPin, Navigation,
-  PauseCircle, Tractor, Truck, User, Zap,
+  PauseCircle, Route, Tractor, Truck, User, Zap,
 } from 'lucide-react';
 import { renderToString } from 'react-dom/server';
 import type { LucideIcon } from 'lucide-react';
-import { EquipmentLiveState, EquipmentOperationalStatus } from '@/lib/types';
+import { EquipmentLiveState, EquipmentOperationalStatus, TrailPoint } from '@/lib/types';
 
-// ── CSS overrides (string concat avoids JSX template-literal parser issues) ─
 const LEAFLET_CSS = (
   '.leaflet-container{background:#050812!important}' +
   '.silo-enterprise-popup .leaflet-popup-content-wrapper{background:transparent!important;padding:0!important;box-shadow:none!important;border:none!important}' +
@@ -26,7 +25,6 @@ const LEAFLET_CSS = (
   '.leaflet-popup-close-button{color:#6b7280!important;padding:10px!important;z-index:100}'
 );
 
-// ── Thresholds ───────────────────────────────────────────────────────────────
 const GPS_RECENT_MS       = 15 * 60 * 1000;
 const HEARTBEAT_RECENT_MS =  3 * 60 * 1000;
 const GPS_ALERT_MS        =      120 * 1000;
@@ -45,7 +43,6 @@ const STATUS_CONFIG: Record<
   offline:    { label: 'Offline',    color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
 };
 
-// ── Exported types ───────────────────────────────────────────────────────────
 export type MapCounts = {
   online: number; operando: number; parado: number;
   offline: number; staleGps: number; staleHeartbeat: number;
@@ -60,7 +57,8 @@ export type LiveMapItem = EquipmentLiveState & {
   displayOperation: string;
 };
 
-// ── Leaflet default icon ─────────────────────────────────────────────────────
+type TrailState = { fleetCode: string; journeyId: string; points: TrailPoint[] } | null;
+
 const DefaultIcon = L.icon({
   iconUrl:    'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl:  'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -69,7 +67,17 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const trailStartIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:14px;height:14px;background:#10b981;border:3px solid white;border-radius:50%;box-shadow:0 0 8px rgba(16,185,129,0.8)"></div>',
+  iconSize: [14, 14], iconAnchor: [7, 7],
+});
+const trailEndIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:14px;height:14px;background:#ef4444;border:3px solid white;border-radius:50%;box-shadow:0 0 8px rgba(239,68,68,0.8)"></div>',
+  iconSize: [14, 14], iconAnchor: [7, 7],
+});
+
 const hasValidPosition = (
   item: EquipmentLiveState
 ): item is EquipmentLiveState & { latitude: number; longitude: number } =>
@@ -90,9 +98,9 @@ const ageMs = (value?: string): number => {
 const formatAge = (ms: number): string => {
   if (!Number.isFinite(ms)) return '';
   const s = Math.floor(ms / 1000);
-  if (s < 60)  return 'ha ' + s + 's';
+  if (s < 60) return 'ha ' + s + 's';
   const m = Math.floor(s / 60);
-  if (m < 60)  return 'ha ' + m + 'min';
+  if (m < 60) return 'ha ' + m + 'min';
   return 'ha ' + Math.floor(m / 60) + 'h';
 };
 
@@ -142,7 +150,6 @@ export const buildLiveMapCounts = (items: EquipmentLiveState[]): MapCounts => ({
   staleHeartbeat: items.filter(i => !isRecent(i.lastHeartbeatAt, HEARTBEAT_RECENT_MS)).length,
 });
 
-// ── Machine marker icon ───────────────────────────────────────────────────────
 const createMachineIcon = (
   iconName: LiveMapItem['typeIcon'],
   statusKey: EquipmentOperationalStatus,
@@ -178,7 +185,6 @@ const createMachineIcon = (
   return L.divIcon({ className: 'silo-machine-icon', html, iconSize: [48, 64], iconAnchor: [24, 56] });
 };
 
-// ── MapController: flyTo + openPopup on selectedId change ────────────────────
 function MapController({
   selectedId,
   fleet,
@@ -194,33 +200,34 @@ function MapController({
   React.useEffect(() => {
     if (!selectedId || selectedId === prevId.current) return;
     prevId.current = selectedId;
-
     const machine = fleet.find(m => m.id === selectedId);
-    if (!machine) return;
-
-    if (!machine.pos) {
-      console.info('[map-ui] sidebar click fleetCode=' + machine.code + ' (no GPS)');
+    if (!machine?.pos) {
+      console.info('[map-ui] sidebar click fleetCode=' + (machine?.code ?? selectedId) + ' (no GPS)');
       return;
     }
-
     console.info('[map-ui] flyTo fleetCode=' + machine.code + ' lat=' + machine.pos[0] + ' lng=' + machine.pos[1]);
     map.flyTo(machine.pos, 17, { animate: true, duration: 0.8 });
-
-    const openAfterFly = () => {
-      const marker = markerRefs.current[selectedId];
-      if (marker) {
-        marker.openPopup();
-        console.info('[map-ui] popup opened fleetCode=' + machine.code);
-      }
+    const open = () => {
+      const mk = markerRefs.current[selectedId];
+      if (mk) { mk.openPopup(); console.info('[map-ui] popup opened fleetCode=' + machine.code); }
     };
-    map.once('moveend', openAfterFly);
-    return () => { map.off('moveend', openAfterFly); };
+    map.once('moveend', open);
+    return () => { map.off('moveend', open); };
   }, [selectedId, fleet, map, markerRefs]);
 
   return null;
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function TrailBoundsController({ points }: { points: [number, number][] }) {
+  const map = useMap();
+  React.useEffect(() => {
+    if (points.length < 2) return;
+    const bounds = L.latLngBounds(points);
+    map.fitBounds(bounds, { padding: [60, 60], animate: true });
+  }, [points, map]);
+  return null;
+}
+
 export default function FullMapEnterprise({
   onFleetUpdate,
   selectedId,
@@ -228,9 +235,11 @@ export default function FullMapEnterprise({
   onFleetUpdate?: (data: { fleet: LiveMapItem[]; counts: MapCounts }) => void;
   selectedId?: string | null;
 }) {
-  const [fleet, setFleet]     = useState<LiveMapItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const farmCenter: [number, number] = [-12.5568, -55.7229];
+  const [fleet, setFleet]       = useState<LiveMapItem[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [trail, setTrail]       = useState<TrailState>(null);
+  const [trailLoading, setTrailLoading] = useState(false);
+  const farmCenter: [number, number]    = [-12.5568, -55.7229];
   const markerRefs = React.useRef<Record<string, L.Marker>>({});
 
   const logPopupOpen = React.useCallback((item: LiveMapItem) => {
@@ -239,6 +248,26 @@ export default function FullMapEnterprise({
     console.info('[map-popup] opened fleetCode=' + item.code);
     console.info('[map-popup] data keys=' + keys);
   }, []);
+
+  const fetchTrail = React.useCallback(async (fleetCode: string, journeyId: string) => {
+    if (!journeyId) { setTrail({ fleetCode, journeyId: '', points: [] }); return; }
+    setTrailLoading(true);
+    try {
+      const url = '/api/equipamentos/trail?fleetCode=' + encodeURIComponent(fleetCode) + '&journeyId=' + encodeURIComponent(journeyId);
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = res.ok ? await res.json() : { points: [] };
+      const pts: TrailPoint[] = Array.isArray(data.points) ? data.points : [];
+      setTrail({ fleetCode, journeyId, points: pts });
+      console.info('[map-trail] rendered points=' + pts.length);
+    } catch (e) {
+      console.error('[map-trail] fetch error', e);
+      setTrail({ fleetCode, journeyId, points: [] });
+    } finally {
+      setTrailLoading(false);
+    }
+  }, []);
+
+  const clearTrail = React.useCallback(() => setTrail(null), []);
 
   const loadFleetData = React.useCallback(async () => {
     try {
@@ -272,6 +301,10 @@ export default function FullMapEnterprise({
     { name: 'T14', coords: [[-12.561,-55.715],[-12.561,-55.730],[-12.570,-55.730],[-12.570,-55.715]] as [number,number][] },
   ];
 
+  const trailPositions: [number, number][] = (trail?.points ?? [])
+    .filter(p => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+    .map(p => [p.latitude, p.longitude]);
+
   if (loading) {
     return (
       <div className="flex-1 bg-[#050812] flex items-center justify-center">
@@ -287,6 +320,10 @@ export default function FullMapEnterprise({
         scrollWheelZoom zoomControl={false} className="z-0">
 
         <MapController selectedId={selectedId} fleet={fleet} markerRefs={markerRefs} />
+
+        {trailPositions.length >= 2 && (
+          <TrailBoundsController points={trailPositions} />
+        )}
 
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Satelite">
@@ -305,18 +342,37 @@ export default function FullMapEnterprise({
           </LayersControl.Overlay>
         </LayersControl>
 
+        {/* Trail polyline */}
+        {trailPositions.length >= 2 && (
+          <Polyline positions={trailPositions}
+            pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.85, dashArray: undefined }} />
+        )}
+        {trailPositions.length >= 1 && (
+          <Marker position={trailPositions[0]} icon={trailStartIcon} />
+        )}
+        {trailPositions.length >= 2 && (
+          <Marker position={trailPositions[trailPositions.length - 1]} icon={trailEndIcon} />
+        )}
+
         {fleet.filter(m => m.pos !== null).map(machine => {
           const sCfg = getStatus(machine.status);
           return (
             <Marker key={machine.id} position={machine.pos!}
               icon={createMachineIcon(machine.typeIcon, machine.status, machine.code)}
               eventHandlers={{
-                add:      (e) => { markerRefs.current[machine.id] = e.target as L.Marker; },
-                remove:   ()  => { delete markerRefs.current[machine.id]; },
+                add:       (e) => { markerRefs.current[machine.id] = e.target as L.Marker; },
+                remove:    ()  => { delete markerRefs.current[machine.id]; },
                 popupopen: () => logPopupOpen(machine),
               }}>
               <Popup className="silo-enterprise-popup" minWidth={300}>
-                <OperationalPopup machine={machine} statusCfg={sCfg} />
+                <OperationalPopup
+                  machine={machine}
+                  statusCfg={sCfg}
+                  onRequestTrail={fetchTrail}
+                  onClearTrail={clearTrail}
+                  trailLoading={trailLoading}
+                  activeTrail={trail}
+                />
               </Popup>
             </Marker>
           );
@@ -329,12 +385,19 @@ export default function FullMapEnterprise({
   );
 }
 
-// ── Popup types ───────────────────────────────────────────────────────────────
 type StatusCfg = { label: string; color: string };
 type IconType  = LucideIcon;
 
-// ── Operational Popup ─────────────────────────────────────────────────────────
-function OperationalPopup({ machine, statusCfg }: { machine: LiveMapItem; statusCfg: StatusCfg }) {
+function OperationalPopup({
+  machine, statusCfg, onRequestTrail, onClearTrail, trailLoading, activeTrail,
+}: {
+  machine: LiveMapItem;
+  statusCfg: StatusCfg;
+  onRequestTrail: (fleetCode: string, journeyId: string) => void;
+  onClearTrail: () => void;
+  trailLoading: boolean;
+  activeTrail: TrailState;
+}) {
   const TypeIcon: IconType =
     machine.typeIcon === 'Tractor' ? Tractor :
     machine.typeIcon === 'Truck'   ? Truck   :
@@ -347,12 +410,15 @@ function OperationalPopup({ machine, statusCfg }: { machine: LiveMapItem; status
   const gpsFresh = gpsAge <= GPS_FRESH_MS;
   const anyAlert = gpsStale || hbStale;
 
-  // Prefer canonical API field names; fall back to legacy
   const registration = machine.operatorRegistration ?? machine.registration;
   const hStart   = machine.hourmeterStart   ?? machine.hourmeterInitial;
   const hCurrent = machine.hourmeterCurrent ?? machine.hourmeter;
   const hEnd     = machine.hourmeterEnd     ?? machine.hourmeterFinal;
   const stopDesc = machine.stopDescription  ?? machine.stopReason;
+
+  const isMyTrail = activeTrail?.fleetCode === machine.code;
+  const trailHasPoints = isMyTrail && (activeTrail?.points.length ?? 0) > 0;
+  const trailEmpty = isMyTrail && (activeTrail?.points.length ?? 0) === 0;
 
   return (
     <div className="bg-[#0a0e27] text-white rounded-xl border border-[#2d3647] font-sans shadow-2xl overflow-hidden"
@@ -383,7 +449,6 @@ function OperationalPopup({ machine, statusCfg }: { machine: LiveMapItem; status
           {hbStale  && <AlertRow text={'Sem heartbeat (' + formatAge(hbAge) + ')'} color="#ef4444" />}
         </div>
       )}
-
       {gpsFresh && !anyAlert && (
         <div className="flex items-center gap-1.5 px-4 py-1.5 bg-[#061a0f] border-b border-[#0d3320]/60">
           <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
@@ -426,12 +491,53 @@ function OperationalPopup({ machine, statusCfg }: { machine: LiveMapItem; status
             <PField icon={<Hash       size={11} />} label="Codigo"  value={formatValue(machine.stopCode)} />
           </div>
         </PSection>
+
+        {/* Trail section */}
+        <div className="pt-2 border-t border-[#2d3647]/40">
+          {!isMyTrail && (
+            <button
+              onClick={() => onRequestTrail(machine.code, machine.journeyId ?? '')}
+              disabled={trailLoading || !machine.journeyId}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase hover:bg-blue-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+              <Route size={11} />
+              {trailLoading ? 'Carregando rastro...' : (machine.journeyId ? 'Ver rastro' : 'Sem jornada ativa')}
+            </button>
+          )}
+          {isMyTrail && trailHasPoints && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] font-bold">
+                  <Route size={11} />
+                  {(activeTrail?.points.length ?? 0) + ' pontos no rastro'}
+                </div>
+                <button onClick={onClearTrail}
+                  className="text-[9px] font-black uppercase text-muted-foreground hover:text-white transition-colors">
+                  Limpar
+                </button>
+              </div>
+              <div className="text-[9px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1 mr-3">
+                  <span style={{ width: 8, height: 8, background: '#10b981', borderRadius: '50%', display: 'inline-block' }} />
+                  Inicio
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span style={{ width: 8, height: 8, background: '#ef4444', borderRadius: '50%', display: 'inline-block' }} />
+                  Fim
+                </span>
+              </div>
+            </div>
+          )}
+          {isMyTrail && trailEmpty && (
+            <p className="text-[10px] font-bold text-muted-foreground/60 italic text-center py-1">
+              Sem rastro disponivel para esta jornada
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
 function AlertRow({ text, color }: { text: string; color: string }) {
   return (
     <div className="flex items-center gap-1.5">

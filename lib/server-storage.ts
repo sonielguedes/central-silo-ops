@@ -510,14 +510,18 @@ export class ServerStorage {
   }
 
   static saveTrailPoint(tenantId: string, point: TrailPoint): boolean {
+    // Reject invalid coordinates
     if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) return false;
     if (point.latitude === 0 && point.longitude === 0) return false;
+    // Reject absent timestamp or journeyId — they are the deduplication/routing keys
     if (!point.timestamp) return false;
+    if (!point.journeyId || !point.journeyId.trim()) return false;
 
     const file   = this.getTrailFile(tenantId, point.journeyId);
     const pts: TrailPoint[] = fs.existsSync(file)
       ? JSON.parse(fs.readFileSync(file, 'utf-8')) : [];
 
+    // Deduplicate by journeyId (implicit via file) + timestamp + lat + lng
     const isDup = pts.some((p: TrailPoint) =>
       p.timestamp === point.timestamp &&
       p.latitude  === point.latitude  &&
@@ -528,7 +532,7 @@ export class ServerStorage {
     pts.push(point);
     pts.sort((a: TrailPoint, b: TrailPoint) => a.timestamp.localeCompare(b.timestamp));
     fs.writeFileSync(file, JSON.stringify(pts, null, 2));
-    console.info('[trail] saved point fleetCode=' + point.fleetCode + ' journeyId=' + point.journeyId);
+    console.info('[trail] saved point fleetCode=' + point.fleetCode + ' journeyId=' + point.journeyId + ' total=' + pts.length);
     return true;
   }
 
@@ -545,7 +549,7 @@ export class ServerStorage {
       events = JSON.parse(fs.readFileSync(eventsFile, 'utf-8'));
     }
 
-    if (events.some(e => e.tenantId === tenantId && e.offlineId === event.offlineId)) {
+        if (events.some((e: MobileEvent) => e.tenantId === tenantId && e.offlineId === event.offlineId)) {
       return 'DUPLICATE';
     }
 
