@@ -16,19 +16,34 @@ import {
   RefreshCw,
   Bell,
   FileText,
+  ClipboardList,
   Settings,
   Activity,
+  BarChart2,
   History as HistoryIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
 }
 
-const menuItems = [
+interface MenuItem {
+  icon: LucideIcon;
+  label: string;
+  href: string;
+  badge?: string;
+}
+
+interface MenuGroup {
+  group: string;
+  items: MenuItem[];
+}
+
+const menuItems: MenuGroup[] = [
   { group: 'Monitoramento', items: [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
     { icon: MapIcon, label: 'Mapa Operacional', href: '/mapa-operacional' },
@@ -51,6 +66,7 @@ const menuItems = [
     { icon: PauseCircle, label: 'Motivos de Parada', href: '/paradas' },
   ]},
   { group: 'Operacional', items: [
+    { icon: BarChart2, label: 'Painel Operacional', href: '/operacional/painel' },
     { icon: Play, label: 'Operações', href: '/operacoes' },
     { icon: HistoryIcon, label: 'Timeline', href: '/operacoes/timeline' },
     { icon: Fuel, label: 'Abastecimentos', href: '/abastecimentos' },
@@ -59,6 +75,7 @@ const menuItems = [
   ]},
   { group: 'Ferramentas', items: [
     { icon: FileText, label: 'Conf. Operacional', href: '/ferramentas/conferencia-operacional' },
+    { icon: ClipboardList, label: 'Ficha Operador', href: '/ferramentas/ficha-operador' },
     { icon: RefreshCw, label: 'Integrações', href: '/ferramentas/integracoes' },
     { icon: Settings, label: 'Ordens de Serviço', href: '/ferramentas/ordens-servico' },
   ]},
