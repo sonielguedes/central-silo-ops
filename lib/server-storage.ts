@@ -156,6 +156,13 @@ export class ServerStorage {
     // against the new hourmeterStart.
     const isNewJourneyStart = cleanUpdates.hourmeterStart !== undefined;
 
+    // FINALIZADO is terminal. Never let an OFFLINE update overwrite it in the same
+    // merge/sanitize (e.g. a stale heartbeat timeout arriving after JOURNEY_END).
+    // A genuinely new journey (JOURNEY_START carries hourmeterStart) is still allowed.
+    if (index >= 0 && current?.status === 'FINALIZADO' && cleanUpdates.status === 'OFFLINE' && !isNewJourneyStart) {
+      delete cleanUpdates.status;
+    }
+
     let state: EquipmentLiveState;
     if (index >= 0) {
       let base: Record<string, unknown> = { ...all[index] };
@@ -178,6 +185,18 @@ export class ServerStorage {
         ...cleanUpdates
       } as EquipmentLiveState);
       all.push(state);
+    }
+
+    // On journey end, close any stop still open. Uses the MERGED state (current + updates),
+    // so a stop opened in a previous batch is closed even if this batch only sent JOURNEY_END.
+    {
+      const merged = state as unknown as Record<string, unknown>;
+      const hasStop = Boolean(merged.stopCode || merged.stopDescription || merged.stopReason);
+      if (merged.status === 'FINALIZADO' && hasStop && !merged.stopEndedAt) {
+        merged.stopEndedAt = (merged.endedAt as string) || now;
+        all[index >= 0 ? index : all.length - 1] = state;
+        console.info(`[live-state] auto-closed open stop on JOURNEY_END fleetCode=${fleetCode} stopEndedAt=${merged.stopEndedAt}`);
+      }
     }
 
     fs.writeFileSync(this.getLiveStateFile(tenantId), JSON.stringify(all, null, 2));
@@ -215,7 +234,9 @@ export class ServerStorage {
       const gps = s.lastGpsAt ? new Date(s.lastGpsAt).getTime() : 0;
       const lastSignal = Math.max(hb, gps);
 
-      if (s.status !== 'OFFLINE' && lastSignal > 0 && (now - lastSignal) > OFFLINE_TIMEOUT_MS) {
+      // FINALIZADO is terminal — a finished journey must never be downgraded to OFFLINE
+      // by the signal-timeout rule (offline-synced JOURNEY_END carries old timestamps).
+      if (s.status !== 'OFFLINE' && s.status !== 'FINALIZADO' && lastSignal > 0 && (now - lastSignal) > OFFLINE_TIMEOUT_MS) {
         return { ...s, status: 'OFFLINE' as const };
       }
       return s;

@@ -134,10 +134,12 @@ export async function GET(req: NextRequest) {
     const totalFleet      = fleet.length;
     const onlineCount     = fleet.filter(m => m.status !== 'OFFLINE').length;
     const activeOperations = fleet.filter(m => m.status === 'OPERANDO').length;
-    // openStops: qualquer máquina com parada em aberto (stopCode/stopDescription/stopReason
-    // presente e sem stopEndedAt), independente do status atual (inclui OFFLINE)
+    // openStops: máquina com parada em aberto (stopCode/stopDescription/stopReason
+    // presente e sem stopEndedAt). Máquinas FINALIZADO não contam — a jornada encerrou
+    // e a parada foi fechada no JOURNEY_END.
     const openStops = fleet.filter(m => {
       const raw = m as unknown as Record<string, unknown>;
+      if (m.status === 'FINALIZADO') return false;
       return (m.stopCode || m.stopDescription || raw['stopReason']) && !raw['stopEndedAt'];
     }).length;
 

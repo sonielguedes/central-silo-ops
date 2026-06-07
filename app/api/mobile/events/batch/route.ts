@@ -223,6 +223,11 @@ export async function POST(req: NextRequest) {
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
+    // Tracks whether a JOURNEY_END was seen in this batch. FINALIZADO is terminal and
+    // must win over any other status regardless of event ordering or later heartbeats.
+    let journeyEnded = false;
+    let journeyEndedAt: string | undefined;
+
     for (const event of sorted) {
       const d = event.data || {};
       const ts = event.timestamp ? new Date(event.timestamp).toISOString() : now;
@@ -381,6 +386,11 @@ export async function POST(req: NextRequest) {
           liveUpdates.status          = 'FINALIZADO';
           liveUpdates.statusStartedAt = ts;
 
+          // FINALIZADO has maximum priority — record it so it cannot be undone by
+          // out-of-order events later in this same batch.
+          journeyEnded   = true;
+          journeyEndedAt = liveUpdates.endedAt as string;
+
           console.info(`[JourneyEnd] payload: fleetCode=${validation.equipment.code}` +
             ` journeyId=${jIdEnd || 'missing'}` +
             ` hourmeterStart=${hStartEnd ?? 'missing'}` +
@@ -397,6 +407,18 @@ export async function POST(req: NextRequest) {
     const hasHeartbeat = events.some((e) => e.type === 'HEARTBEAT');
     if (hasHeartbeat && !liveUpdates.lastHeartbeatAt) {
       liveUpdates.lastHeartbeatAt = now;
+    }
+
+    // ── JOURNEY_END has maximum priority ───────────────────────────────────────
+    // Re-assert FINALIZADO after the whole batch so a heartbeat/GPS with a newer
+    // timestamp than the JOURNEY_END (common with offline sync) can't flip it back.
+    if (journeyEnded) {
+      liveUpdates.status = 'FINALIZADO';
+      if (!liveUpdates.endedAt && journeyEndedAt) liveUpdates.endedAt = journeyEndedAt;
+      // If a stop was open in this batch and not closed by the APK, close it now.
+      if ((liveUpdates.stopCode || liveUpdates.stopStartedAt) && !liveUpdates.stopEndedAt) {
+        liveUpdates.stopEndedAt = liveUpdates.endedAt as string;
+      }
     }
 
     const loggedHourmeter = liveUpdates.hourmeterCurrent ?? liveUpdates.hourmeterEnd ?? liveUpdates.hourmeterStart ?? 'missing';

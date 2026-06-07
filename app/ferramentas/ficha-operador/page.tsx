@@ -14,7 +14,7 @@ import { withAuth } from '@/components/shared/with-auth';
 import type { EquipmentLiveState } from '@/lib/types';
 
 // â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-type FichaStatus = 'PENDENTE' | 'EXPORTADO' | 'INCONSISTENTE';
+type FichaStatus = 'PENDENTE' | 'EXPORTADO' | 'INCONSISTENTE' | 'FINALIZADO';
 type TabId = 'geral' | 'operacional' | 'paradas' | 'rastro' | 'exportacao';
 
 interface StopEntry {
@@ -76,6 +76,15 @@ const fmtTime = (v: string | null | undefined): string => {
     : t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
+/** Converts a decimal hour value to "Xh Ymin" display format.
+ *  e.g. 101.6833... → "101h 41min" */
+const fmtHourmeterHM = (v: number | null | undefined): string => {
+  if (v == null) return NI;
+  const h = Math.floor(v);
+  const m = Math.round((v - h) * 60);
+  return m > 0 ? h + 'h ' + m + 'min' : h + 'h';
+};
+
 const gpsAgeStr = (ts: string | null | undefined): string => {
   if (!ts) return 'Sem sinal';
   const mins = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
@@ -98,6 +107,7 @@ const FICHA_BADGE: Record<FichaStatus, string> = {
   PENDENTE:      'text-amber-300 bg-amber-500/10 border-amber-500/30',
   INCONSISTENTE: 'text-red-300  bg-red-500/10  border-red-500/30',
   EXPORTADO:     'text-blue-300 bg-blue-500/10 border-blue-500/30',
+  FINALIZADO:    'text-emerald-300 bg-emerald-500/10 border-emerald-500/30',
 };
 
 function deriveFleetFichaStatus(r: FleetRow): FichaStatus {
@@ -445,10 +455,10 @@ function GeralTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) {
 
 // â”€â”€ Operacional Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function OperacionalTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) {
-  const hStart   = ficha.hourmeterStart   != null ? ficha.hourmeterStart   + 'h' : NI;
-  const hCurrent = fleet.hourmeterCurrent != null ? fleet.hourmeterCurrent + 'h' : NI;
-  const hEnd     = ficha.hourmeterEnd     != null ? ficha.hourmeterEnd     + 'h' : NI;
-  const hTotal   = ficha.totalHourmeter   != null ? ficha.totalHourmeter   + 'h' : NI;
+  const hStart   = fmtHourmeterHM(ficha.hourmeterStart);
+  const hCurrent = fmtHourmeterHM(fleet.hourmeterCurrent);
+  const hEnd     = fmtHourmeterHM(ficha.hourmeterEnd);
+  const hTotal   = fmtHourmeterHM(ficha.totalHourmeter);
 
   const rows = [
     ['Horimetro InÃ­cio',   hStart,   ficha.hourmeterStart   == null],
@@ -660,9 +670,9 @@ function ExportacaoTab({
           ['Operador',       fv(ficha.operatorName)],
           ['MatrÃ­cula',      fv(ficha.operatorRegistration)],
           ['Operação',       fv(ficha.operationName || ficha.operationCode)],
-          ['HorÃ­m. InÃ­cio',  ficha.hourmeterStart != null ? ficha.hourmeterStart + 'h' : NI],
-          ['HorÃ­m. Final',   ficha.hourmeterEnd   != null ? ficha.hourmeterEnd   + 'h' : NI],
-          ['Total HorÃ­m.',   ficha.totalHourmeter != null ? ficha.totalHourmeter + 'h' : NI],
+          ['HorÃ­m. InÃ­cio',  fmtHourmeterHM(ficha.hourmeterStart)],
+          ['HorÃ­m. Final',   fmtHourmeterHM(ficha.hourmeterEnd)],
+          ['Total HorÃ­m.',   fmtHourmeterHM(ficha.totalHourmeter)],
           ['Paradas',        String(ficha.stops.length)],
           ['Rastro GPS',     ficha.trailSummary.points + ' pontos Â· ' + ficha.trailSummary.distanceKm + 'km'],
         ]} />
@@ -844,7 +854,7 @@ function FichaOperadorPage() {
             onGerar={handleGerar}
             onExport={handleExport}
           />
-        </div>
+            </div>
       </div>
     </div>
   );

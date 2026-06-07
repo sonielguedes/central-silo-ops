@@ -30,7 +30,7 @@ export interface FichaOperador {
     lastGpsAt: string | null;
     distanceKm: number;
   };
-  status: 'PENDENTE' | 'EXPORTADO' | 'INCONSISTENTE';
+  status: 'PENDENTE' | 'EXPORTADO' | 'INCONSISTENTE' | 'FINALIZADO';
   inconsistencies: string[];
 }
 
@@ -112,6 +112,16 @@ export function buildOperatorSheet(params: {
     stops.push({ code, description: desc, startedAt: stopStartAt });
   }
 
+  // Apply the journey's stop close timestamp to the stop entries. The live-state carries a
+  // single stopEndedAt (set on JOURNEY_END); assign it to any stop still missing an endedAt.
+  const machineStopEndedAt =
+    String((machine as unknown as Record<string, unknown>)['stopEndedAt'] ?? '').trim() || null;
+  if (machineStopEndedAt) {
+    for (const s of stops) {
+      if (!s.endedAt) s.endedAt = machineStopEndedAt;
+    }
+  }
+
   const trailPoints = effectiveJourneyId
     ? ServerStorage.getTrail(tenantId, effectiveJourneyId)
     : [];
@@ -161,8 +171,21 @@ export function buildOperatorSheet(params: {
   if (trailSummary.points === 0)
     inconsistencies.push('Sem rastro de GPS registrado (alerta)');
 
+  const hasBlockingInconsistency = inconsistencies.some(i => !i.includes('(alerta)'));
+
+  // FINALIZADO: jornada encerrada e íntegra — horímetro final + total + endedAt válidos
+  // e sem inconsistências bloqueantes. Caso contrário cai em INCONSISTENTE ou PENDENTE.
+  const isFullyFinalized =
+    isFinalized &&
+    hourmeterEnd !== null &&
+    totalHourmeter !== null && totalHourmeter >= 0 &&
+    !!endedAt &&
+    !hasBlockingInconsistency;
+
   const status: FichaOperador['status'] =
-    inconsistencies.some(i => !i.includes('(alerta)')) ? 'INCONSISTENTE' : 'PENDENTE';
+    hasBlockingInconsistency ? 'INCONSISTENTE'
+    : isFullyFinalized       ? 'FINALIZADO'
+    :                          'PENDENTE';
 
   console.info(
     '[operator-sheet-builder] fleetCode=' + fleetCode +
