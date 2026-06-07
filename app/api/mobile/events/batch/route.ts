@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
+import { CadastroStorage } from '@/lib/cadastro-storage';
 import { EquipmentLiveState, EquipmentLiveStatus, TrailPoint } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -63,6 +64,7 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   const operationCode = data.operationCode;
   const operationName = data.operationName ?? data.currentOperation;
   const implementCode = data.implementCode;
+  const implementName = data.implementName;
   const hourmeterCurrent = asValidHourmeter(data.hourmeterCurrent ?? data.hourmeter);
 
   putIfValid(target, 'operatorRegistration', operatorRegistration);
@@ -75,9 +77,64 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   putIfValid(target, 'costCenter', data.costCenter);
   putIfValid(target, 'workOrder', data.workOrder);
   putIfValid(target, 'implementCode', implementCode);
+  putIfValid(target, 'implementName', implementName);
   putIfValid(target, 'journeyId', data.journeyId);
   putIfValid(target, 'hourmeterSource', data.hourmeterSource);
   putIfValid(target, 'hourmeterCurrent', hourmeterCurrent);
+}
+
+
+/** Look up catalog names from codes when the APK only sent codes (no names). */
+function enrichOperationalFields(
+  tenantId: string,
+  updates: Record<string, unknown>
+): void {
+  // Operator: registration → name
+  const reg = asString(updates.operatorRegistration);
+  if (reg && !asString(updates.operatorName)) {
+    const ops = CadastroStorage.getAll(tenantId, 'operadores') as Array<Record<string, unknown>>;
+    const found = ops.find(o => asString(o.registration) === reg);
+    if (found && asString(found.name)) {
+      updates.operatorName  = found.name;
+      updates.currentOperator = found.name;
+      console.info('[operational-fields] enriched operator=' + String(found.name) + ' reg=' + reg);
+    }
+  }
+
+  // Operation: code → name (from 'estados' operational-state catalog)
+  const opCode = asString(updates.operationCode);
+  if (opCode && !asString(updates.operationName)) {
+    const estados = CadastroStorage.getAll(tenantId, 'estados') as Array<Record<string, unknown>>;
+    const found = estados.find(e => asString(e.code) === opCode);
+    if (found && asString(found.name)) {
+      updates.operationName    = found.name;
+      updates.currentOperation = found.name;
+      console.info('[operational-fields] enriched operation=' + String(found.name) + ' code=' + opCode);
+    }
+  }
+
+  // Implement: code → name
+  const impCode = asString(updates.implementCode);
+  if (impCode && !asString(updates.implementName)) {
+    const imps = CadastroStorage.getAll(tenantId, 'implementos') as Array<Record<string, unknown>>;
+    const found = imps.find(i => asString(i.code) === impCode);
+    if (found && asString(found.name)) {
+      updates.implementName = found.name;
+      console.info('[operational-fields] enriched implement=' + String(found.name) + ' code=' + impCode);
+    }
+  }
+
+  // Stop reason: code → description
+  const stopCode = asString(updates.stopCode);
+  if (stopCode && !asString(updates.stopDescription)) {
+    const paradas = CadastroStorage.getAll(tenantId, 'paradas') as Array<Record<string, unknown>>;
+    const found = paradas.find(p => asString(p.code) === stopCode);
+    if (found && asString(found.description)) {
+      updates.stopDescription = found.description;
+      updates.stopReason      = found.description;
+      console.info('[operational-fields] enriched stop=' + String(found.description) + ' code=' + stopCode);
+    }
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -293,7 +350,9 @@ export async function POST(req: NextRequest) {
     }
 
     const loggedHourmeter = liveUpdates.hourmeterCurrent ?? liveUpdates.hourmeterEnd ?? liveUpdates.hourmeterStart ?? 'missing';
-    console.info(`[batch-operational] fleetCode=${validation.equipment.code} operator=${String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing')} operation=${String(liveUpdates.operationName || liveUpdates.operationCode || 'missing')} hourmeter=${String(loggedHourmeter)}`);
+    console.info('[operational-fields] received fleetCode=' + validation.equipment.code);
+    enrichOperationalFields(tenantId, liveUpdates);
+        console.info(`[batch-operational] fleetCode=${validation.equipment.code} operator=${String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing')} operation=${String(liveUpdates.operationName || liveUpdates.operationCode || 'missing')} hourmeter=${String(loggedHourmeter)}`);
     console.info(`[Hourmeter] source=${String(liveUpdates.hourmeterSource || 'missing')}`);
     console.info(`[Hourmeter] start=${String(liveUpdates.hourmeterStart ?? 'missing')}`);
     console.info(`[Hourmeter] current=${String(liveUpdates.hourmeterCurrent ?? 'missing')}`);

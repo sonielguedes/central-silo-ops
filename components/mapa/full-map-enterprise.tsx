@@ -488,8 +488,8 @@ function OperationalPopup({
             <PField icon={<User size={11} />} label="Operador"    value={machine.displayOperator} />
             <PField icon={<Hash size={11} />} label="Matricula"   value={formatValue(registration)} />
             <PField icon={<Zap  size={11} />} label="Operacao"    value={machine.displayOperation} />
-            <PField icon={<Hash size={11} />} label="Cod.Operacao" value={formatValue(machine.operationCode)} />
-            <PField icon={<Hash size={11} />} label="Implemento"  value={formatValue(machine.implementCode)} />
+            <PField icon={<Hash size={11} />} label="Cod.Operacao" value={formatValue(machine.operationName || machine.operationCode)} />
+            <PField icon={<Hash size={11} />} label="Implemento"  value={formatValue((machine as unknown as Record<string,string>).implementName || machine.implementCode)} />
           </div>
         </PSection>
 

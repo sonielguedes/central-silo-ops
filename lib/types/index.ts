@@ -509,6 +509,8 @@ export interface EquipmentLiveState {
   workOrder?: string;
   /** Código do implemento acoplado */
   implementCode?: string;
+  /** Nome do implemento acoplado */
+  implementName?: string;
 
   hourmeter?: number;
   /** Horimetro no inicio da jornada */
