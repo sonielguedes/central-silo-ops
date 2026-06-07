@@ -223,7 +223,7 @@ function TrailBoundsController({ points }: { points: [number, number][] }) {
   React.useEffect(() => {
     if (points.length < 2) return;
     const bounds = L.latLngBounds(points);
-    map.fitBounds(bounds, { padding: [60, 60], animate: true });
+    map.fitBounds(bounds, { padding: [80, 80], maxZoom: 17, animate: true });
   }, [points, map]);
   return null;
 }
@@ -327,12 +327,28 @@ export default function FullMapEnterprise({
 
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Satelite">
-            <TileLayer attribution="Esri"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+            <TileLayer
+              attribution="Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={20}
+              maxNativeZoom={17}
+            />
           </LayersControl.BaseLayer>
           <LayersControl.BaseLayer name="Operacional">
-            <TileLayer attribution="CARTO"
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{y}/{x}{r}.png" />
+            <TileLayer
+              attribution="CARTO"
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{y}/{x}{r}.png"
+              maxZoom={20}
+              maxNativeZoom={19}
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="OSM">
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxZoom={20}
+              maxNativeZoom={19}
+            />
           </LayersControl.BaseLayer>
           <LayersControl.Overlay checked name="Talhoes">
             {fieldsPolygons.map(f => (
