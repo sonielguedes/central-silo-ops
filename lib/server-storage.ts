@@ -517,9 +517,17 @@ export class ServerStorage {
     if (!point.timestamp) return false;
     if (!point.journeyId || !point.journeyId.trim()) return false;
 
-    const file   = this.getTrailFile(tenantId, point.journeyId);
-    const pts: TrailPoint[] = fs.existsSync(file)
-      ? JSON.parse(fs.readFileSync(file, 'utf-8')) : [];
+    const file = this.getTrailFile(tenantId, point.journeyId);
+    let pts: TrailPoint[] = [];
+    if (fs.existsSync(file)) {
+      try {
+        pts = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        if (!Array.isArray(pts)) pts = [];
+      } catch {
+        console.warn('[trail] saveTrailPoint: corrupted trail file, resetting', file);
+        pts = [];
+      }
+    }
 
     // Deduplicate by journeyId (implicit via file) + timestamp + lat + lng
     const isDup = pts.some((p: TrailPoint) =>
@@ -539,7 +547,13 @@ export class ServerStorage {
   static getTrail(tenantId: string, journeyId: string): TrailPoint[] {
     const file = this.getTrailFile(tenantId, journeyId);
     if (!fs.existsSync(file)) return [];
-    return JSON.parse(fs.readFileSync(file, 'utf-8')) as TrailPoint[];
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      console.warn('[trail] getTrail: corrupted trail file, returning []', file);
+      return [];
+    }
   }
 
   static getEvents(tenantId: string, equipmentId?: string): MobileEvent[] {

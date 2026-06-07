@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -7,7 +7,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, ChevronRight,
   Clock, Download, FileText, Hash, Loader2, MapPin,
   RefreshCw, Route, Search, Tractor, User, WifiOff,
-  XCircle, Play, Square,
+  Play, Square,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
@@ -53,7 +53,7 @@ interface FichaOperador {
 type FleetRow = EquipmentLiveState;
 
 // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const NI = 'â€”';
+const NI = '—';
 const fv = (v: unknown): string =>
   v === null || v === undefined || v === '' ? NI : String(v);
 
@@ -101,7 +101,7 @@ const FICHA_BADGE: Record<FichaStatus, string> = {
 };
 
 function deriveFleetFichaStatus(r: FleetRow): FichaStatus {
-  const hasOp = !!(r.operatorName || r.operatorRegistration || (r as unknown as Record<string,unknown>).currentOperator);
+  const hasOp = !!(r.operatorName || r.operatorRegistration || r.currentOperator);
   const hasH  = (r.hourmeterStart ?? 0) > 0;
   if (!hasOp || !hasH) return 'INCONSISTENTE';
   if (r.status === 'OFFLINE' || r.status === 'FINALIZADO') return 'EXPORTADO';
@@ -114,10 +114,10 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'operacional', label: 'Operacional', icon: <Activity  size={12} /> },
   { id: 'paradas',     label: 'Paradas',     icon: <Square    size={12} /> },
   { id: 'rastro',      label: 'Rastro',      icon: <Route     size={12} /> },
-  { id: 'exportacao',  label: 'ExportaÃ§Ã£o',  icon: <Download  size={12} /> },
+  { id: 'exportacao',  label: 'Exportação',  icon: <Download  size={12} /> },
 ];
 
-// â”€â”€ Left sidebar â€” fleet list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Left sidebar — fleet list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FleetSidebar({
   fleet, loading, selected, search, onSearch, onSelect, onRefresh, lastAt,
 }: {
@@ -248,7 +248,7 @@ function FleetCard({
             r.status === 'PARADO'     ? 'text-amber-300  bg-amber-500/10  border-amber-500/20'  :
             r.status === 'FINALIZADO' ? 'text-blue-300   bg-blue-500/10   border-blue-500/20'   :
                                         'text-cyan-300   bg-cyan-500/10   border-cyan-500/20'
-          )}>{r.status ?? 'â€”'}</span>
+          )}>{r.status ?? '—'}</span>
           <div className="flex items-center gap-1 text-muted-foreground/50">
             <Clock size={8} />
             <span className="text-[8px] font-bold">{age}</span>
@@ -387,7 +387,7 @@ function DetailPanel({
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {error && (
           <div className="m-6 flex items-center gap-3 bg-red-950/40 border border-red-500/30 rounded-2xl px-5 py-3">
-            <XCircle size={14} className="text-red-400 shrink-0" />
+            <AlertTriangle size={14} className="text-red-400 shrink-0" />
             <span className="text-[11px] font-bold text-red-300">{error}</span>
           </div>
         )}
@@ -422,14 +422,14 @@ function GeralTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) {
   const rows = [
     ['Operador',          fv(ficha.operatorName)],
     ['MatrÃ­cula',         fv(ficha.operatorRegistration)],
-    ['DescriÃ§Ã£o OperaÃ§Ã£o',fv(ficha.operationName || ficha.operationCode)],
-    ['Cod. OperaÃ§Ã£o',     fv(ficha.operationCode)],
+    ['Descrição Operação',fv(ficha.operationName || ficha.operationCode)],
+    ['Cod. Operação',     fv(ficha.operationCode)],
     ['Implemento',        fv(ficha.implementName || ficha.implementCode)],
     ['Cod. Implemento',   fv(ficha.implementCode)],
-    ['ComunicaÃ§Ã£o',       fv((fleet as unknown as Record<string,unknown>).communicationType || (fleet as unknown as Record<string,unknown>).communication || 'GPRS')],
+    ['Comunicação',       fv((fleet as unknown as Record<string,unknown>).communicationType || (fleet as unknown as Record<string,unknown>).communication || 'GPRS')],
     ['Fazenda',           fv((fleet as unknown as Record<string,unknown>).farm || (fleet as unknown as Record<string,unknown>).fazenda)],
     ['Grupo/Frente',      fv((fleet as unknown as Record<string,unknown>).group || (fleet as unknown as Record<string,unknown>).frente || (fleet as unknown as Record<string,unknown>).operationGroup)],
-    ['TalhÃ£o',            fv((fleet as unknown as Record<string,unknown>).talhao || (fleet as unknown as Record<string,unknown>).field)],
+    ['Talhão',            fv((fleet as unknown as Record<string,unknown>).talhao || (fleet as unknown as Record<string,unknown>).field)],
     ['InÃ­cio Jornada',    fmtDT(ficha.startedAt)],
     ['Fim Jornada',       fmtDT(ficha.endedAt)],
     ['Ãšltima GPS',        fmtDT(fleet.lastGpsAt)],
@@ -437,7 +437,7 @@ function GeralTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) {
   ];
   return (
     <div className="p-6">
-      <SectionTitle icon={<User size={12} />} title="InformaÃ§Ãµes Gerais" />
+      <SectionTitle icon={<User size={12} />} title="InformaçÃµes Gerais" />
       <FieldGrid rows={rows} />
     </div>
   );
@@ -468,11 +468,11 @@ function OperacionalTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRo
         </div>
       </div>
       <div>
-        <SectionTitle icon={<Activity size={12} />} title="OperaÃ§Ã£o" />
+        <SectionTitle icon={<Activity size={12} />} title="Operação" />
         <FieldGrid rows={[
-          ['CÃ³digo OperaÃ§Ã£o',  fv(ficha.operationCode)],
-          ['Nome OperaÃ§Ã£o',    fv(ficha.operationName)],
-          ['CÃ³digo Implement.',fv(ficha.implementCode)],
+          ['Código Operação',  fv(ficha.operationCode)],
+          ['Nome Operação',    fv(ficha.operationName)],
+          ['Código Implement.',fv(ficha.implementCode)],
           ['Nome Implement.',  fv(ficha.implementName)],
           ['Status Jornada',   fleet.status ?? NI],
         ]} />
@@ -605,7 +605,7 @@ function TrailStat({ label, value, dim }: { label: string; value: string; dim: b
   );
 }
 
-// â”€â”€ ExportaÃ§Ã£o Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Exportação Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ExportacaoTab({
   ficha, onGerar, onExport, loading,
 }: {
@@ -619,7 +619,7 @@ function ExportacaoTab({
 
   return (
     <div className="p-6 space-y-6">
-      <SectionTitle icon={<Download size={12} />} title="ExportaÃ§Ã£o" />
+      <SectionTitle icon={<Download size={12} />} title="Exportação" />
 
       {/* status card */}
       <div className={cn(
@@ -632,12 +632,12 @@ function ExportacaoTab({
         }
         <div className="space-y-1">
           <p className={cn('text-sm font-black uppercase', isInc ? 'text-red-300' : 'text-emerald-300')}>
-            {isInc ? 'Ficha com InconsistÃªncias' : 'Ficha Pronta para ExportaÃ§Ã£o'}
+            {isInc ? 'Ficha com InconsistÃªncias' : 'Ficha Pronta para Exportação'}
           </p>
           <p className="text-[10px] text-muted-foreground">
             {isInc
               ? 'Corrija as inconsistÃªncias abaixo antes de exportar.'
-              : 'Todos os dados obrigatÃ³rios estÃ£o presentes.'}
+              : 'Todos os dados obrigatórios estão presentes.'}
           </p>
           {blocking.length > 0 && (
             <ul className="mt-2 space-y-1">
@@ -659,7 +659,7 @@ function ExportacaoTab({
           ['Journey ID',     fv(ficha.journeyId)],
           ['Operador',       fv(ficha.operatorName)],
           ['MatrÃ­cula',      fv(ficha.operatorRegistration)],
-          ['OperaÃ§Ã£o',       fv(ficha.operationName || ficha.operationCode)],
+          ['Operação',       fv(ficha.operationName || ficha.operationCode)],
           ['HorÃ­m. InÃ­cio',  ficha.hourmeterStart != null ? ficha.hourmeterStart + 'h' : NI],
           ['HorÃ­m. Final',   ficha.hourmeterEnd   != null ? ficha.hourmeterEnd   + 'h' : NI],
           ['Total HorÃ­m.',   ficha.totalHourmeter != null ? ficha.totalHourmeter + 'h' : NI],
@@ -731,6 +731,7 @@ function FichaOperadorPage() {
   const [ficha,          setFicha]          = useState<FichaOperador | null>(null);
   const [fichaLoading,   setFichaLoading]   = useState(false);
   const [fichaError,     setFichaError]     = useState<string | null>(null);
+  const [exportError,    setExportError]    = useState<string | null>(null);
   const [activeTab,      setActiveTab]      = useState<TabId>('geral');
 
   const abortRef = useRef<AbortController | null>(null);
@@ -778,6 +779,12 @@ function FichaOperadorPage() {
 
   useEffect(() => { fetchFleet(); }, [fetchFleet]);
 
+  // Auto-refresh fleet every 30s
+  useEffect(() => {
+    const id = setInterval(fetchFleet, 30_000);
+    return () => clearInterval(id);
+  }, [fetchFleet]);
+
   const handleSelectFleet = useCallback((fc: string, jid?: string) => {
     setSelectedFleet(fc);
     setSelectedJourney(jid);
@@ -794,7 +801,8 @@ function FichaOperadorPage() {
   const handleExport = useCallback(() => {
     const fc  = selectedFleet   || ficha?.fleetCode  || '';
     const jid = selectedJourney || ficha?.journeyId  || '';
-    if (!fc) { alert('Selecione uma frota antes de exportar.'); return; }
+    if (!fc) { setExportError('Selecione uma frota antes de exportar.'); return; }
+    setExportError(null);
     const url = new URL('/api/ficha-operador/export', window.location.origin);
     url.searchParams.set('fleetCode', fc);
     if (jid) url.searchParams.set('journeyId', jid);
@@ -808,7 +816,14 @@ function FichaOperadorPage() {
       <Sidebar className="hidden lg:flex shrink-0" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header />
-        <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
+          {exportError && (
+            <div className="absolute bottom-4 right-4 z-50 flex items-center gap-2 bg-red-950/90 border border-red-500/40 rounded-2xl px-4 py-3 shadow-2xl">
+              <AlertTriangle size={14} className="text-red-400 shrink-0" />
+              <span className="text-[11px] font-bold text-red-300">{exportError}</span>
+              <button onClick={() => setExportError(null)} className="ml-2 text-red-400 hover:text-red-200 text-xs font-bold">x</button>
+            </div>
+          )}
           <FleetSidebar
             fleet={fleet}
             loading={fleetLoading}
