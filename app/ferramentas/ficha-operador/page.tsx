@@ -720,6 +720,7 @@ function FieldGrid({ rows }: { rows: string[][] }) {
 }
 
 // â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main page ─────────────────────────────────────────────────────────────────
 function FichaOperadorPage() {
   const [fleet,          setFleet]          = useState<FleetRow[]>([]);
   const [fleetLoading,   setFleetLoading]   = useState(true);
@@ -767,7 +768,7 @@ function FichaOperadorPage() {
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== 'AbortError') {
-        setFichaError('Falha de conexÃ£o com o servidor.');
+        setFichaError('Falha de conexão com o servidor.');
         setFicha(null);
       }
     } finally {
@@ -808,7 +809,6 @@ function FichaOperadorPage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header />
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          {/* left sidebar */}
           <FleetSidebar
             fleet={fleet}
             loading={fleetLoading}
@@ -819,7 +819,6 @@ function FichaOperadorPage() {
             onRefresh={fetchFleet}
             lastAt={lastAt}
           />
-          {/* right detail panel */}
           <DetailPanel
             fleet={selectedFleetObj}
             ficha={ficha}
@@ -837,4 +836,3 @@ function FichaOperadorPage() {
 }
 
 export default withAuth(FichaOperadorPage, { module: 'FICHA_OPERADOR' });
-

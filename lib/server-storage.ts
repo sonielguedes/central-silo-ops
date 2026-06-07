@@ -542,17 +542,46 @@ export class ServerStorage {
     return JSON.parse(fs.readFileSync(file, 'utf-8')) as TrailPoint[];
   }
 
+  static getEvents(tenantId: string, equipmentId?: string): MobileEvent[] {
+    const eventsFile = this.getEventsFile(tenantId);
+    if (!fs.existsSync(eventsFile)) return [];
+    let all: MobileEvent[] = [];
+    try {
+      const raw = fs.readFileSync(eventsFile, 'utf-8');
+      const parsed = JSON.parse(raw);
+      all = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      console.warn('[server-storage] getEvents: failed to parse', eventsFile);
+      return [];
+    }
+    let result = all;
+    if (equipmentId) {
+      result = all.filter(e => {
+        if (e.equipmentId === equipmentId) return true;
+        const p = e.payload as Record<string, unknown> | null | undefined;
+        if (!p) return false;
+        return p['equipmentId'] === equipmentId || p['machineId'] === equipmentId;
+      });
+    }
+    return result.sort((a, b) => {
+      const ta = a.timestamp ?? a.receivedAt ?? '';
+      const tb = b.timestamp ?? b.receivedAt ?? '';
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
+    });
+  }
+
   static saveEvent(event: Omit<MobileEvent, 'receivedAt' | 'tenantId'>, tenantId = DEFAULT_TENANT_ID): 'SYNCED' | 'DUPLICATE' {
     const eventsFile = this.getEventsFile(tenantId);
     let events: MobileEvent[] = [];
     if (fs.existsSync(eventsFile)) {
-      events = JSON.parse(fs.readFileSync(eventsFile, 'utf-8'));
+      try {
+        events = JSON.parse(fs.readFileSync(eventsFile, 'utf-8'));
+        if (!Array.isArray(events)) events = [];
+      } catch { events = []; }
     }
-
-        if (events.some((e: MobileEvent) => e.tenantId === tenantId && e.offlineId === event.offlineId)) {
+    if (event.offlineId && events.some((e: MobileEvent) => e.tenantId === tenantId && e.offlineId === event.offlineId)) {
       return 'DUPLICATE';
     }
-
     events.push({ ...event, tenantId, receivedAt: new Date().toISOString() });
     fs.writeFileSync(eventsFile, JSON.stringify(events, null, 2));
     return 'SYNCED';
