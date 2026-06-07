@@ -134,7 +134,12 @@ export async function GET(req: NextRequest) {
     const totalFleet      = fleet.length;
     const onlineCount     = fleet.filter(m => m.status !== 'OFFLINE').length;
     const activeOperations = fleet.filter(m => m.status === 'OPERANDO').length;
-    const openStops       = fleet.filter(m => m.status === 'PARADO' && m.stopCode).length;
+    // openStops: qualquer máquina com parada em aberto (stopCode/stopDescription/stopReason
+    // presente e sem stopEndedAt), independente do status atual (inclui OFFLINE)
+    const openStops = fleet.filter(m => {
+      const raw = m as unknown as Record<string, unknown>;
+      return (m.stopCode || m.stopDescription || raw['stopReason']) && !raw['stopEndedAt'];
+    }).length;
 
     const fleetStatusCounts: FleetStatusCounts = {
       OPERANDO:   0,
@@ -198,8 +203,16 @@ export async function GET(req: NextRequest) {
     };
 
     // ── Active fleet detail ─────────────────────────────────────────────────
+    // Inclui toda máquina com sinal recente OU parada em aberto OU operador atribuído
     const activeFleet: ActiveFleetItem[] = fleet
-      .filter(m => m.status !== 'OFFLINE')
+      .filter(m =>
+        m.status !== 'OFFLINE' ||
+        m.lastHeartbeatAt ||
+        m.lastGpsAt ||
+        m.stopCode ||
+        m.currentOperator ||
+        m.operatorName
+      )
       .map(m => ({
         equipmentId:       m.equipmentId,
         fleetCode:         m.fleetCode,

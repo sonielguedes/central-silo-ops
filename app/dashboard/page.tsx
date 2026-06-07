@@ -326,7 +326,7 @@ function DashboardPage() {
                   icon={PauseCircle}
                 />
                 <KPICard
-                  title="Produção (Hoje)"
+                  title="Horas Operacionais Hoje"
                   value={fmtH(data.productionToday)}
                   color="blue"
                   icon={Factory}
@@ -370,5 +370,4 @@ function DashboardPage() {
     </div>
   );
 }
-
 export default withAuth(DashboardPage);
