@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
 import type { EquipmentLiveState } from '@/lib/types';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type FichaStatus = 'PENDENTE' | 'EXPORTADO' | 'INCONSISTENTE';
 type TabId = 'geral' | 'operacional' | 'paradas' | 'rastro' | 'exportacao';
 
@@ -52,8 +52,8 @@ interface FichaOperador {
 
 type FleetRow = EquipmentLiveState;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const NI = '—';
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const NI = 'â€”';
 const fv = (v: unknown): string =>
   v === null || v === undefined || v === '' ? NI : String(v);
 
@@ -108,16 +108,16 @@ function deriveFleetFichaStatus(r: FleetRow): FichaStatus {
   return 'PENDENTE';
 }
 
-// ── TABS config ───────────────────────────────────────────────────────────────
+// â”€â”€ TABS config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'geral',       label: 'Geral',       icon: <User      size={12} /> },
   { id: 'operacional', label: 'Operacional', icon: <Activity  size={12} /> },
   { id: 'paradas',     label: 'Paradas',     icon: <Square    size={12} /> },
   { id: 'rastro',      label: 'Rastro',      icon: <Route     size={12} /> },
-  { id: 'exportacao',  label: 'Exportação',  icon: <Download  size={12} /> },
+  { id: 'exportacao',  label: 'ExportaÃ§Ã£o',  icon: <Download  size={12} /> },
 ];
 
-// ── Left sidebar — fleet list ─────────────────────────────────────────────────
+// â”€â”€ Left sidebar â€” fleet list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FleetSidebar({
   fleet, loading, selected, search, onSearch, onSelect, onRefresh, lastAt,
 }: {
@@ -248,7 +248,7 @@ function FleetCard({
             r.status === 'PARADO'     ? 'text-amber-300  bg-amber-500/10  border-amber-500/20'  :
             r.status === 'FINALIZADO' ? 'text-blue-300   bg-blue-500/10   border-blue-500/20'   :
                                         'text-cyan-300   bg-cyan-500/10   border-cyan-500/20'
-          )}>{r.status ?? '—'}</span>
+          )}>{r.status ?? 'â€”'}</span>
           <div className="flex items-center gap-1 text-muted-foreground/50">
             <Clock size={8} />
             <span className="text-[8px] font-bold">{age}</span>
@@ -259,7 +259,7 @@ function FleetCard({
   );
 }
 
-// ── Right panel ───────────────────────────────────────────────────────────────
+// â”€â”€ Right panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DetailPanel({
   fleet, ficha, loading, error, activeTab, onTabChange, onGerar, onExport,
 }: {
@@ -280,7 +280,7 @@ function DetailPanel({
         </div>
         <div>
           <p className="text-sm font-black uppercase text-white/40 tracking-widest">Selecione uma frota</p>
-          <p className="text-[10px] text-muted-foreground/40 mt-1">Clique em qualquer equipamento na lista à esquerda</p>
+          <p className="text-[10px] text-muted-foreground/40 mt-1">Clique em qualquer equipamento na lista Ã  esquerda</p>
         </div>
       </div>
     );
@@ -306,7 +306,7 @@ function DetailPanel({
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-xl font-black italic uppercase tracking-tighter text-white">{fleet.fleetCode}</h2>
             {implName && (
-              <span className="text-[10px] font-bold text-white/40 uppercase">·</span>
+              <span className="text-[10px] font-bold text-white/40 uppercase">Â·</span>
             )}
             {implName && (
               <span className="text-[11px] font-bold text-white/60 uppercase truncate">{implName}</span>
@@ -394,7 +394,7 @@ function DetailPanel({
         {!ficha && !loading && !error && (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             <FileText size={28} className="text-primary/30" />
-            <p className="text-[10px] font-bold uppercase">Clique em "Atualizar ficha" para carregar os dados</p>
+            <p className="text-[10px] font-bold uppercase">Clique em Atualizar ficha para carregar os dados</p>
           </div>
         )}
         {loading && !ficha && (
@@ -417,33 +417,33 @@ function DetailPanel({
   );
 }
 
-// ── Geral Tab ─────────────────────────────────────────────────────────────────
+// â”€â”€ Geral Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function GeralTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) {
   const rows = [
     ['Operador',          fv(ficha.operatorName)],
-    ['Matrícula',         fv(ficha.operatorRegistration)],
-    ['Descrição Operação',fv(ficha.operationName || ficha.operationCode)],
-    ['Cod. Operação',     fv(ficha.operationCode)],
+    ['MatrÃ­cula',         fv(ficha.operatorRegistration)],
+    ['DescriÃ§Ã£o OperaÃ§Ã£o',fv(ficha.operationName || ficha.operationCode)],
+    ['Cod. OperaÃ§Ã£o',     fv(ficha.operationCode)],
     ['Implemento',        fv(ficha.implementName || ficha.implementCode)],
     ['Cod. Implemento',   fv(ficha.implementCode)],
-    ['Comunicação',       fv((fleet as unknown as Record<string,unknown>).communicationType || (fleet as unknown as Record<string,unknown>).communication || 'GPRS')],
+    ['ComunicaÃ§Ã£o',       fv((fleet as unknown as Record<string,unknown>).communicationType || (fleet as unknown as Record<string,unknown>).communication || 'GPRS')],
     ['Fazenda',           fv((fleet as unknown as Record<string,unknown>).farm || (fleet as unknown as Record<string,unknown>).fazenda)],
     ['Grupo/Frente',      fv((fleet as unknown as Record<string,unknown>).group || (fleet as unknown as Record<string,unknown>).frente || (fleet as unknown as Record<string,unknown>).operationGroup)],
-    ['Talhão',            fv((fleet as unknown as Record<string,unknown>).talhao || (fleet as unknown as Record<string,unknown>).field)],
-    ['Início Jornada',    fmtDT(ficha.startedAt)],
+    ['TalhÃ£o',            fv((fleet as unknown as Record<string,unknown>).talhao || (fleet as unknown as Record<string,unknown>).field)],
+    ['InÃ­cio Jornada',    fmtDT(ficha.startedAt)],
     ['Fim Jornada',       fmtDT(ficha.endedAt)],
-    ['Última GPS',        fmtDT(fleet.lastGpsAt)],
+    ['Ãšltima GPS',        fmtDT(fleet.lastGpsAt)],
     ['Journey ID',        fv(ficha.journeyId)],
   ];
   return (
     <div className="p-6">
-      <SectionTitle icon={<User size={12} />} title="Informações Gerais" />
+      <SectionTitle icon={<User size={12} />} title="InformaÃ§Ãµes Gerais" />
       <FieldGrid rows={rows} />
     </div>
   );
 }
 
-// ── Operacional Tab ───────────────────────────────────────────────────────────
+// â”€â”€ Operacional Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function OperacionalTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) {
   const hStart   = ficha.hourmeterStart   != null ? ficha.hourmeterStart   + 'h' : NI;
   const hCurrent = fleet.hourmeterCurrent != null ? fleet.hourmeterCurrent + 'h' : NI;
@@ -451,7 +451,7 @@ function OperacionalTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRo
   const hTotal   = ficha.totalHourmeter   != null ? ficha.totalHourmeter   + 'h' : NI;
 
   const rows = [
-    ['Horimetro Início',   hStart,   ficha.hourmeterStart   == null],
+    ['Horimetro InÃ­cio',   hStart,   ficha.hourmeterStart   == null],
     ['Horimetro Atual',    hCurrent, false],
     ['Horimetro Final',    hEnd,     false],
     ['Total Horimetro',    hTotal,   ficha.totalHourmeter   != null && ficha.totalHourmeter < 0],
@@ -460,7 +460,7 @@ function OperacionalTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRo
   return (
     <div className="p-6 space-y-6">
       <div>
-        <SectionTitle icon={<Activity size={12} />} title="Horímetros" />
+        <SectionTitle icon={<Activity size={12} />} title="HorÃ­metros" />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 mt-3">
           {rows.map(([label, value, alert]) => (
             <HourmeterCard key={label} label={label} value={value} alert={alert} />
@@ -468,11 +468,11 @@ function OperacionalTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRo
         </div>
       </div>
       <div>
-        <SectionTitle icon={<Activity size={12} />} title="Operação" />
+        <SectionTitle icon={<Activity size={12} />} title="OperaÃ§Ã£o" />
         <FieldGrid rows={[
-          ['Código Operação',  fv(ficha.operationCode)],
-          ['Nome Operação',    fv(ficha.operationName)],
-          ['Código Implement.',fv(ficha.implementCode)],
+          ['CÃ³digo OperaÃ§Ã£o',  fv(ficha.operationCode)],
+          ['Nome OperaÃ§Ã£o',    fv(ficha.operationName)],
+          ['CÃ³digo Implement.',fv(ficha.implementCode)],
           ['Nome Implement.',  fv(ficha.implementName)],
           ['Status Jornada',   fleet.status ?? NI],
         ]} />
@@ -497,7 +497,7 @@ function HourmeterCard({ label, value, alert }: { label: string; value: string; 
   );
 }
 
-// ── Paradas Tab ───────────────────────────────────────────────────────────────
+// â”€â”€ Paradas Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ParadasTab({ ficha }: { ficha: FichaOperador }) {
   if (ficha.stops.length === 0) {
     return (
@@ -521,7 +521,7 @@ function ParadasTab({ ficha }: { ficha: FichaOperador }) {
               <div className="flex items-center gap-3 text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Play size={8} />
-                  <span className="text-[9px]">Início: {fmtDT(s.startedAt)}</span>
+                  <span className="text-[9px]">InÃ­cio: {fmtDT(s.startedAt)}</span>
                 </div>
                 {s.endedAt && (
                   <div className="flex items-center gap-1">
@@ -544,7 +544,7 @@ function ParadasTab({ ficha }: { ficha: FichaOperador }) {
   );
 }
 
-// ── Rastro Tab ────────────────────────────────────────────────────────────────
+// â”€â”€ Rastro Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function RastroTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) {
   const { trailSummary: ts } = ficha;
   const hasTrail = ts.points > 0;
@@ -560,16 +560,16 @@ function RastroTab({ ficha, fleet }: { ficha: FichaOperador; fleet: FleetRow }) 
       {/* summary cards */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <TrailStat label="Pontos GPS"      value={String(ts.points)}         dim={!hasTrail} />
-        <TrailStat label="Distância"       value={ts.distanceKm + ' km'}    dim={!hasTrail} />
+        <TrailStat label="DistÃ¢ncia"       value={ts.distanceKm + ' km'}    dim={!hasTrail} />
         <TrailStat label="Primeiro GPS"    value={fmtTime(ts.firstGpsAt)}    dim={!hasTrail} />
-        <TrailStat label="Último GPS"      value={fmtTime(ts.lastGpsAt)}     dim={!hasTrail} />
+        <TrailStat label="Ãšltimo GPS"      value={fmtTime(ts.lastGpsAt)}     dim={!hasTrail} />
       </div>
 
       {/* position detail */}
       {hasTrail && (
         <div>
           <FieldGrid rows={[
-            ['Início GPS', fmtDT(ts.firstGpsAt)],
+            ['InÃ­cio GPS', fmtDT(ts.firstGpsAt)],
             ['Fim GPS',    fmtDT(ts.lastGpsAt)],
             ['Journey ID', fv(ficha.journeyId)],
             ['Frota',      fleet.fleetCode],
@@ -605,7 +605,7 @@ function TrailStat({ label, value, dim }: { label: string; value: string; dim: b
   );
 }
 
-// ── Exportação Tab ────────────────────────────────────────────────────────────
+// â”€â”€ ExportaÃ§Ã£o Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ExportacaoTab({
   ficha, onGerar, onExport, loading,
 }: {
@@ -619,7 +619,7 @@ function ExportacaoTab({
 
   return (
     <div className="p-6 space-y-6">
-      <SectionTitle icon={<Download size={12} />} title="Exportação" />
+      <SectionTitle icon={<Download size={12} />} title="ExportaÃ§Ã£o" />
 
       {/* status card */}
       <div className={cn(
@@ -632,18 +632,18 @@ function ExportacaoTab({
         }
         <div className="space-y-1">
           <p className={cn('text-sm font-black uppercase', isInc ? 'text-red-300' : 'text-emerald-300')}>
-            {isInc ? 'Ficha com Inconsistências' : 'Ficha Pronta para Exportação'}
+            {isInc ? 'Ficha com InconsistÃªncias' : 'Ficha Pronta para ExportaÃ§Ã£o'}
           </p>
           <p className="text-[10px] text-muted-foreground">
             {isInc
-              ? 'Corrija as inconsistências abaixo antes de exportar.'
-              : 'Todos os dados obrigatórios estão presentes.'}
+              ? 'Corrija as inconsistÃªncias abaixo antes de exportar.'
+              : 'Todos os dados obrigatÃ³rios estÃ£o presentes.'}
           </p>
           {blocking.length > 0 && (
             <ul className="mt-2 space-y-1">
               {blocking.map(inc => (
                 <li key={inc} className="flex items-center gap-1.5 text-[9px] font-bold text-red-300 uppercase">
-                  <span className="text-red-500">•</span>{inc}
+                  <span className="text-red-500">â€¢</span>{inc}
                 </li>
               ))}
             </ul>
@@ -658,13 +658,13 @@ function ExportacaoTab({
           ['Frota',          ficha.fleetCode],
           ['Journey ID',     fv(ficha.journeyId)],
           ['Operador',       fv(ficha.operatorName)],
-          ['Matrícula',      fv(ficha.operatorRegistration)],
-          ['Operação',       fv(ficha.operationName || ficha.operationCode)],
-          ['Horím. Início',  ficha.hourmeterStart != null ? ficha.hourmeterStart + 'h' : NI],
-          ['Horím. Final',   ficha.hourmeterEnd   != null ? ficha.hourmeterEnd   + 'h' : NI],
-          ['Total Horím.',   ficha.totalHourmeter != null ? ficha.totalHourmeter + 'h' : NI],
+          ['MatrÃ­cula',      fv(ficha.operatorRegistration)],
+          ['OperaÃ§Ã£o',       fv(ficha.operationName || ficha.operationCode)],
+          ['HorÃ­m. InÃ­cio',  ficha.hourmeterStart != null ? ficha.hourmeterStart + 'h' : NI],
+          ['HorÃ­m. Final',   ficha.hourmeterEnd   != null ? ficha.hourmeterEnd   + 'h' : NI],
+          ['Total HorÃ­m.',   ficha.totalHourmeter != null ? ficha.totalHourmeter + 'h' : NI],
           ['Paradas',        String(ficha.stops.length)],
-          ['Rastro GPS',     ficha.trailSummary.points + ' pontos · ' + ficha.trailSummary.distanceKm + 'km'],
+          ['Rastro GPS',     ficha.trailSummary.points + ' pontos Â· ' + ficha.trailSummary.distanceKm + 'km'],
         ]} />
       </div>
 
@@ -689,7 +689,7 @@ function ExportacaoTab({
   );
 }
 
-// ── Shared sub-components ─────────────────────────────────────────────────────
+// â”€â”€ Shared sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2 mb-4">
@@ -719,7 +719,7 @@ function FieldGrid({ rows }: { rows: string[][] }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FichaOperadorPage() {
   const [fleet,          setFleet]          = useState<FleetRow[]>([]);
   const [fleetLoading,   setFleetLoading]   = useState(true);
@@ -767,7 +767,7 @@ function FichaOperadorPage() {
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== 'AbortError') {
-        setFichaError('Falha de conexão com o servidor.');
+        setFichaError('Falha de conexÃ£o com o servidor.');
         setFicha(null);
       }
     } finally {
@@ -837,3 +837,4 @@ function FichaOperadorPage() {
 }
 
 export default withAuth(FichaOperadorPage, { module: 'FICHA_OPERADOR' });
+
