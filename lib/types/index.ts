@@ -539,10 +539,14 @@ export interface EquipmentLiveState {
   stopStartedAt?: string;
   /** Duracao da parada em segundos */
   stopDurationSeconds?: number;
+  /** Timestamp de encerramento da parada (preenchido no JOURNEY_END) */
+  stopEndedAt?: string;
   /** Timestamp de inicio do status atual */
   statusStartedAt?: string;
   /** Duracao do status atual em segundos */
   statusDurationSeconds?: number;
+  /** Timestamp de encerramento da jornada */
+  endedAt?: string;
   type?: string;
   name?: string;
   updatedAt: string;

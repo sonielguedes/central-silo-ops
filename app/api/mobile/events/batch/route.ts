@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
-import { EquipmentLiveState, EquipmentLiveStatus, TrailPoint } from '@/lib/types';
+import { EquipmentLiveStatus, TrailPoint } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -338,22 +338,54 @@ export async function POST(req: NextRequest) {
         }
         case 'JOURNEY_END': {
           applyOperationalFields(liveUpdates, d);
-          const hStart = asValidHourmeter(d.hourmeterStart ?? d.hourmeterStartValue);
-          const hEnd = asValidHourmeter(d.hourmeterEnd ?? d.hourmeter);
-          if (hStart != null && hEnd != null && hEnd < hStart) {
-            // Flag the inconsistency — sanitizeLiveStateItem will also re-validate on write
-            liveUpdates.hourmeterInconsistent = true;
-            liveUpdates.hourmeterInconsistencyReason = 'hourmeterEnd menor que hourmeterStart';
-            console.warn(`[Hourmeter] inconsistent fleetCode=${validation.equipment.code} start=${hStart} end=${hEnd}`);
+
+          const jIdEnd = asString(d.journeyId);
+          if (!jIdEnd) {
+            console.warn(`[JourneyEnd] journeyId ausente fleetCode=${validation.equipment.code}`);
           }
-          if (hStart != null) liveUpdates.hourmeterStart = hStart;
-          if (hEnd != null && (hStart == null || hEnd >= hStart)) liveUpdates.hourmeterEnd = hEnd;
-          const total = asNumber(d.totalHourmeter);
-          if (total != null && total >= 0) liveUpdates.totalHourmeter = total;
+
+          const hStartEnd = asValidHourmeter(d.hourmeterStart ?? d.hourmeterStartValue);
+          const hEnd      = asValidHourmeter(d.hourmeterEnd ?? d.hourmeter);
+
+          if (hStartEnd != null) liveUpdates.hourmeterStart = hStartEnd;
+
+          if (hEnd != null) {
+            if (hStartEnd != null && hEnd < hStartEnd) {
+              liveUpdates.hourmeterInconsistent = true;
+              liveUpdates.hourmeterInconsistencyReason = 'hourmeterEnd menor que hourmeterStart';
+              console.warn(`[JourneyEnd] validation failed: hourmeterEnd(${hEnd}) < hourmeterStart(${hStartEnd}) fleetCode=${validation.equipment.code}`);
+            }
+            // Accept hourmeterEnd regardless — inconsistency flag signals the anomaly
+            liveUpdates.hourmeterEnd     = hEnd;
+            liveUpdates.hourmeterCurrent = hEnd;
+          }
+
+          // totalHourmeter: prefer APK-provided; fallback to calculated
+          const totalFromPayload = asNumber(d.totalHourmeter);
+          if (totalFromPayload != null && totalFromPayload >= 0) {
+            liveUpdates.totalHourmeter = totalFromPayload;
+          } else if (hStartEnd != null && hEnd != null && hEnd >= hStartEnd) {
+            liveUpdates.totalHourmeter = Math.round((hEnd - hStartEnd) * 1000) / 1000;
+          }
+
           const srcEnd = asString(d.hourmeterSource);
           if (srcEnd) liveUpdates.hourmeterSource = srcEnd;
-          liveUpdates.status = 'OFFLINE';
+
+          // Close any open stop that was not closed by the APK
+          if (liveUpdates.stopCode || liveUpdates.stopStartedAt) {
+            liveUpdates.stopEndedAt = ts;
+          }
+
+          // Journey end timestamp + final status
+          liveUpdates.endedAt         = asString(d.endedAt) || ts;
+          liveUpdates.status          = 'FINALIZADO';
           liveUpdates.statusStartedAt = ts;
+
+          console.info(`[JourneyEnd] payload: fleetCode=${validation.equipment.code}` +
+            ` journeyId=${jIdEnd || 'missing'}` +
+            ` hourmeterStart=${hStartEnd ?? 'missing'}` +
+            ` hourmeterEnd=${hEnd ?? 'missing'}` +
+            ` total=${String(liveUpdates.totalHourmeter ?? 'n/a')}`);
           break;
         }
         default:
@@ -370,7 +402,7 @@ export async function POST(req: NextRequest) {
     const loggedHourmeter = liveUpdates.hourmeterCurrent ?? liveUpdates.hourmeterEnd ?? liveUpdates.hourmeterStart ?? 'missing';
     console.info('[operational-fields] received fleetCode=' + validation.equipment.code);
     enrichOperationalFields(tenantId, liveUpdates);
-        console.info(`[batch-operational] fleetCode=${validation.equipment.code} operator=${String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing')} operation=${String(liveUpdates.operationName || liveUpdates.operationCode || 'missing')} hourmeter=${String(loggedHourmeter)}`);
+    console.info(`[batch-operational] fleetCode=${validation.equipment.code} operator=${String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing')} operation=${String(liveUpdates.operationName || liveUpdates.operationCode || 'missing')} hourmeter=${String(loggedHourmeter)}`);
     console.info(`[Hourmeter] source=${String(liveUpdates.hourmeterSource || 'missing')}`);
     console.info(`[Hourmeter] start=${String(liveUpdates.hourmeterStart ?? 'missing')}`);
     console.info(`[Hourmeter] current=${String(liveUpdates.hourmeterCurrent ?? 'missing')}`);
@@ -380,12 +412,11 @@ export async function POST(req: NextRequest) {
       tenantId,
       validation.equipment.id,
       validation.equipment.code,
-      liveUpdates as Partial<EquipmentLiveState>
+      liveUpdates,
     );
-
-    return NextResponse.json({ results, tenantId });
+    return NextResponse.json({ received: events.length, processed: results.length, results });
   } catch (error) {
-    console.error('[mobile/events/batch] critical error', error);
+    console.error('[batch] unhandled error', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
