@@ -21,7 +21,8 @@ import {
   Activity,
   BarChart2,
   History as HistoryIcon,
-  Gauge
+  Clock,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -86,6 +87,7 @@ const menuItems: MenuGroup[] = [
     { icon: ShieldCheck, label: 'Perfis / RBAC', href: '/administracao/grupos-acesso' },
     { icon: Activity, label: 'Intelligence', href: '/relatorios/intelligence' },
     { icon: FileText, label: 'Relatórios', href: '/relatorios' },
+    { icon: Clock, label: 'Tempo Operacional', href: '/relatorios/tempo-operacional' },
     { icon: Gauge, label: 'Eficiência Operacional', href: '/relatorios/eficiencia-operacional' },
     { icon: Settings, label: 'Configurações', href: '/configuracoes' },
   ]}
