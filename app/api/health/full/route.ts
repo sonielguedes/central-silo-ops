@@ -22,20 +22,15 @@ function checkDir(dirPath: string): { exists: boolean; readable: boolean; writab
   try {
     if (!fs.existsSync(dirPath)) return { exists: false, readable: false, writable: false };
     fs.accessSync(dirPath, fs.constants.R_OK);
-    const readable = true;
     let writable = false;
-    try {
-      fs.accessSync(dirPath, fs.constants.W_OK);
-      writable = true;
-    } catch { /* not writable */ }
-    return { exists: true, readable, writable };
+    try { fs.accessSync(dirPath, fs.constants.W_OK); writable = true; } catch { /* not writable */ }
+    return { exists: true, readable: true, writable };
   } catch {
     return { exists: true, readable: false, writable: false };
   }
 }
 
 function getDiskInfo(): { freeGb?: number; totalGb?: number } | null {
-  // Only available on some systems
   try {
     const stats = fs.statfsSync(DATA_ROOT);
     return {
@@ -47,35 +42,52 @@ function getDiskInfo(): { freeGb?: number; totalGb?: number } | null {
   }
 }
 
+interface TenantHealth {
+  tenantId: string;
+  code: string;
+  status: string;
+  dataDir: { exists: boolean; readable: boolean; writable: boolean };
+  mobileEvents: { exists: boolean; readable: boolean; sizeBytes?: number };
+  liveState: { exists: boolean; readable: boolean; sizeBytes?: number };
+  alerts: { exists: boolean; readable: boolean; sizeBytes?: number };
+  auditLog: { exists: boolean; readable: boolean; sizeBytes?: number };
+}
+
+function getTenantHealth(): TenantHealth[] {
+  // Load companies to get tenant list (never expose tokens)
+  try {
+    const companiesFile = path.join(DATA_ROOT, 'companies.json');
+    if (!fs.existsSync(companiesFile)) return [];
+    const companies = JSON.parse(fs.readFileSync(companiesFile, 'utf-8')) as Array<{
+      tenantId: string; code: string; status: string;
+    }>;
+
+    return companies.map(c => {
+      const tenantDir = path.join(DATA_ROOT, c.tenantId);
+      return {
+        tenantId: c.tenantId,
+        code: c.code,
+        status: c.status || 'ATIVO',
+        dataDir: checkDir(tenantDir),
+        mobileEvents: checkFile(path.join(tenantDir, 'mobile-events.json')),
+        liveState: checkFile(path.join(tenantDir, 'live-state.json')),
+        alerts: checkFile(path.join(tenantDir, 'alerts.json')),
+        auditLog: checkFile(path.join(tenantDir, 'audit-log.jsonl')),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
   const now = new Date().toISOString();
   const dataDir = checkDir(DATA_ROOT);
-
-  // Find tenants
-  let tenants: string[] = [];
-  try {
-    if (dataDir.exists && dataDir.readable) {
-      tenants = fs.readdirSync(DATA_ROOT)
-        .filter(f => fs.statSync(path.join(DATA_ROOT, f)).isDirectory())
-        .filter(f => !f.startsWith('.'));
-    }
-  } catch { /* ignore */ }
-
-  // Check key files for first tenant (or default)
-  const tenantId = tenants[0] || 'silo-ops-001';
-  const tenantDir = path.join(DATA_ROOT, tenantId);
-  const mobileEvents = checkFile(path.join(tenantDir, 'mobile-events.json'));
-  const liveState = checkFile(path.join(tenantDir, 'live-state.json'));
-  const alerts = checkFile(path.join(tenantDir, 'alerts.json'));
-  const auditLog = checkFile(path.join(tenantDir, 'audit-log.jsonl'));
-
   const disk = getDiskInfo();
+  const tenants = getTenantHealth();
 
-  const allOk =
-    dataDir.exists && dataDir.readable && dataDir.writable &&
-    mobileEvents.readable !== false &&
-    liveState.readable !== false;
-
+  const tenantsOk = tenants.length > 0 && tenants.every(t => t.dataDir.exists && t.dataDir.readable);
+  const allOk = dataDir.exists && dataDir.readable && dataDir.writable && tenantsOk;
   const status = allOk ? 'healthy' : 'degraded';
 
   const result = {
@@ -84,14 +96,9 @@ export async function GET() {
     timestamp: now,
     environment: process.env.NEXT_PUBLIC_APP_ENV || process.env.NODE_ENV || 'unknown',
     uptime: process.uptime(),
-    checks: {
-      dataDir,
-      mobileEvents,
-      liveState,
-      alerts,
-      auditLog,
-    },
+    dataDir,
     tenants,
+    tenantCount: tenants.length,
     disk,
     memory: {
       heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1048576 * 100) / 100,

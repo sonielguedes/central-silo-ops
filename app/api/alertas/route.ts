@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ServerStorage } from '@/lib/server-storage';
 import { generateAlerts } from '@/lib/alertas-builder';
+import { requireTenant } from '@/lib/auth/api-guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
+    const tenant = requireTenant(req);
+    if (!tenant.ok) return tenant.response;
+    const { tenantId } = tenant;
+
     const alerts = generateAlerts(tenantId);
 
     const { searchParams } = new URL(req.url);
@@ -17,7 +20,6 @@ export async function GET(req: NextRequest) {
     if (severity) filtered = filtered.filter(a => a.severity === severity);
     if (status) filtered = filtered.filter(a => a.status === status);
 
-    // Most recent first
     filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
     const summary = {
@@ -29,8 +31,6 @@ export async function GET(req: NextRequest) {
       reconhecidos: filtered.filter(a => a.status === 'RECONHECIDO').length,
       resolvidos: filtered.filter(a => a.status === 'RESOLVIDO').length,
     };
-
-    console.info(`[alertas] total=${summary.total} critico=${summary.critico} atencao=${summary.atencao} informativo=${summary.informativo}`);
 
     return NextResponse.json({ summary, alerts: filtered }, {
       headers: { 'Cache-Control': 'no-store' },

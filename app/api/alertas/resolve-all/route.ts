@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ServerStorage } from '@/lib/server-storage';
 import { resolveAllAlerts } from '@/lib/alertas-builder';
-import { blockWriteInDemo } from '@/lib/auth/api-guard';
+import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +10,9 @@ export async function POST(req: NextRequest) {
     const demoBlock = blockWriteInDemo(req);
     if (demoBlock) return demoBlock;
 
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
+    const tenant = requireTenant(req);
+    if (!tenant.ok) return tenant.response;
+    const { tenantId } = tenant;
     const count = resolveAllAlerts(tenantId);
 
     auditFromRequest(req, tenantId, { action: 'ALERT_RESOLVE_ALL', entity: 'alert', entityId: '*', metadata: { count } });

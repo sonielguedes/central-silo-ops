@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireTenant } from '@/lib/auth/api-guard';
 import { ServerStorage, MobileEvent } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
 
@@ -125,7 +126,9 @@ function computeProductivity(events: MobileEvent[]): ProductivityAccum {
 
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
+    const tenant = requireTenant(req);
+    if (!tenant.ok) return tenant.response;
+    const { tenantId } = tenant;
     const { from, to } = todayRange();
 
     // ── Live fleet ──────────────────────────────────────────────────────────

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
+import { requireTenant } from '@/lib/auth/api-guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
-    const liveFleet = ServerStorage.getLiveFleet(tenantId);
+    const tenant = requireTenant(req);
+    if (!tenant.ok) return tenant.response;
 
-    console.info(`[map-status] returned count=${liveFleet.length}`);
-
+    const liveFleet = ServerStorage.getLiveFleet(tenant.tenantId);
     return NextResponse.json(liveFleet);
   } catch (error) {
     console.error('[api/equipamentos/status] failed to fetch live state', error);

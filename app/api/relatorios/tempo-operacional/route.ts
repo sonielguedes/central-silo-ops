@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireTenant } from '@/lib/auth/api-guard';
 import { buildTempoReport } from '@/lib/tempo-operacional-builder';
-import { ServerStorage } from '@/lib/server-storage';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
+    const tenant = requireTenant(req);
+    if (!tenant.ok) return tenant.response;
+    const { tenantId } = tenant;
     const result = buildTempoReport({
       tenantId,
       from: searchParams.get('from')?.trim() || null,

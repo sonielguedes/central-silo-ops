@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireTenant } from '@/lib/auth/api-guard';
 import { buildTempoReport, buildTempoCsv } from '@/lib/tempo-operacional-builder';
-import { ServerStorage } from '@/lib/server-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Formato invalido' }, { status: 400 });
     }
 
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
+    const tenant = requireTenant(req);
+    if (!tenant.ok) return tenant.response;
+    const { tenantId } = tenant;
     const result = buildTempoReport({
       tenantId,
       from: searchParams.get('from')?.trim() || null,

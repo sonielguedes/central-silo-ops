@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { Equipment } from '@/lib/types';
-import { requireMobileAuth, maskToken, blockWriteInDemo } from '@/lib/auth/api-guard';
+import { requireMobileAuth, requireTenant, maskToken, blockWriteInDemo } from '@/lib/auth/api-guard';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,8 +18,10 @@ export async function POST(req: NextRequest) {
       tenantId = auth.tenantId;
       companyId = auth.company.id;
     } else {
-      // Fallback for Central UI or internal calls
-      tenantId = ServerStorage.resolveTenantId(req.headers);
+      // Fallback for Central UI — still requires valid tenant
+      const webTenant = requireTenant(req);
+      if (!webTenant.ok) return webTenant.response;
+      tenantId = webTenant.tenantId;
     }
 
     const body = await req.json() as Equipment & {

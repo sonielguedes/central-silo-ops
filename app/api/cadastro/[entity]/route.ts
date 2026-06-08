@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CadastroStorage, ALLOWED_ENTITIES } from '@/lib/cadastro-storage';
-import { ServerStorage } from '@/lib/server-storage';
-import { blockWriteInDemo } from '@/lib/auth/api-guard';
+import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +19,9 @@ export async function GET(
   const { entity } = params;
   if (!ALLOWED_ENTITIES.includes(entity)) return badEntity(entity);
 
-  const tenantId = ServerStorage.resolveTenantId(req.headers);
+  const tenant = requireTenant(req);
+  if (!tenant.ok) return tenant.response;
+  const { tenantId } = tenant;
   const data = CadastroStorage.getAll(tenantId, entity);
   return NextResponse.json(data);
 }
@@ -35,7 +36,9 @@ export async function POST(
   const { entity } = params;
   if (!ALLOWED_ENTITIES.includes(entity)) return badEntity(entity);
 
-  const tenantId = ServerStorage.resolveTenantId(req.headers);
+  const tenant = requireTenant(req);
+  if (!tenant.ok) return tenant.response;
+  const { tenantId } = tenant;
   try {
     const body = await req.json();
     const item = CadastroStorage.create(tenantId, entity, body);

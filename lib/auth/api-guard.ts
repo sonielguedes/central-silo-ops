@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { Company } from '@/lib/types';
+import { resolveWebTenant } from '@/lib/tenant/tenant-resolver';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,29 +93,14 @@ export function requireMobileAuth(req: NextRequest): MobileAuthResult | GuardErr
 
 // ── requireTenant ───────────────────────────────────────────────────────────
 // Resolves tenantId from headers for web/internal routes.
+// Now uses tenant-resolver (no silent fallback to default tenant).
 
 export function requireTenant(req: NextRequest): TenantResult | GuardError {
-  try {
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
-    if (!tenantId) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: 'Tenant nao identificado' },
-          { status: 401 },
-        ),
-      };
-    }
-    return { ok: true, tenantId };
-  } catch {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: 'Tenant nao identificado' },
-        { status: 401 },
-      ),
-    };
+  const result = resolveWebTenant(req);
+  if (!result.ok) {
+    return { ok: false, response: result.response };
   }
+  return { ok: true, tenantId: result.tenantId };
 }
 
 // ── blockWriteInDemo ────────────────────────────────────────────────────────

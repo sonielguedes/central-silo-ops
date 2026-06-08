@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ServerStorage } from '@/lib/server-storage';
+import { requireTenant } from '@/lib/auth/api-guard';
 import { buildOperatorSheet } from '@/lib/operator-sheet-builder';
 import type { FichaOperador } from '@/lib/operator-sheet-builder';
 
@@ -77,7 +77,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'fleetCode is required' }, { status: 400 });
     }
 
-    const tenantId = ServerStorage.resolveTenantId(req.headers);
+    const tenant = requireTenant(req);
+    if (!tenant.ok) return tenant.response;
+    const { tenantId } = tenant;
     const result   = buildOperatorSheet({ tenantId, fleetCode, journeyId });
 
     if (!result.ok) {

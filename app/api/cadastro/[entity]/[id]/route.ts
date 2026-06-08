@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CadastroStorage, ALLOWED_ENTITIES } from '@/lib/cadastro-storage';
-import { ServerStorage } from '@/lib/server-storage';
-import { blockWriteInDemo } from '@/lib/auth/api-guard';
+import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +13,9 @@ export async function GET(
   if (!ALLOWED_ENTITIES.includes(entity)) {
     return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
   }
-  const tenantId = ServerStorage.resolveTenantId(req.headers);
+  const tenant = requireTenant(req);
+  if (!tenant.ok) return tenant.response;
+  const { tenantId } = tenant;
   const item = CadastroStorage.getById(tenantId, entity, id);
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(item);
@@ -31,7 +32,9 @@ export async function PUT(
   if (!ALLOWED_ENTITIES.includes(entity)) {
     return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
   }
-  const tenantId = ServerStorage.resolveTenantId(req.headers);
+  const tenant = requireTenant(req);
+  if (!tenant.ok) return tenant.response;
+  const { tenantId } = tenant;
   try {
     const before = CadastroStorage.getById(tenantId, entity, id);
     const body = await req.json();
@@ -56,7 +59,9 @@ export async function DELETE(
   if (!ALLOWED_ENTITIES.includes(entity)) {
     return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
   }
-  const tenantId = ServerStorage.resolveTenantId(req.headers);
+  const tenant = requireTenant(req);
+  if (!tenant.ok) return tenant.response;
+  const { tenantId } = tenant;
   const before = CadastroStorage.getById(tenantId, entity, id);
   const ok = CadastroStorage.archive(tenantId, entity, id);
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
