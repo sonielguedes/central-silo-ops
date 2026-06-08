@@ -30,8 +30,14 @@ interface EfficiencyReport {
     totalHours: number;
     productiveHours: number;
     unproductiveHours: number;
+    maintenanceHours?: number;
+    productivePercent?: number;
+    unproductivePercent?: number;
+    maintenancePercent?: number;
     stopsCount: number;
     finalizedJourneys: number;
+    hourmeterInconsistent?: boolean;
+    inconsistencies?: string[];
   }>;
   byOperator: Array<{
     registration: string;
@@ -229,7 +235,7 @@ function EficienciaOperacionalPage() {
                     {report.byFleet.map(item => (
                       <div key={item.fleetCode}>
                         <div className="mb-1 flex justify-between text-xs">
-                          <span className="font-black text-white">{item.fleetCode}</span>
+                          <span className="font-black text-white">{item.fleetCode}{item.hourmeterInconsistent && <span className="ml-2 text-[9px] text-amber-400" title={(item.inconsistencies || []).join('; ')}>⚠</span>}</span>
                           <span className="text-muted-foreground">{fmtHours(item.totalHours)}</span>
                         </div>
                         <div className="h-3 overflow-hidden rounded-full bg-[#1a1f3a]">
@@ -240,6 +246,42 @@ function EficienciaOperacionalPage() {
                   </div>
                 </div>
               </section>
+
+              {/* Tabela detalhada por Frota */}
+              <FleetTable items={report.byFleet} />
+
+              {/* Timeline */}
+              {report.timeline.length > 0 && (
+                <div className="rounded-3xl border border-[#2d3647] bg-[#0a0e27]/70 p-5">
+                  <h2 className="mb-5 text-xs font-black uppercase tracking-[0.25em] text-muted-foreground">Timeline</h2>
+                  <div className="overflow-x-auto">
+                    <div className="flex items-end gap-1" style={{ minWidth: Math.max(report.timeline.length * 38, 300) }}>
+                      {report.timeline.map(slot => {
+                        const slotTotal = slot.productiveHours + slot.unproductiveHours + slot.maintenanceHours;
+                        const maxBar = 80;
+                        const scale = slotTotal > 0 ? maxBar / slotTotal : 0;
+                        const d = new Date(slot.hour);
+                        const label = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}h`;
+                        return (
+                          <div key={slot.hour} className="flex flex-col items-center" style={{ minWidth: 34 }}>
+                            <div className="flex flex-col-reverse">
+                              {slot.productiveHours > 0 && <div className="w-5 rounded-sm bg-emerald-500" style={{ height: slot.productiveHours * scale }} title={`Produtiva: ${fmtHours(slot.productiveHours)}`} />}
+                              {slot.unproductiveHours > 0 && <div className="w-5 rounded-sm bg-amber-500" style={{ height: slot.unproductiveHours * scale }} title={`Improdutiva: ${fmtHours(slot.unproductiveHours)}`} />}
+                              {slot.maintenanceHours > 0 && <div className="w-5 rounded-sm bg-red-500" style={{ height: slot.maintenanceHours * scale }} title={`Manutenção: ${fmtHours(slot.maintenanceHours)}`} />}
+                            </div>
+                            <span className="mt-1 text-[7px] text-muted-foreground leading-none">{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-4 text-[9px] text-muted-foreground">
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> Produtiva</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-amber-500" /> Improdutiva</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-500" /> Manutenção</span>
+                  </div>
+                </div>
+              )}
 
               <section className="grid gap-6 xl:grid-cols-2">
                 <DataTable
@@ -264,6 +306,55 @@ function EficienciaOperacionalPage() {
             <EmptyState />
           )}
         </main>
+      </div>
+    </div>
+  );
+}
+
+function FleetTable({ items }: { items: EfficiencyReport['byFleet'] }) {
+  if (items.length === 0) return null;
+  const headers = ['Frota', 'Operador', 'Operação', 'Implemento', 'Total', 'Produtiva', 'Improdutiva', 'Manut.', 'Prod%', 'Improd%', 'Manut%', 'Paradas', 'Status'];
+  return (
+    <div className="overflow-hidden rounded-3xl border border-[#2d3647] bg-[#0a0e27]/70">
+      <div className="border-b border-[#2d3647] p-4">
+        <h2 className="text-xs font-black uppercase tracking-[0.25em] text-muted-foreground">Detalhamento por Frota</h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-[#050812]/70 text-[9px] uppercase tracking-widest text-muted-foreground">
+            <tr>{headers.map(h => <th key={h} className="whitespace-nowrap px-3 py-3 font-black">{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {items.map(item => {
+              const hasIssue = item.hourmeterInconsistent;
+              return (
+                <tr key={item.fleetCode} className={cn("border-t border-[#1a1f3a]", hasIssue && "bg-amber-500/5")}>
+                  <td className="whitespace-nowrap px-3 py-3 font-bold text-white">{item.fleetCode}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{item.operatorName}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{item.operationName}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{item.implementName || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{fmtHours(item.totalHours)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-emerald-300">{fmtHours(item.productiveHours)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-amber-300">{fmtHours(item.unproductiveHours)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-red-300">{fmtHours(item.maintenanceHours || 0)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{fmtPercent(Math.min(100, item.productivePercent || 0))}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{fmtPercent(Math.min(100, item.unproductivePercent || 0))}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{fmtPercent(Math.min(100, item.maintenancePercent || 0))}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-white/80">{item.stopsCount}</td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    {hasIssue ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-bold text-amber-300" title={(item.inconsistencies || []).join('\n')}>
+                        <AlertTriangle size={10} /> Inconsistência
+                      </span>
+                    ) : (
+                      <span className="text-emerald-400 text-[9px] font-bold">OK</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
