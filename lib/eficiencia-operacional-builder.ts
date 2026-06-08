@@ -414,16 +414,46 @@ export function buildEfficiencyReport(params: {
 
   for (const journey of journeys) {
     const total = journeyTotalHours(journey);
-    const stopUnproductive = journey.stops.filter(s => s.group === 'IMPRODUTIVA').reduce((sum, stop) => sum + stop.hours, 0);
-    const stopMaintenance = journey.stops.filter(s => s.group === 'MANUTENCAO').reduce((sum, stop) => sum + stop.hours, 0);
-    const productive = journey.operationCode || journey.operationName ? Math.max(0, total - stopUnproductive - stopMaintenance) : 0;
-    const stopTotal = stopUnproductive + stopMaintenance;
-    if (stopUnproductive > total) {
-      journey.inconsistencies.push('unproductiveHours excede totalHours');
+
+    // --- C4.4 Fix: Clamp each stop duration to journey total ---
+    let rawStopUnproductive = 0;
+    let rawStopMaintenance = 0;
+    for (const stop of journey.stops) {
+      if (stop.hours > total && total > 0) {
+        journey.inconsistencies.push(`stop ${stop.code} duração ${round(stop.hours)}h excede jornada ${round(total)}h – limitada`);
+        stop.hours = total;
+      }
+      if (stop.group === 'IMPRODUTIVA') rawStopUnproductive += stop.hours;
+      else rawStopMaintenance += stop.hours;
     }
-    if (stopTotal > total) {
-      journey.inconsistencies.push('stopHours excede totalHours');
+
+    // --- C4.4 Fix: Priorizar MANUTENCAO/IMPRODUTIVA, cap ao total ---
+    let stopMaintenance = rawStopMaintenance;
+    let stopUnproductive = rawStopUnproductive;
+    const rawStopTotal = stopMaintenance + stopUnproductive;
+
+    if (rawStopTotal > total && total > 0) {
+      journey.inconsistencies.push('stopHours excede totalHours – recalculado');
+      // Manutenção tem prioridade, depois improdutiva
+      stopMaintenance = Math.min(stopMaintenance, total);
+      stopUnproductive = Math.min(stopUnproductive, Math.max(0, total - stopMaintenance));
     }
+
+    // Produtiva = residual após paradas (nunca negativa)
+    const productive = (journey.operationCode || journey.operationName)
+      ? Math.max(0, total - stopMaintenance - stopUnproductive)
+      : 0;
+
+    // Flag de inconsistência original mantida
+    if (rawStopUnproductive > total && total > 0) {
+      if (!journey.inconsistencies.includes('unproductiveHours excede totalHours')) {
+        journey.inconsistencies.push('unproductiveHours excede totalHours');
+      }
+    }
+
+    // --- C4.4 Fix: journeyId confiável para somar em byFleet ---
+    const hasReliableJourney = !!journey.journeyId && journey.journeyId.length > 0
+      && (journey.startedAt || journey.endedAt || journey.status === 'FINALIZADO');
 
     totalHours += total;
     productiveHours += productive;
@@ -441,35 +471,41 @@ export function buildEfficiencyReport(params: {
       stopMap.set(key, current);
     }
 
-    const fleetKey = journey.fleetCode || 'NAO_INFORMADO';
-    const fleet = fleetMap.get(fleetKey) || {
-      fleetCode: fleetKey,
-      operatorName: journey.operatorName || 'Nao informado',
-      operationName: journey.operationName || 'Nao informado',
-      implementName: journey.implementName || 'Nao informado',
-      totalHours: 0,
-      productiveHours: 0,
-      unproductiveHours: 0,
-      maintenanceHours: 0,
-      productivePercent: 0,
-      unproductivePercent: 0,
-      maintenancePercent: 0,
-      stopsCount: 0,
-      finalizedJourneys: 0,
-      hourmeterInconsistent: false,
-      inconsistencies: [],
-    };
-    fleet.totalHours += total;
-    fleet.productiveHours += productive;
-    fleet.unproductiveHours += stopUnproductive;
-    fleet.maintenanceHours = (fleet.maintenanceHours || 0) + stopMaintenance;
-    fleet.stopsCount += journey.stops.length;
-    fleet.finalizedJourneys += journey.status === 'FINALIZADO' ? 1 : 0;
-    if (journey.inconsistencies.length > 0) {
-      fleet.hourmeterInconsistent = true;
-      fleet.inconsistencies = Array.from(new Set([...(fleet.inconsistencies || []), ...journey.inconsistencies]));
+    // --- C4.4 Fix: Stops sem journeyId confiável não somam no byFleet ---
+    if (!hasReliableJourney) {
+      journey.inconsistencies.push('journeyId não confiável – excluído do byFleet');
+      // Não acumula no byFleet, mas stops já estão no stopMap/topStops
+    } else {
+      const fleetKey = journey.fleetCode || 'NAO_INFORMADO';
+      const fleet = fleetMap.get(fleetKey) || {
+        fleetCode: fleetKey,
+        operatorName: journey.operatorName || 'Nao informado',
+        operationName: journey.operationName || 'Nao informado',
+        implementName: journey.implementName || 'Nao informado',
+        totalHours: 0,
+        productiveHours: 0,
+        unproductiveHours: 0,
+        maintenanceHours: 0,
+        productivePercent: 0,
+        unproductivePercent: 0,
+        maintenancePercent: 0,
+        stopsCount: 0,
+        finalizedJourneys: 0,
+        hourmeterInconsistent: false,
+        inconsistencies: [],
+      };
+      fleet.totalHours += total;
+      fleet.productiveHours += productive;
+      fleet.unproductiveHours += stopUnproductive;
+      fleet.maintenanceHours = (fleet.maintenanceHours || 0) + stopMaintenance;
+      fleet.stopsCount += journey.stops.length;
+      fleet.finalizedJourneys += journey.status === 'FINALIZADO' ? 1 : 0;
+      if (journey.inconsistencies.length > 0) {
+        fleet.hourmeterInconsistent = true;
+        fleet.inconsistencies = Array.from(new Set([...(fleet.inconsistencies || []), ...journey.inconsistencies]));
+      }
+      fleetMap.set(fleetKey, fleet);
     }
-    fleetMap.set(fleetKey, fleet);
 
     const opReg = journey.operatorRegistration || 'NAO_INFORMADO';
     const operator = operatorMap.get(opReg) || {
@@ -507,15 +543,20 @@ export function buildEfficiencyReport(params: {
       if (item.unproductiveHours + (item.maintenanceHours || 0) > item.totalHours) {
         inconsistencies.push('paradas excedem totalHours da frota');
       }
+      // --- C4.4 Fix: Cap por frota – mesma lógica de prioridade ---
+      const t = item.totalHours;
+      let maint = Math.min(item.maintenanceHours || 0, t);
+      let unprod = Math.min(item.unproductiveHours, Math.max(0, t - maint));
+      let prod = Math.min(item.productiveHours, Math.max(0, t - maint - unprod));
       return {
         ...item,
-        totalHours: round(item.totalHours),
-        productiveHours: round(item.productiveHours),
-        unproductiveHours: round(item.unproductiveHours),
-        maintenanceHours: round(item.maintenanceHours || 0),
-        productivePercent: percent(item.productiveHours, item.totalHours),
-        unproductivePercent: percent(item.unproductiveHours, item.totalHours),
-        maintenancePercent: percent(item.maintenanceHours || 0, item.totalHours),
+        totalHours: round(t),
+        productiveHours: round(prod),
+        unproductiveHours: round(unprod),
+        maintenanceHours: round(maint),
+        productivePercent: percent(prod, t),
+        unproductivePercent: percent(unprod, t),
+        maintenancePercent: percent(maint, t),
         hourmeterInconsistent: inconsistencies.length > 0,
         inconsistencies: Array.from(new Set(inconsistencies)),
       };
@@ -549,6 +590,14 @@ export function buildEfficiencyReport(params: {
       unproductiveHours: round(item.unproductiveHours),
       maintenanceHours: round(item.maintenanceHours),
     }));
+
+  // --- C4.4 Fix: Cap summary so productive+unproductive+maintenance ≤ totalHours ---
+  if (totalHours > 0) {
+    // Manutenção e improdutiva têm prioridade; produtiva = residual
+    maintenanceHours = Math.min(maintenanceHours, totalHours);
+    unproductiveHours = Math.min(unproductiveHours, Math.max(0, totalHours - maintenanceHours));
+    productiveHours = Math.min(productiveHours, Math.max(0, totalHours - maintenanceHours - unproductiveHours));
+  }
 
   return {
     ok: true,
