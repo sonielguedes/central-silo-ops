@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { resolveAlert } from '@/lib/alertas-builder';
+import { blockWriteInDemo } from '@/lib/auth/api-guard';
+import { auditFromRequest } from '@/lib/audit/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +11,9 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   try {
+    const demoBlock = blockWriteInDemo(req);
+    if (demoBlock) return demoBlock;
+
     const tenantId = ServerStorage.resolveTenantId(req.headers);
     const alertId = params.id;
 
@@ -21,7 +26,7 @@ export async function POST(
       return NextResponse.json({ error: 'Alerta nao encontrado ou ja resolvido' }, { status: 404 });
     }
 
-    console.info(`[alertas] resolved alertId=${alertId}`);
+    auditFromRequest(req, tenantId, { action: 'ALERT_RESOLVE', entity: 'alert', entityId: alertId });
     return NextResponse.json({ alert });
   } catch (error) {
     console.error('[alertas/resolve] error', error);

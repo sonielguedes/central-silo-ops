@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
 import { EquipmentLiveStatus, TrailPoint } from '@/lib/types';
+import { requireMobileAuth } from '@/lib/auth/api-guard';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
+import { auditFromRequest } from '@/lib/audit/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,17 +160,13 @@ function enrichOperationalFields(
 
 export async function POST(req: NextRequest) {
   try {
-    const companyToken = (req.headers.get('x-company-token') || undefined)?.trim();
-    if (!companyToken) {
-      return NextResponse.json({ error: 'X-Company-Token is required' }, { status: 401 });
-    }
+    const rl = checkRateLimit(req, RATE_LIMITS.mobileBatch);
+    if (rl) return rl;
 
-    const company = ServerStorage.getCompanyByToken(companyToken);
-    if (!company || company.status === 'INATIVO') {
-      return NextResponse.json({ error: 'Token invalido ou instancia inativa' }, { status: 403 });
-    }
+    const auth = requireMobileAuth(req);
+    if (!auth.ok) return auth.response;
 
-    const tenantId = company.tenantId;
+    const { tenantId, companyToken, company } = auth;
     const body = await req.json() as MobileBatchBody;
     const { header, events } = body;
 
@@ -436,7 +435,16 @@ export async function POST(req: NextRequest) {
       validation.equipment.code,
       liveUpdates,
     );
+
+    auditFromRequest(req, tenantId, {
+      action: 'MOBILE_BATCH',
+      entity: 'events',
+      entityId: validation.equipment.code,
+      metadata: { received: events.length, processed: results.length },
+    });
+
     return NextResponse.json({ received: events.length, processed: results.length, results });
+
   } catch (error) {
     console.error('[batch] unhandled error', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

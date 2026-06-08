@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CadastroStorage, ALLOWED_ENTITIES } from '@/lib/cadastro-storage';
 import { ServerStorage } from '@/lib/server-storage';
+import { blockWriteInDemo } from '@/lib/auth/api-guard';
+import { auditFromRequest } from '@/lib/audit/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +29,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { entity: string } }
 ) {
+  const demoBlock = blockWriteInDemo(req);
+  if (demoBlock) return demoBlock;
+
   const { entity } = params;
   if (!ALLOWED_ENTITIES.includes(entity)) return badEntity(entity);
 
@@ -34,6 +39,7 @@ export async function POST(
   try {
     const body = await req.json();
     const item = CadastroStorage.create(tenantId, entity, body);
+    auditFromRequest(req, tenantId, { action: 'CREATE', entity, entityId: (item as Record<string, string>).id });
     return NextResponse.json(item, { status: 201 });
   } catch (err) {
     console.error('[storage-api] create error entity=' + entity, err);

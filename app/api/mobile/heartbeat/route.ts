@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
+import { requireMobileAuth } from '@/lib/auth/api-guard';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
-    const companyToken = (req.headers.get('x-company-token') || undefined)?.trim();
-    if (!companyToken) return NextResponse.json({ error: 'X-Company-Token is required' }, { status: 401 });
+    const rl = checkRateLimit(req, RATE_LIMITS.mobileHeartbeat);
+    if (rl) return rl;
 
-    const company = ServerStorage.getCompanyByToken(companyToken);
-    if (!company || company.status === 'INATIVO') return NextResponse.json({ error: 'Token invalido' }, { status: 403 });
+    const auth = requireMobileAuth(req);
+    if (!auth.ok) return auth.response;
 
-    const tenantId = company.tenantId;
+    const { tenantId, companyToken } = auth;
     const body = await req.json();
     const { equipmentId, mobileToken, timestamp } = body;
 

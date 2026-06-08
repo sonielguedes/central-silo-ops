@@ -1,21 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { Equipment } from '@/lib/types';
+import { requireMobileAuth, maskToken, blockWriteInDemo } from '@/lib/auth/api-guard';
 
 export async function POST(req: NextRequest) {
   try {
-    const apiPort = ServerStorage.resolveApiPort(req.headers);
-    const company = apiPort ? ServerStorage.getCompanyByApiPort(apiPort) : undefined;
-    const resolvedTenantId = company?.tenantId || ServerStorage.resolveTenantId(req.headers);
+    const demoBlock = blockWriteInDemo(req);
+    if (demoBlock) return demoBlock;
+
+    const companyToken = (req.headers.get('x-company-token') || undefined)?.trim();
+    let tenantId: string;
+    let companyId: string | undefined;
+
+    if (companyToken) {
+      const auth = requireMobileAuth(req);
+      if (!auth.ok) return auth.response;
+      tenantId = auth.tenantId;
+      companyId = auth.company.id;
+    } else {
+      // Fallback for Central UI or internal calls
+      tenantId = ServerStorage.resolveTenantId(req.headers);
+    }
+
     const body = await req.json() as Equipment & {
       equipmentId?: string;
       fleetCode?: string;
       name?: string;
       type?: string;
     };
-
-    // Rule: always use company.tenantId if found via port, otherwise resolve from headers
-    const tenantId = company?.tenantId || resolvedTenantId;
 
     const equipment = {
       ...body,
@@ -38,14 +50,13 @@ export async function POST(req: NextRequest) {
 
     const saved = ServerStorage.upsertEquipment(equipment, tenantId);
     console.info('[mobile/equipment] equipment synced', {
-      companyId: company?.id,
-      companyTenantId: company?.tenantId,
-      tenantId: saved.tenantId,
+      companyId,
+      companyTenantId: tenantId,
       equipmentId: saved.id,
       fleetCode: saved.code,
       mobileEnabled: saved.mobileEnabled,
       status: saved.status,
-      mobileToken: saved.mobileToken ? `${saved.mobileToken.slice(0, 4)}...${saved.mobileToken.slice(-4)}` : 'missing',
+      receivedCompanyToken: maskToken(companyToken),
     });
 
     return NextResponse.json({

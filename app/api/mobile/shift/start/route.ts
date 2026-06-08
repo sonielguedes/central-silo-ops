@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
+import { requireMobileAuth } from '@/lib/auth/api-guard';
+import { auditFromRequest } from '@/lib/audit/audit-log';
 
 export async function POST(req: NextRequest) {
   try {
-    const companyToken = (req.headers.get('x-company-token') || undefined)?.trim();
-    if (!companyToken) return NextResponse.json({ error: 'X-Company-Token is required' }, { status: 401 });
+    const auth = requireMobileAuth(req);
+    if (!auth.ok) return auth.response;
 
-    const company = ServerStorage.getCompanyByToken(companyToken);
-    if (!company || company.status === 'INATIVO') return NextResponse.json({ error: 'Token invalido' }, { status: 403 });
-
-    const tenantId = company.tenantId;
+    const { tenantId, companyToken } = auth;
     const body = await req.json();
     const { equipmentId, mobileToken, operatorId, startTimestamp, offlineId } = body;
 
@@ -42,6 +41,7 @@ export async function POST(req: NextRequest) {
       payload: { operatorId, shiftId }
     }, tenantId);
 
+    auditFromRequest(req, tenantId, { action: 'SHIFT_START', entity: 'shift', entityId: shiftId, metadata: { equipmentId, operatorId } });
     return NextResponse.json({ status: 'OK', shiftId });
   } catch (error) {
     return NextResponse.json({ error: 'Error' }, { status: 500 });

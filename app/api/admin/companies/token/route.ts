@@ -2,11 +2,9 @@ import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { Company } from '@/lib/types';
-
-const maskToken = (token?: string) => {
-  if (!token) return 'missing';
-  return `${token.slice(0, 4)}...${token.slice(-4)}`;
-};
+import { blockWriteInDemo, maskToken } from '@/lib/auth/api-guard';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
+import { auditFromRequest } from '@/lib/audit/audit-log';
 
 const generateCompanyToken = () => `CTK-${randomBytes(18).toString('hex').toUpperCase()}`;
 
@@ -21,6 +19,11 @@ const getUniqueCompanyToken = () => {
 
 export async function POST(req: NextRequest) {
   try {
+    const rl = checkRateLimit(req, RATE_LIMITS.adminToken);
+    if (rl) return rl;
+
+    const demoBlock = blockWriteInDemo(req);
+    if (demoBlock) return demoBlock;
     const body = await req.json() as { company?: Company; regenerate?: boolean };
     const company = body.company;
 
@@ -64,6 +67,13 @@ export async function POST(req: NextRequest) {
       mqttPort: persisted.mqttPort,
       status: persisted.status,
       companyToken: maskToken(persisted.companyToken),
+    });
+
+    auditFromRequest(req, persisted.tenantId, {
+      action: body.regenerate ? 'TOKEN_REGENERATE' : 'TOKEN_CREATE',
+      entity: 'company',
+      entityId: persisted.id,
+      after: { code: persisted.code, status: persisted.status },
     });
 
     return NextResponse.json({ company: persisted });
