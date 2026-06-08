@@ -1,5 +1,6 @@
 import { CadastroStorage } from '@/lib/cadastro-storage';
 import { MobileEvent, ServerStorage } from '@/lib/server-storage';
+import { buildOperatorSheet } from '@/lib/operator-sheet-builder';
 
 export interface EfficiencyReport {
   period: { from: string; to: string };
@@ -24,8 +25,14 @@ export interface EfficiencyReport {
     totalHours: number;
     productiveHours: number;
     unproductiveHours: number;
+    maintenanceHours?: number;
+    productivePercent?: number;
+    unproductivePercent?: number;
+    maintenancePercent?: number;
     stopsCount: number;
     finalizedJourneys: number;
+    hourmeterInconsistent?: boolean;
+    inconsistencies?: string[];
   }>;
   byOperator: Array<{
     registration: string;
@@ -75,8 +82,11 @@ interface JourneySlice {
   hourmeterStart?: number;
   hourmeterEnd?: number;
   totalHourmeter?: number;
+  inconsistencies: string[];
   stops: StopSlice[];
 }
+
+const MIN_VALID_TIMESTAMP = Date.UTC(2020, 0, 1);
 
 const ZERO_SUMMARY: EfficiencyReport['summary'] = {
   totalHours: 0,
@@ -104,27 +114,39 @@ function round(value: number): number {
 }
 
 function percent(part: number, total: number): number {
-  return total > 0 ? round((part / total) * 100) : 0;
+  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
+  return Math.min(100, Math.max(0, round((part / total) * 100)));
 }
 
 function diffHours(start?: string, end?: string): number {
   if (!start || !end) return 0;
-  const a = new Date(start).getTime();
-  const b = new Date(end).getTime();
-  return Number.isFinite(a) && Number.isFinite(b) && b >= a ? (b - a) / 3_600_000 : 0;
+  const a = timestampMs(start);
+  const b = timestampMs(end);
+  return a !== undefined && b !== undefined && b >= a ? (b - a) / 3_600_000 : 0;
 }
 
-function hourBucket(ts?: string): string {
-  const d = ts ? new Date(ts) : new Date(0);
-  if (!Number.isFinite(d.getTime())) return 'unknown';
+function timestampMs(ts?: string): number | undefined {
+  if (!ts) return undefined;
+  const value = new Date(ts).getTime();
+  return Number.isFinite(value) && value >= MIN_VALID_TIMESTAMP ? value : undefined;
+}
+
+function validIso(ts?: string): string | undefined {
+  const value = timestampMs(ts);
+  return value !== undefined ? new Date(value).toISOString() : undefined;
+}
+
+function hourBucket(ts?: string): string | undefined {
+  const value = timestampMs(ts);
+  if (value === undefined) return undefined;
+  const d = new Date(value);
   d.setMinutes(0, 0, 0);
   return d.toISOString();
 }
 
 function inRange(ts: string | undefined, from: Date, to: Date): boolean {
-  if (!ts) return false;
-  const t = new Date(ts).getTime();
-  return Number.isFinite(t) && t >= from.getTime() && t <= to.getTime();
+  const t = timestampMs(ts);
+  return t !== undefined && t >= from.getTime() && t <= to.getTime();
 }
 
 function normalizeText(value: string): string {
@@ -168,10 +190,15 @@ function firstName(catalog: Map<string, Record<string, unknown>>, key: string, f
   return str(row?.name) || str(row?.description) || fallback;
 }
 
+function firstCode(catalog: Map<string, Record<string, unknown>>, key: string, fallback = ''): string {
+  const row = key ? catalog.get(key) : undefined;
+  return str(row?.code) || str(row?.fleetCode) || fallback;
+}
+
 function resolveDefaultPeriod(events: MobileEvent[], from?: string | null, to?: string | null): { from: string; to: string } {
   const validDates = events
     .map(event => new Date(event.timestamp).getTime())
-    .filter(Number.isFinite)
+    .filter((value): value is number => Number.isFinite(value) && value >= MIN_VALID_TIMESTAMP)
     .sort((a, b) => a - b);
 
   const now = new Date();
@@ -196,6 +223,7 @@ function ensureJourney(map: Map<string, JourneySlice>, journeyId: string): Journ
       implementCode: '',
       implementName: '',
       status: 'PENDENTE',
+      inconsistencies: [],
       stops: [],
     };
     map.set(journeyId, item);
@@ -205,7 +233,7 @@ function ensureJourney(map: Map<string, JourneySlice>, journeyId: string): Journ
 
 function applyCommonFields(journey: JourneySlice, event: MobileEvent, catalogs: Catalogs): void {
   const p = getPayload(event);
-  journey.fleetCode = journey.fleetCode || str(p.fleetCode);
+  journey.fleetCode = journey.fleetCode || str(p.fleetCode) || firstCode(catalogs.equipment, str(p.equipmentId) || event.equipmentId);
   journey.equipmentId = journey.equipmentId || str(p.equipmentId) || event.equipmentId;
   journey.operatorRegistration = journey.operatorRegistration || str(p.operatorRegistration) || str(p.registration) || str(p.operatorId);
   journey.operatorName = journey.operatorName || str(p.operatorName) || firstName(catalogs.operators, journey.operatorRegistration);
@@ -226,6 +254,7 @@ function collectJourneys(params: {
   operatorRegistration?: string | null;
 }): JourneySlice[] {
   const journeys = new Map<string, JourneySlice>();
+  const stopSeen = new Set<string>();
 
   for (const event of params.events) {
     const p = getPayload(event);
@@ -237,7 +266,7 @@ function collectJourneys(params: {
     applyCommonFields(journey, event, params.catalogs);
 
     if (event.type === 'JOURNEY_START') {
-      journey.startedAt = journey.startedAt || event.timestamp;
+      journey.startedAt = journey.startedAt || validIso(event.timestamp);
       journey.hourmeterStart = journey.hourmeterStart ?? num(p.hourmeterStart) ?? num(p.hourmeter);
     }
 
@@ -247,8 +276,12 @@ function collectJourneys(params: {
         const catalog = params.catalogs.stops.get(code);
         const description = str(p.stopDescription) || str(p.description) || str(p.reason) || firstName(params.catalogs.stops, code, code);
         const seconds = num(p.stopDurationSeconds) ?? num(p.durationSeconds);
-        const startedAt = str(p.stopStartedAt) || str(p.startedAt) || event.timestamp;
-        const endedAt = str(p.stopEndedAt) || str(p.endedAt);
+        const startedAt = validIso(str(p.stopStartedAt) || str(p.startedAt) || event.timestamp);
+        if (!startedAt) continue;
+        const dedupeKey = [journeyId, code, startedAt].join('|');
+        if (stopSeen.has(dedupeKey)) continue;
+        stopSeen.add(dedupeKey);
+        const endedAt = validIso(str(p.stopEndedAt) || str(p.endedAt));
         const hours = seconds !== undefined ? seconds / 3600 : diffHours(startedAt, endedAt);
         const group = isMaintenanceStop(code, description, catalog) ? 'MANUTENCAO' : 'IMPRODUTIVA';
         journey.stops.push({ code, description, group, hours: Math.max(0, hours), startedAt });
@@ -257,7 +290,7 @@ function collectJourneys(params: {
 
     if (event.type === 'JOURNEY_END') {
       journey.status = 'FINALIZADO';
-      journey.endedAt = str(p.endedAt) || event.timestamp;
+      journey.endedAt = validIso(str(p.endedAt) || event.timestamp);
       journey.hourmeterStart = journey.hourmeterStart ?? num(p.hourmeterStart);
       journey.hourmeterEnd = num(p.hourmeterEnd) ?? num(p.hourmeter);
       const total = num(p.totalHourmeter);
@@ -288,6 +321,22 @@ function collectJourneys(params: {
     if (state.status === 'FINALIZADO') journey.status = 'FINALIZADO';
   }
 
+  for (const journey of journeys.values()) {
+    if (!journey.fleetCode) continue;
+    const ficha = buildOperatorSheet({
+      tenantId: params.tenantId,
+      fleetCode: journey.fleetCode,
+      journeyId: journey.journeyId,
+    });
+    if (!ficha.ok) continue;
+    journey.operatorRegistration = journey.operatorRegistration || ficha.ficha.operatorRegistration || '';
+    journey.operatorName = journey.operatorName || ficha.ficha.operatorName || firstName(params.catalogs.operators, journey.operatorRegistration, 'Nao informado');
+    journey.operationCode = journey.operationCode || ficha.ficha.operationCode || '';
+    journey.operationName = journey.operationName || ficha.ficha.operationName || firstName(params.catalogs.operations, journey.operationCode, 'Nao informado');
+    journey.implementCode = journey.implementCode || ficha.ficha.implementCode || '';
+    journey.implementName = journey.implementName || ficha.ficha.implementName || firstName(params.catalogs.implements, journey.implementCode, 'Nao informado');
+  }
+
   return Array.from(journeys.values()).filter(journey => {
     if (params.fleetCode && journey.fleetCode !== params.fleetCode) return false;
     if (params.operatorRegistration && journey.operatorRegistration !== params.operatorRegistration) return false;
@@ -304,10 +353,11 @@ function journeyTotalHours(journey: JourneySlice): number {
 
 function addTimeline(
   map: Map<string, { productiveHours: number; unproductiveHours: number; maintenanceHours: number }>,
-  hour: string,
+  hour: string | undefined,
   field: 'productiveHours' | 'unproductiveHours' | 'maintenanceHours',
   value: number,
 ): void {
+  if (!hour || value <= 0) return;
   const current = map.get(hour) || { productiveHours: 0, unproductiveHours: 0, maintenanceHours: 0 };
   current[field] += value;
   map.set(hour, current);
@@ -367,6 +417,13 @@ export function buildEfficiencyReport(params: {
     const stopUnproductive = journey.stops.filter(s => s.group === 'IMPRODUTIVA').reduce((sum, stop) => sum + stop.hours, 0);
     const stopMaintenance = journey.stops.filter(s => s.group === 'MANUTENCAO').reduce((sum, stop) => sum + stop.hours, 0);
     const productive = journey.operationCode || journey.operationName ? Math.max(0, total - stopUnproductive - stopMaintenance) : 0;
+    const stopTotal = stopUnproductive + stopMaintenance;
+    if (stopUnproductive > total) {
+      journey.inconsistencies.push('unproductiveHours excede totalHours');
+    }
+    if (stopTotal > total) {
+      journey.inconsistencies.push('stopHours excede totalHours');
+    }
 
     totalHours += total;
     productiveHours += productive;
@@ -393,14 +450,25 @@ export function buildEfficiencyReport(params: {
       totalHours: 0,
       productiveHours: 0,
       unproductiveHours: 0,
+      maintenanceHours: 0,
+      productivePercent: 0,
+      unproductivePercent: 0,
+      maintenancePercent: 0,
       stopsCount: 0,
       finalizedJourneys: 0,
+      hourmeterInconsistent: false,
+      inconsistencies: [],
     };
     fleet.totalHours += total;
     fleet.productiveHours += productive;
-    fleet.unproductiveHours += stopUnproductive + stopMaintenance;
+    fleet.unproductiveHours += stopUnproductive;
+    fleet.maintenanceHours = (fleet.maintenanceHours || 0) + stopMaintenance;
     fleet.stopsCount += journey.stops.length;
     fleet.finalizedJourneys += journey.status === 'FINALIZADO' ? 1 : 0;
+    if (journey.inconsistencies.length > 0) {
+      fleet.hourmeterInconsistent = true;
+      fleet.inconsistencies = Array.from(new Set([...(fleet.inconsistencies || []), ...journey.inconsistencies]));
+    }
     fleetMap.set(fleetKey, fleet);
 
     const opReg = journey.operatorRegistration || 'NAO_INFORMADO';
@@ -430,14 +498,28 @@ export function buildEfficiencyReport(params: {
     }
   }
 
-  const totalStopsHours = unproductiveHours + maintenanceHours;
   const byFleet = Array.from(fleetMap.values())
-    .map(item => ({
-      ...item,
-      totalHours: round(item.totalHours),
-      productiveHours: round(item.productiveHours),
-      unproductiveHours: round(item.unproductiveHours),
-    }))
+    .map(item => {
+      const inconsistencies = [...(item.inconsistencies || [])];
+      if (item.unproductiveHours > item.totalHours) {
+        inconsistencies.push('unproductiveHours excede totalHours da frota');
+      }
+      if (item.unproductiveHours + (item.maintenanceHours || 0) > item.totalHours) {
+        inconsistencies.push('paradas excedem totalHours da frota');
+      }
+      return {
+        ...item,
+        totalHours: round(item.totalHours),
+        productiveHours: round(item.productiveHours),
+        unproductiveHours: round(item.unproductiveHours),
+        maintenanceHours: round(item.maintenanceHours || 0),
+        productivePercent: percent(item.productiveHours, item.totalHours),
+        unproductivePercent: percent(item.unproductiveHours, item.totalHours),
+        maintenancePercent: percent(item.maintenanceHours || 0, item.totalHours),
+        hourmeterInconsistent: inconsistencies.length > 0,
+        inconsistencies: Array.from(new Set(inconsistencies)),
+      };
+    })
     .sort((a, b) => b.totalHours - a.totalHours);
 
   const byOperator = Array.from(operatorMap.values())
@@ -455,7 +537,7 @@ export function buildEfficiencyReport(params: {
     .sort((a, b) => b.hours - a.hours);
 
   const topStops = Array.from(stopMap.values())
-    .map(item => ({ ...item, hours: round(item.hours), percent: percent(item.hours, totalStopsHours || totalHours) }))
+    .map(item => ({ ...item, hours: round(item.hours), percent: percent(item.hours, totalHours) }))
     .sort((a, b) => b.hours - a.hours)
     .slice(0, 10);
 
@@ -534,6 +616,22 @@ export function buildEfficiencyCsv(report: EfficiencyReport): string {
       'Paradas e improdutividade',
       item.unproductiveHours.toFixed(2),
       percent(item.unproductiveHours, item.totalHours).toFixed(2),
+      item.finalizedJourneys,
+      item.stopsCount,
+    ].map(esc).join(';'));
+
+    rows.push([
+      report.period.from,
+      report.period.to,
+      item.fleetCode,
+      item.operatorName,
+      item.operationName,
+      item.implementName,
+      'MANUTENCAO',
+      '',
+      'Horas de manutencao',
+      (item.maintenanceHours || 0).toFixed(2),
+      percent(item.maintenanceHours || 0, item.totalHours).toFixed(2),
       item.finalizedJourneys,
       item.stopsCount,
     ].map(esc).join(';'));
