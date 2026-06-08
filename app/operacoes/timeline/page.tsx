@@ -28,6 +28,7 @@ function TimelinePage() {
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     search: '',
     equipmentId: '',
@@ -39,26 +40,41 @@ function TimelinePage() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    setLoading(true);
-    const [evts, eqs, oprs] = await Promise.all([
-      TimelineService.getAll(),
-      EquipmentService.getAll(),
-      OperatorService.getAll()
-    ]);
-    setData(evts);
-    setEquipments(eqs);
-    setOperators(oprs);
-    setLoading(false);
+    try {
+      setLoading(true);
+      setError(null);
+      const [evts, eqs, oprs] = await Promise.all([
+        TimelineService.getAll().catch(() => [] as TimelineEvent[]),
+        EquipmentService.getAll().catch(() => [] as Equipment[]),
+        OperatorService.getAll().catch(() => [] as Operator[]),
+      ]);
+      setData(Array.isArray(evts) ? evts : []);
+      setEquipments(Array.isArray(eqs) ? eqs : []);
+      setOperators(Array.isArray(oprs) ? oprs : []);
+    } catch (err) {
+      console.error('[operacoes/timeline] loadData error', err);
+      setError('Erro ao carregar timeline. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredEvents = data.filter(evt => {
-    const matchesSearch = evt.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-                         evt.description.toLowerCase().includes(filters.search.toLowerCase());
-    const matchesEquip = !filters.equipmentId || evt.equipmentId === filters.equipmentId;
-    const matchesOpr = !filters.operatorId || evt.operatorId === filters.operatorId;
-    const matchesType = !filters.type || evt.type === filters.type;
-    return matchesSearch && matchesEquip && matchesOpr && matchesType;
-  }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    if (filters.search) {
+      const term = filters.search.toLowerCase();
+      const titleMatch = (evt.title || '').toLowerCase().includes(term);
+      const descMatch = (evt.description || '').toLowerCase().includes(term);
+      if (!titleMatch && !descMatch) return false;
+    }
+    if (filters.equipmentId && evt.equipmentId !== filters.equipmentId) return false;
+    if (filters.operatorId && evt.operatorId !== filters.operatorId) return false;
+    if (filters.type && evt.type !== filters.type) return false;
+    return true;
+  }).sort((a, b) => {
+    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
 
   const getEventIcon = (type: string, severity: string) => {
     switch (type) {
@@ -110,6 +126,12 @@ function TimelinePage() {
 
           {loading ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4"><Loader2 size={40} className="text-primary animate-spin" /><p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Recompondo Histórico...</p></div>
+          ) : error ? (
+             <div className="flex flex-col items-center justify-center h-64 gap-4">
+               <AlertCircle size={40} className="text-red-500" />
+               <p className="text-sm text-red-400 font-bold">{error}</p>
+               <button onClick={loadData} className="px-4 py-2 bg-primary/20 text-primary rounded-xl text-xs font-black uppercase hover:bg-primary/30 transition-colors">Tentar Novamente</button>
+             </div>
           ) : (
              <div className="max-w-4xl mx-auto space-y-1 relative">
                 {/* Central Line */}
@@ -133,7 +155,7 @@ function TimelinePage() {
                          <div className="bg-[#0a0e27]/40 border border-[#2d3647] rounded-2xl p-4 hover:border-primary/40 transition-all shadow-lg group-hover:bg-[#1a1f3a]/20">
                             <div className="flex items-center justify-between mb-2">
                                <div className="flex items-center gap-3">
-                                  <span className="text-[10px] font-black text-primary uppercase tracking-widest">{new Date(evt.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                  <span className="text-[10px] font-black text-primary uppercase tracking-widest">{evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
                                   <div className="h-3 w-[1px] bg-[#2d3647]"></div>
                                   <h4 className="text-sm font-bold text-white uppercase tracking-tight">{evt.title}</h4>
                                </div>
@@ -195,7 +217,7 @@ function TimelinePage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                     <InfoItem label="Timestamp" value={new Date(selectedEvent.timestamp).toLocaleString()} />
+                     <InfoItem label="Timestamp" value={selectedEvent.timestamp ? new Date(selectedEvent.timestamp).toLocaleString() : '-'} />
                      <InfoItem label="Severidade" value={selectedEvent.severity} />
                      <InfoItem label="Equipamento" value={equipments.find(e => e.id === selectedEvent.equipmentId)?.code || '-'} />
                      <InfoItem label="Operador" value={operators.find(o => o.id === selectedEvent.operatorId)?.name || '-'} />

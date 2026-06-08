@@ -21,7 +21,8 @@ import {
   Clock,
   MapPin,
   Truck,
-  User
+  User,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
@@ -34,6 +35,7 @@ function OperacoesPage() {
   const [fields, setFields] = useState<Field[]>([]);
   const [models, setModels] = useState<EquipmentModel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -50,22 +52,29 @@ function OperacoesPage() {
   }, [isDrawerOpen, reset]);
 
   const loadData = async () => {
-    setLoading(true);
-    const [ops, eqs, oprs, fms, fds, mdls] = await Promise.all([
-      OperationService.getAll(),
-      EquipmentService.getAll(),
-      OperatorService.getAll(),
-      FarmService.getAll(),
-      FieldService.getAll(),
-      EquipmentModelService.getAll()
-    ]);
-    setData(ops);
-    setEquipments(eqs);
-    setOperators(oprs);
-    setFarms(fms);
-    setFields(fds);
-    setModels(mdls);
-    setLoading(false);
+    try {
+      setLoading(true);
+      setError(null);
+      const [ops, eqs, oprs, fms, fds, mdls] = await Promise.all([
+        OperationService.getAll().catch(() => [] as Operation[]),
+        EquipmentService.getAll().catch(() => [] as Equipment[]),
+        OperatorService.getAll().catch(() => [] as Operator[]),
+        FarmService.getAll().catch(() => [] as Farm[]),
+        FieldService.getAll().catch(() => [] as Field[]),
+        EquipmentModelService.getAll().catch(() => [] as EquipmentModel[]),
+      ]);
+      setData(Array.isArray(ops) ? ops : []);
+      setEquipments(Array.isArray(eqs) ? eqs : []);
+      setOperators(Array.isArray(oprs) ? oprs : []);
+      setFarms(Array.isArray(fms) ? fms : []);
+      setFields(Array.isArray(fds) ? fds : []);
+      setModels(Array.isArray(mdls) ? mdls : []);
+    } catch (err) {
+      console.error('[operacoes] loadData error', err);
+      setError('Erro ao carregar dados. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onSubmit = async (formData: OperationFormData) => {
@@ -73,12 +82,19 @@ function OperacoesPage() {
       await OperationService.create(formData);
       setIsDrawerOpen(false);
       loadData();
-    } catch (error: any) { alert(error.message); }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao iniciar operacao';
+      alert(msg);
+    }
   };
 
   const filteredOps = data.filter(op => {
+     if (!search) return true;
+     const term = search.toLowerCase();
      const equipment = equipments.find(e => e.id === op.equipmentId);
-     return equipment?.code.toLowerCase().includes(search.toLowerCase()) || op.type.toLowerCase().includes(search.toLowerCase());
+     const codeMatch = (equipment?.code || '').toLowerCase().includes(term);
+     const typeMatch = (op.type || '').toLowerCase().includes(term);
+     return codeMatch || typeMatch;
   });
 
   return (
@@ -97,6 +113,17 @@ function OperacoesPage() {
 
           {loading ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4"><Loader2 size={40} className="text-primary animate-spin" /><p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Sincronizando Operações...</p></div>
+          ) : error ? (
+             <div className="flex flex-col items-center justify-center h-64 gap-4">
+               <AlertCircle size={40} className="text-red-500" />
+               <p className="text-sm text-red-400 font-bold">{error}</p>
+               <button onClick={loadData} className="px-4 py-2 bg-primary/20 text-primary rounded-xl text-xs font-black uppercase hover:bg-primary/30 transition-colors">Tentar Novamente</button>
+             </div>
+          ) : filteredOps.length === 0 ? (
+             <div className="flex flex-col items-center justify-center h-64 gap-4 opacity-40">
+               <StopCircle size={48} />
+               <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{search ? 'Nenhuma operacao encontrada para esta busca' : 'Nenhuma operacao ativa no momento'}</p>
+             </div>
           ) : (
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filteredOps.map(op => {
@@ -125,7 +152,7 @@ function OperacoesPage() {
                          <div className="grid grid-cols-2 gap-y-4 gap-x-6 mb-6">
                             <div className="space-y-1"><p className="text-[9px] text-muted-foreground font-black uppercase flex items-center gap-1.5"><User size={10} className="text-primary" /> Operador</p><p className="text-xs font-bold text-white uppercase">{opr?.name}</p></div>
                             <div className="space-y-1"><p className="text-[9px] text-muted-foreground font-black uppercase flex items-center gap-1.5"><MapPin size={10} className="text-primary" /> Local</p><p className="text-xs font-bold text-white uppercase truncate">{farm?.name} • {field?.code}</p></div>
-                            <div className="space-y-1"><p className="text-[9px] text-muted-foreground font-black uppercase flex items-center gap-1.5"><Clock size={10} className="text-primary" /> Início</p><p className="text-xs font-bold text-white">{new Date(op.start).toLocaleString()}</p></div>
+                            <div className="space-y-1"><p className="text-[9px] text-muted-foreground font-black uppercase flex items-center gap-1.5"><Clock size={10} className="text-primary" /> Início</p><p className="text-xs font-bold text-white">{op.start ? new Date(op.start).toLocaleString() : '-'}</p></div>
                             <div className="space-y-1"><p className="text-[9px] text-muted-foreground font-black uppercase flex items-center gap-1.5">Status</p><div className={cn("px-2 py-0.5 rounded-full text-[9px] font-black uppercase w-fit", op.status === 'EM_CURSO' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border border-amber-500/20")}>{op.status}</div></div>
                          </div>
                          <div className="pt-4 border-t border-[#2d3647] flex items-center justify-between"><span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Tempo Decorrido: 02h 15m</span><button className="text-[10px] font-black text-primary uppercase hover:underline">Ver Detalhes</button></div>
