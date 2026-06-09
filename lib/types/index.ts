@@ -91,10 +91,17 @@ export interface User extends BaseEntity {
   jobTitle?: string; // Cargo
   accessGroupId: string;
   unitId?: string;
+  scope?: 'PLATFORM' | 'TENANT';
+  defaultTenantId?: string;
   isADValidated: boolean;
   password?: string;
+  passwordHash?: string;
   tempPassword?: string;
   requirePasswordChange: boolean;
+  mustChangePassword?: boolean;
+  resetPasswordTokenHash?: string;
+  resetPasswordExpiresAt?: string;
+  resetPasswordUsedAt?: string;
   status: 'ATIVO' | 'BLOQUEADO';
 }
 

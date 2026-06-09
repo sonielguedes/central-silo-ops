@@ -1,4 +1,5 @@
 export type SystemRole =
+  | 'SUPER_ADMIN_SILO'
   | 'SUPER_ADMIN'
   | 'ADMIN_EMPRESA'
   | 'GESTOR'
@@ -36,6 +37,7 @@ export interface Permission {
 }
 
 const ROLE_LEVEL: Record<SystemRole, number> = {
+  SUPER_ADMIN_SILO: 110,
   SUPER_ADMIN: 100,
   ADMIN_EMPRESA: 80,
   GESTOR: 60,
@@ -59,6 +61,20 @@ const CRUD_EXPORT: Action[] = ['visualizar', 'criar', 'editar', 'arquivar', 'exp
 const FULL: Action[] = ['visualizar', 'criar', 'editar', 'arquivar', 'exportar', 'aprovar', 'administrar'];
 
 export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
+  SUPER_ADMIN_SILO: [
+    { module: 'dashboard', actions: FULL },
+    { module: 'mapa', actions: FULL },
+    { module: 'operacoes', actions: FULL },
+    { module: 'equipamentos', actions: FULL },
+    { module: 'operadores', actions: FULL },
+    { module: 'alertas', actions: [...FULL, 'reconhecer'] },
+    { module: 'relatorios', actions: FULL },
+    { module: 'cadastros', actions: FULL },
+    { module: 'administracao', actions: FULL },
+    { module: 'audit-log', actions: FULL },
+    { module: 'configuracoes', actions: FULL },
+    { module: 'sincronizacao', actions: FULL },
+  ],
   SUPER_ADMIN: [
     { module: 'dashboard', actions: FULL },
     { module: 'mapa', actions: FULL },
@@ -128,7 +144,7 @@ export function getPermissions(role: SystemRole): Permission[] {
 }
 
 export function hasPermission(role: SystemRole, module: Module, action: Action): boolean {
-  if (role === 'SUPER_ADMIN') return true;
+  if (role === 'SUPER_ADMIN' || role === 'SUPER_ADMIN_SILO') return true;
   const perms = ROLE_PERMISSIONS[role];
   const modPerm = perms?.find((p) => p.module === module);
   return !!modPerm && modPerm.actions.includes(action);
@@ -195,7 +211,7 @@ export function moduleFromPath(pathname: string): Module | null {
 }
 
 export function canAccessRoute(role: SystemRole, href: string): boolean {
-  if (role === 'SUPER_ADMIN') return true;
+  if (role === 'SUPER_ADMIN' || role === 'SUPER_ADMIN_SILO') return true;
 
   for (const entry of ROUTE_MODULE_MAP) {
     if (entry.pattern.test(href)) {
@@ -212,6 +228,7 @@ export const SYSTEM_ROLES: Array<{
   name: string;
   description: string;
 }> = [
+  { id: 'role-super-admin-silo', role: 'SUPER_ADMIN_SILO', name: 'Super Administrador SILO', description: 'Acesso total à plataforma SILO OPS' },
   { id: 'role-super-admin', role: 'SUPER_ADMIN', name: 'Super Administrador', description: 'Acesso total a todas as empresas e configuracoes globais' },
   { id: 'role-admin-empresa', role: 'ADMIN_EMPRESA', name: 'Admin Empresa', description: 'Gestao completa da propria empresa: cadastros, configuracoes, usuarios' },
   { id: 'role-gestor', role: 'GESTOR', name: 'Gestor', description: 'Dashboard, relatorios, alertas, operacoes. Sem configuracoes de sistema' },

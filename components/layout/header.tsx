@@ -5,6 +5,25 @@ import { Search, Bell, ChevronDown, Users, Menu } from 'lucide-react';
 import { useSidebar } from '@/lib/context/sidebar-context';
 import { useAuth } from '@/lib/context/auth-context';
 
+function roleLabel(role?: string) {
+  switch (role) {
+    case 'SUPER_ADMIN_SILO':
+      return 'Admin Plataforma';
+    case 'ADMIN_EMPRESA':
+      return 'Admin Empresa';
+    case 'GESTOR':
+      return 'Gestor';
+    case 'COA':
+      return 'COA';
+    case 'AUDITOR':
+      return 'Auditoria';
+    case 'CONSULTA':
+      return 'Consulta';
+    default:
+      return 'Acesso';
+  }
+}
+
 export function Header() {
   const { toggle } = useSidebar();
   const { user } = useAuth();
@@ -53,7 +72,7 @@ export function Header() {
           <div className="flex items-center gap-3 pl-4 border-l border-[#2d3647] ml-2">
             <div className="text-right hidden md:block">
               <p className="text-sm font-semibold text-white">{user?.name || 'Carregando...'}</p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{user?.jobTitle || 'Acesso'}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{roleLabel(user?.role)}</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#1a1f3a] to-[#2d3647] border border-[#2d3647] p-0.5 cursor-pointer hover:border-primary/50 transition-colors">
                <div className="w-full h-full rounded-full bg-[#0a0e27] flex items-center justify-center overflow-hidden">

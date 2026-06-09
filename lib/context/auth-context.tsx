@@ -1,8 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, AccessGroup, Company } from '@/lib/types';
-import { UserService, AccessGroupService, CompanyService, BaseService, AuditService } from '@/services/master.service';
+import { AccessGroup, Company } from '@/lib/types';
+import { AccessGroupService, CompanyService, BaseService } from '@/services/master.service';
 import {
   SystemRole,
   hasPermission,
@@ -12,15 +12,29 @@ import {
   Action,
 } from '@/lib/auth/rbac-shared';
 
+interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  role: SystemRole;
+  scope: 'PLATFORM' | 'TENANT';
+  tenantId: string | null;
+  defaultTenantId: string;
+  accessGroupId: string;
+  expiresAt: string;
+  mustChangePassword: boolean;
+  activeTenantId?: string;
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: SessionUser | null;
   userRole: SystemRole;
   accessGroup: AccessGroup | null;
   tenant: Company | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkPermission: (module: string, action: string) => boolean;
   canAccess: (module: Module) => boolean;
   canRoute: (href: string) => boolean;
@@ -32,6 +46,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function resolveRole(accessGroupId: string | undefined): SystemRole {
   if (!accessGroupId) return 'CONSULTA';
   const map: Record<string, SystemRole> = {
+    'role-super-admin-silo': 'SUPER_ADMIN_SILO',
     'role-super-admin': 'SUPER_ADMIN',
     'ag-admin': 'SUPER_ADMIN',
     'role-admin-empresa': 'ADMIN_EMPRESA',
@@ -49,38 +64,28 @@ function resolveRole(accessGroupId: string | undefined): SystemRole {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [accessGroup, setAccessGroup] = useState<AccessGroup | null>(null);
   const [tenant, setTenant] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState<SystemRole>('CONSULTA');
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('silo_auth_user');
-    if (savedUser) {
-      try {
-        loadSession(JSON.parse(savedUser));
-      } catch {
-        setIsLoading(false);
-      }
-    } else {
-      setIsLoading(false);
-    }
+    restoreSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadSession = async (userData: User) => {
+  const loadSession = async (sessionUser: SessionUser) => {
     try {
       setIsLoading(true);
-      BaseService.setContext(userData.name, userData.tenantId);
+      BaseService.setContext(sessionUser.name, sessionUser.tenantId || '');
 
-      const group = await AccessGroupService.getById(userData.accessGroupId);
+      const group = await AccessGroupService.getById(sessionUser.accessGroupId);
       const companies = await CompanyService.getAllGlobal();
-      const currentTenant = companies.find(c => c.id === userData.tenantId) || null;
+      const currentTenant = companies.find(c => c.id === sessionUser.tenantId) || companies.find(c => c.id === sessionUser.defaultTenantId) || null;
 
-      const role = resolveRole(userData.accessGroupId);
-      setUser(userData);
-      setUserRole(role);
+      setUser(sessionUser);
+      setUserRole(sessionUser.role || resolveRole(sessionUser.accessGroupId));
       setAccessGroup(group || null);
       setTenant(currentTenant);
     } catch (error) {
@@ -91,38 +96,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const restoreSession = async () => {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+      if (!res.ok) {
+        localStorage.removeItem('silo_auth_user');
+        setIsLoading(false);
+        return;
+      }
+      const body = await res.json() as { session: SessionUser };
+      localStorage.setItem('silo_auth_user', JSON.stringify(body.session));
+      await loadSession(body.session);
+    } catch {
+      localStorage.removeItem('silo_auth_user');
+      setIsLoading(false);
+    }
+  };
+
   const login = async (email: string, password?: string) => {
     setIsLoading(true);
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const allUsers = await UserService.getAll(true);
-      const foundUser = allUsers.find(u => u.email.toLowerCase() === normalizedEmail);
-
-      if (!foundUser) throw new Error('Usuario nao encontrado');
-      if (foundUser.status === 'BLOQUEADO') throw new Error('Usuario bloqueado');
-
-      if (foundUser.password && foundUser.password !== password) {
-        throw new Error('Senha invalida');
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((body as { error?: string }).error || 'usuario ou senha invalidos');
       }
 
-      await AuditService.create({
-        userId: foundUser.id,
-        userName: foundUser.name,
-        module: 'AUTH',
-        action: 'LOGIN',
-        timestamp: new Date().toISOString(),
-        ip: '127.0.0.1',
-        origin: 'WEB'
-      });
-
-      localStorage.setItem('silo_auth_user', JSON.stringify(foundUser));
-      await loadSession(foundUser);
+      const sessionUser = (body as { user: SessionUser }).user;
+      localStorage.setItem('silo_auth_user', JSON.stringify(sessionUser));
+      await loadSession(sessionUser);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
     localStorage.removeItem('silo_auth_user');
     setUser(null);
     setUserRole('CONSULTA');

@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { Company } from '@/lib/types';
-import { resolveWebTenant } from '@/lib/tenant/tenant-resolver';
+import { resolveSessionFromRequest } from '@/lib/auth/session';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,11 +96,26 @@ export function requireMobileAuth(req: NextRequest): MobileAuthResult | GuardErr
 // Now uses tenant-resolver (no silent fallback to default tenant).
 
 export function requireTenant(req: NextRequest): TenantResult | GuardError {
-  const result = resolveWebTenant(req);
-  if (!result.ok) {
-    return { ok: false, response: result.response };
+  const session = resolveSessionFromRequest(req);
+  if (!session) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Sessao nao identificada. Faca login novamente.' }, { status: 401 }),
+    };
   }
-  return { ok: true, tenantId: result.tenantId };
+  if (session.scope === 'TENANT' && session.tenantId) {
+    return { ok: true, tenantId: session.tenantId };
+  }
+  if (session.scope === 'PLATFORM') {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Selecione um tenant ativo para operar.' }, { status: 403 }),
+    };
+  }
+  return {
+    ok: false,
+    response: NextResponse.json({ error: 'Tenant nao identificado.' }, { status: 400 }),
+  };
 }
 
 // ── blockWriteInDemo ────────────────────────────────────────────────────────

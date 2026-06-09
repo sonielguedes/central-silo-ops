@@ -67,6 +67,22 @@ export const INITIAL_COMPANIES: Company[] = [
     companyToken: 'CMP-SILO-OPS-001',
     plan: 'ENTERPRISE',
     status: 'ATIVO'
+  },
+  {
+    ...DEFAULT_AUDIT,
+    id: 'silo-demo',
+    code: 'SILO-DEMO',
+    tradingName: 'SILO OPS Demo',
+    corporateName: 'SILO OPS Demo LTDA',
+    cnpj: '00.000.000/9999-99',
+    domain: 'demo.siloops.com.br',
+    apiPort: 3999,
+    mqttPort: 18999,
+    apiBaseUrl: 'https://api.siloops.com.br:3999',
+    mqttUrl: 'mqtt.siloops.com.br:18999',
+    companyToken: 'CMP-SILO-DEMO-001',
+    plan: 'ENTERPRISE',
+    status: 'ATIVO'
   }
 ];
 
@@ -94,6 +110,26 @@ export const INITIAL_UNITS: Unit[] = [
 ];
 
 export const INITIAL_ACCESS_GROUPS: AccessGroup[] = [
+  {
+    ...DEFAULT_AUDIT,
+    id: 'role-super-admin-silo',
+    name: 'Super Admin SILO',
+    description: 'Acesso global à plataforma.',
+    status: 'ATIVO',
+    permissions: [
+      { module: 'ALL', actions: ['visualizar', 'criar', 'editar', 'arquivar', 'exportar', 'aprovar', 'administrar'] }
+    ]
+  },
+  {
+    ...DEFAULT_AUDIT,
+    id: 'role-admin-empresa',
+    name: 'Admin Empresa',
+    description: 'Gestão total do tenant da empresa.',
+    status: 'ATIVO',
+    permissions: [
+      { module: 'ALL', actions: ['visualizar', 'criar', 'editar', 'arquivar', 'exportar', 'aprovar'] }
+    ]
+  },
   {
     ...DEFAULT_AUDIT,
     id: 'ag-admin',
@@ -135,8 +171,11 @@ export const INITIAL_USERS: User[] = [
     name: 'Soniel Guedes',
     username: 'soniel.guedes',
     email: 'sonieloficial@gmail.com',
-    password: 'Sjagro@01',
-    accessGroupId: 'ag-admin',
+    accessGroupId: 'role-super-admin-silo',
+    scope: 'PLATFORM',
+    defaultTenantId: 'silo-demo',
+    passwordHash: '',
+    mustChangePassword: true,
     jobTitle: 'Diretor de Operações',
     unitId: 'u-sorriso',
     isADValidated: false,
@@ -149,8 +188,11 @@ export const INITIAL_USERS: User[] = [
     name: 'Administrador SILO OPS',
     username: 'admin.siloops',
     email: 'admin@siloops.com.br',
-    password: 'Admin@2026',
-    accessGroupId: 'ag-admin',
+    accessGroupId: 'role-admin-empresa',
+    scope: 'TENANT',
+    defaultTenantId: 'silo-ops-001',
+    passwordHash: '',
+    mustChangePassword: false,
     jobTitle: 'Gestor de TI',
     unitId: 'u-sorriso',
     isADValidated: false,
@@ -163,8 +205,11 @@ export const INITIAL_USERS: User[] = [
     name: 'Admin Demo',
     username: 'admin.demo',
     email: 'admin@silo.com',
-    password: '123456',
-    accessGroupId: 'ag-admin',
+    accessGroupId: 'role-admin-empresa',
+    scope: 'TENANT',
+    defaultTenantId: 'silo-demo',
+    passwordHash: '',
+    mustChangePassword: false,
     jobTitle: 'Acesso Demonstrativo',
     unitId: 'u-sorriso',
     isADValidated: false,
@@ -177,8 +222,11 @@ export const INITIAL_USERS: User[] = [
     name: 'Supervisor COA',
     username: 'coa.oficial',
     email: 'coa@siloops.com.br',
-    password: 'Coa@2026',
     accessGroupId: 'ag-supervisor',
+    scope: 'TENANT',
+    defaultTenantId: 'silo-ops-001',
+    passwordHash: '',
+    mustChangePassword: false,
     jobTitle: 'Coordenador Operacional',
     unitId: 'u-sorriso',
     isADValidated: false,
@@ -191,8 +239,11 @@ export const INITIAL_USERS: User[] = [
     name: 'Visualizador',
     username: 'viewer.oficial',
     email: 'viewer@siloops.com.br',
-    password: 'Viewer@2026',
     accessGroupId: 'ag-visualizador',
+    scope: 'TENANT',
+    defaultTenantId: 'silo-ops-001',
+    passwordHash: '',
+    mustChangePassword: false,
     jobTitle: 'Acesso Consulta',
     unitId: 'u-sorriso',
     isADValidated: false,
