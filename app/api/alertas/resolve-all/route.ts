@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveAllAlerts } from '@/lib/alertas-builder';
 import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
+import { resolveSessionFromRequest } from '@/lib/auth/session';
 import { auditFromRequest } from '@/lib/audit/audit-log';
-import { requirePermission } from '@/lib/auth/rbac-server';
+import { hasPermission } from '@/lib/auth/rbac-shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +16,27 @@ export async function POST(req: NextRequest) {
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
 
-    const rbac = requirePermission(req, 'alertas', 'administrar', tenantId);
-    if (rbac) return rbac;
+    const session = resolveSessionFromRequest(req);
+    if (!session) {
+      return NextResponse.json({ error: 'Sessao nao identificada. Faca login novamente.' }, { status: 401 });
+    }
+
+    const canResolveAlerts = hasPermission(session.role, 'alertas', 'editar');
+    const canAdminister = hasPermission(session.role, 'administracao', 'editar');
+    if (!canResolveAlerts && !canAdminister) {
+      auditFromRequest(req, tenantId, {
+        action: 'PERMISSION_DENIED',
+        entity: 'alert',
+        entityId: '*',
+        metadata: {
+          userId: session.id,
+          userName: session.name,
+          role: session.role,
+          required: ['alertas:editar', 'administracao:editar'],
+        },
+      });
+      return NextResponse.json({ error: 'Permissao insuficiente.' }, { status: 403 });
+    }
 
     const count = resolveAllAlerts(tenantId);
     auditFromRequest(req, tenantId, { action: 'ALERT_RESOLVE_ALL', entity: 'alert', entityId: '*', metadata: { count } });

@@ -18,7 +18,7 @@ export async function POST(
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
 
-    const rbac = requirePermission(req, 'alertas', 'reconhecer', tenantId);
+    const rbac = requirePermission(req, 'alertas', 'editar', tenantId);
     if (rbac) return rbac;
 
     const alertId = params.id;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auditFromRequest } from '@/lib/audit/audit-log';
+import { resolveSessionFromRequest } from '@/lib/auth/session';
 import {
   Action,
   Module,
@@ -8,42 +9,12 @@ import {
   isRoleAtLeast,
 } from '@/lib/auth/rbac-shared';
 
-export interface SessionUser {
-  id: string;
-  name: string;
-  email: string;
-  role: SystemRole;
-  tenantId: string;
-  accessGroupId?: string;
-}
-
 function getClientIp(req: NextRequest): string {
   return (
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('x-real-ip') ||
     'unknown'
   );
-}
-
-const VALID_ROLES: SystemRole[] = ['SUPER_ADMIN', 'ADMIN_EMPRESA', 'GESTOR', 'COA', 'CONSULTA', 'AUDITOR'];
-
-export function resolveSessionUser(req: NextRequest): SessionUser | null {
-  const rawRole = req.headers.get('x-silo-user-role')?.trim().toUpperCase();
-  const userId = req.headers.get('x-silo-user-id')?.trim();
-  const userName = req.headers.get('x-silo-user-name')?.trim() || 'unknown';
-  const userEmail = req.headers.get('x-silo-user-email')?.trim() || '';
-  const tenantId = req.headers.get('x-silo-tenant')?.trim() || '';
-
-  if (!rawRole) return null;
-  if (!VALID_ROLES.includes(rawRole as SystemRole)) return null;
-
-  return {
-    id: userId || 'anonymous',
-    name: userName,
-    email: userEmail,
-    role: rawRole as SystemRole,
-    tenantId,
-  };
 }
 
 function deny(req: NextRequest, tenantId: string, reason: string, metadata: Record<string, unknown>) {
@@ -67,16 +38,14 @@ export function requirePermission(
   tenantId: string,
   options?: { strict?: boolean },
 ): NextResponse | null {
-  const user = resolveSessionUser(req);
+  const user = resolveSessionFromRequest(req);
 
   if (!user) {
-    if (options?.strict) {
-      return NextResponse.json(
-        { error: 'Sessao nao identificada. Faca login novamente.' },
-        { status: 401 },
-      );
-    }
-    return null;
+    if (options?.strict === false && process.env.NODE_ENV !== 'production') return null;
+    return NextResponse.json(
+      { error: 'Sessao nao identificada. Faca login novamente.' },
+      { status: 401 },
+    );
   }
 
   if (hasPermission(user.role, module, action)) return null;
@@ -106,16 +75,14 @@ export function requireRole(
   tenantId: string,
   options?: { strict?: boolean },
 ): NextResponse | null {
-  const user = resolveSessionUser(req);
+  const user = resolveSessionFromRequest(req);
 
   if (!user) {
-    if (options?.strict) {
-      return NextResponse.json(
-        { error: 'Sessao nao identificada. Faca login novamente.' },
-        { status: 401 },
-      );
-    }
-    return null;
+    if (options?.strict === false && process.env.NODE_ENV !== 'production') return null;
+    return NextResponse.json(
+      { error: 'Sessao nao identificada. Faca login novamente.' },
+      { status: 401 },
+    );
   }
 
   if (isRoleAtLeast(user.role, minimumRole)) return null;

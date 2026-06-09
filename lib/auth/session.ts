@@ -11,7 +11,15 @@
 
 import { NextRequest } from 'next/server';
 import { SystemRole } from './rbac-shared';
-import type { SessionUser } from './rbac-server';
+
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  role: SystemRole;
+  tenantId: string;
+  accessGroupId?: string;
+}
 
 const VALID_ROLES: SystemRole[] = [
   'SUPER_ADMIN', 'ADMIN_EMPRESA', 'GESTOR', 'COA', 'CONSULTA', 'AUDITOR',
@@ -19,9 +27,9 @@ const VALID_ROLES: SystemRole[] = [
 
 /**
  * Resolve the current session user from the request.
- * Returns null if no session headers are present.
+ * Returns null if the request has no authenticated headers/session.
  */
-export function getSessionUser(req: NextRequest): SessionUser | null {
+export function resolveSessionFromRequest(req: NextRequest): SessionUser | null {
   const role = (req.headers.get('x-silo-user-role') || '').trim().toUpperCase() as SystemRole;
   const userId = (req.headers.get('x-silo-user-id') || '').trim();
 
@@ -36,6 +44,10 @@ export function getSessionUser(req: NextRequest): SessionUser | null {
     role,
     tenantId: req.headers.get('x-silo-tenant')?.trim() || '',
   };
+}
+
+export function getSessionUser(req: NextRequest): SessionUser | null {
+  return resolveSessionFromRequest(req);
 }
 
 /**
