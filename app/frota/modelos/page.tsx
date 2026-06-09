@@ -6,10 +6,12 @@ import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
 import { EquipmentModelService, EquipmentTypeService } from '@/services/api-service';
 import { EquipmentModel, EquipmentType } from '@/lib/types';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { equipmentModelSchema, EquipmentModelFormData } from '@/lib/validations/master-schemas';
 import { FormField } from '@/components/shared/form-field';
+import { EquipmentIcon } from '@/components/icons/equipment-icons';
+import { EquipmentIconPicker } from '@/components/icons/equipment-icon-picker';
 import {
   Plus,
   Edit,
@@ -17,7 +19,7 @@ import {
   Loader2,
   X,
   Save,
-  Search
+  Search,
 } from 'lucide-react';
 
 export default function EquipmentModelsPage() {
@@ -28,7 +30,7 @@ export default function EquipmentModelsPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<EquipmentModel | null>(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<EquipmentModelFormData>({
+  const { register, handleSubmit, reset, control, formState: { errors, isSubmitting } } = useForm<EquipmentModelFormData>({
     resolver: zodResolver(equipmentModelSchema),
   });
 
@@ -36,8 +38,8 @@ export default function EquipmentModelsPage() {
 
   useEffect(() => {
     if (isDrawerOpen) {
-      if (selectedItem) reset(selectedItem);
-      else reset({ name: '', brand: '', typeId: '' });
+      if (selectedItem) reset({ ...selectedItem, iconType: selectedItem.iconType || '' });
+      else reset({ name: '', brand: '', typeId: '', iconType: '' });
     }
   }, [selectedItem, reset, isDrawerOpen]);
 
@@ -58,7 +60,10 @@ export default function EquipmentModelsPage() {
     } catch (error: any) { alert(error.message); }
   };
 
-  const filteredData = data.filter(item => item.name.toLowerCase().includes(search.toLowerCase()) || item.brand.toLowerCase().includes(search.toLowerCase()));
+  const filteredData = data.filter(item =>
+    item.name.toLowerCase().includes(search.toLowerCase()) ||
+    item.brand.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="flex h-screen bg-[#050812] text-white overflow-hidden font-sans">
@@ -82,6 +87,7 @@ export default function EquipmentModelsPage() {
               <table className="w-full text-left">
                 <thead className="bg-[#1a1f3a]/50 text-[10px] uppercase font-black tracking-widest text-muted-foreground border-b border-[#2d3647]">
                   <tr>
+                    <th className="px-6 py-4">Ícone</th>
                     <th className="px-6 py-4">Fabricante</th>
                     <th className="px-6 py-4">Modelo</th>
                     <th className="px-6 py-4">Tipo</th>
@@ -91,6 +97,11 @@ export default function EquipmentModelsPage() {
                 <tbody className="divide-y divide-[#2d3647]">
                   {filteredData.map(item => (
                     <tr key={item.id} className="hover:bg-primary/5 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="w-10 h-10 rounded-xl bg-[#1a1f3a] flex items-center justify-center text-primary border border-[#2d3647]">
+                          <EquipmentIcon type={item.iconType} size={24} />
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-xs font-bold text-white uppercase tracking-tighter">{item.brand}</td>
                       <td className="px-6 py-4 text-xs font-black italic text-primary">{item.name}</td>
                       <td className="px-6 py-4 text-xs text-muted-foreground uppercase">{types.find(t => t.id === item.typeId)?.name || '-'}</td>
@@ -117,7 +128,7 @@ export default function EquipmentModelsPage() {
                 <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">{selectedItem ? 'Editar Modelo' : 'Novo Modelo'}</h2>
                 <button onClick={() => setIsDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
              </div>
-             <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+             <form className="space-y-6 flex-1 overflow-y-auto custom-scrollbar pr-1" onSubmit={handleSubmit(onSubmit)}>
                 <FormField label="Fabricante" error={errors.brand?.message} required><input {...register('brand')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none uppercase font-bold" placeholder="John Deere, Case IH, Scania..." /></FormField>
                 <FormField label="Nome do Modelo" error={errors.name?.message} required><input {...register('name')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none uppercase font-bold" placeholder="S770, Magnum 340..." /></FormField>
                 <FormField label="Tipo de Equipamento" error={errors.typeId?.message} required>
@@ -126,6 +137,21 @@ export default function EquipmentModelsPage() {
                     {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </FormField>
+
+                {/* Ícone Operacional */}
+                <FormField label="Ícone Operacional">
+                  <Controller
+                    name="iconType"
+                    control={control}
+                    render={({ field }) => (
+                      <EquipmentIconPicker
+                        value={field.value}
+                        onChange={(v) => field.onChange(v)}
+                      />
+                    )}
+                  />
+                </FormField>
+
                 <div className="pt-6 flex gap-3">
                   <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg">{isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar Modelo</button>
                 </div>

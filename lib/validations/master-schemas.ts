@@ -7,7 +7,12 @@ export const companySchema = z.object({
   tradingName: z.string().min(2, 'Nome fantasia é obrigatório'),
   corporateName: z.string().min(2, 'Razão social é obrigatória'),
   cnpj: z.string().length(18, 'CNPJ deve ter 18 caracteres'),
-  domain: z.string().optional(),
+  domain: z.string().optional().transform(value => {
+    if (!value) return value;
+    const trimmed = value.trim();
+    const withoutProtocol = trimmed.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+    return withoutProtocol.split('/')[0].split(':')[0];
+  }),
   apiPort: z.coerce.number().int('Porta API deve ser inteira').min(1, 'Porta API obrigatoria').max(65535, 'Porta API invalida'),
   mqttPort: z.coerce.number().int('Porta MQTT deve ser inteira').min(1, 'Porta MQTT obrigatoria').max(65535, 'Porta MQTT invalida'),
   apiBaseUrl: z.string().optional(),
@@ -73,6 +78,7 @@ export const equipmentModelSchema = z.object({
   name: z.string().min(2, 'Nome do modelo é obrigatório'),
   brand: z.string().min(2, 'Fabricante é obrigatório'),
   typeId: z.string().min(1, 'Tipo de equipamento é obrigatório'),
+  iconType: z.string().optional(),
 });
 
 export const equipmentGroupSchema = z.object({

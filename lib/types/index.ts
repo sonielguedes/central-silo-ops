@@ -139,6 +139,7 @@ export interface Equipment extends BaseEntity {
   lastSignal: string;
   observations?: string;
   icon?: string;
+  iconType?: string;
   // APK Integration Fields
   mobileEnabled: boolean;
   mobileToken?: string;
@@ -163,6 +164,7 @@ export interface EquipmentModel extends BaseEntity {
   name: string;
   brand: string;
   typeId: string;
+  iconType?: string;
   technicalSpecs?: Record<string, string>;
 }
 

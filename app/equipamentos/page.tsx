@@ -12,6 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { equipmentSchema, EquipmentFormData } from '@/lib/validations/master-schemas';
 import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
+import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import {
   Truck,
   Search,
@@ -24,8 +25,6 @@ import {
   Save,
   Ban,
   History as HistoryIcon,
-  Tractor,
-  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -139,14 +138,12 @@ function EquipamentosPage() {
            type.toLowerCase().includes(search.toLowerCase());
   });
 
-  const getIcon = (typeId: string) => {
-    const type = types.find(t => t.id === typeId);
-    switch (type?.icon) {
-      case 'Tractor': return <Tractor size={24} />;
-      case 'Truck': return <Truck size={24} />;
-      case 'Zap': return <Zap size={24} />;
-      default: return <Truck size={24} />;
-    }
+  /** Resolve iconType: equipamento override > modelo > fallback */
+  const getEquipmentIconType = (item: Equipment): string => {
+    if (item.iconType) return item.iconType;
+    const model = models.find(m => m.id === item.modelId);
+    if (model?.iconType) return model.iconType;
+    return 'PADRAO_GENERICO';
   };
 
   return (
@@ -198,12 +195,13 @@ function EquipamentosPage() {
               {filteredData.map((item) => {
                 const type = types.find(t => t.id === item.typeId);
                 const model = models.find(m => m.id === item.modelId);
+                const iconType = getEquipmentIconType(item);
                 return (
                   <div key={item.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-5 hover:border-primary/40 transition-all group relative overflow-hidden">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-4">
                         <div className={cn("w-12 h-12 rounded-2xl bg-[#1a1f3a] flex items-center justify-center text-primary shadow-lg border border-[#2d3647]")}>
-                          {getIcon(item.typeId)}
+                          <EquipmentIcon type={iconType} size={28} />
                         </div>
                         <div>
                           <h3 className="text-lg font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors">{item.code}</h3>

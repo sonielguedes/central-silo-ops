@@ -5,13 +5,15 @@ import dynamic from 'next/dynamic';
 import {
   AlertTriangle, Clock, Filter, Globe, Hash,
   LayoutGrid, Map as MapIcon, Maximize2,
-  Menu, MoreVertical, Navigation, Search, Settings2,
-  Tractor, Truck, X as CloseIcon, Zap,
+  Menu, MoreVertical, Search, Settings2,
+  X as CloseIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useSidebar } from '@/lib/context/sidebar-context';
 import { withAuth } from '@/components/shared/with-auth';
+import { EquipmentIcon } from '@/components/icons/equipment-icons';
+import { MapLegend } from '@/components/map/equipment-map-marker';
 import type { LiveMapItem, MapCounts } from '@/components/mapa/full-map-enterprise';
 
 const STATUS_CONFIG = {
@@ -218,6 +220,13 @@ function MapaOperacionalPage() {
           </div>
         )}
 
+        {/* Legenda dinâmica */}
+        {fleetData.length > 0 && (
+          <div className="absolute bottom-8 left-4 z-[1400]">
+            <MapLegend items={fleetData.map(m => ({ iconType: m.iconType, status: m.status }))} />
+          </div>
+        )}
+
         <div className="absolute bottom-8 right-8 flex flex-col gap-3 z-[1400]">
           <div className="bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] rounded-2xl p-2 flex flex-col gap-2 shadow-2xl">
             <button className="w-12 h-12 rounded-xl bg-primary text-[#0a0e27] flex items-center justify-center font-black text-[10px] shadow-lg shadow-primary/20 hover:scale-105 transition-transform">SAT</button>
@@ -254,9 +263,6 @@ function EquipmentMapCard({
   onSelect: (machine: LiveMapItem) => void;
 }) {
   const status   = STATUS_CONFIG[machine.status.toLowerCase() as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
-  const TypeIcon = machine.typeIcon === 'Tractor' ? Tractor :
-                   machine.typeIcon === 'Truck'   ? Truck   :
-                   machine.typeIcon === 'Zap'     ? Zap     : Navigation;
   const hasGps   = machine.pos !== null;
 
   return (
@@ -277,7 +283,7 @@ function EquipmentMapCard({
         status.tailwind.replace('bg-', 'bg-').replace('500', '500/10'),
         status.text.replace('text-', 'border-').replace('500', '500/20')
       )}>
-        <TypeIcon size={18} className={status.text} />
+        <EquipmentIcon type={machine.iconType} size={18} />
       </div>
 
       <div className="flex-1 min-w-0">

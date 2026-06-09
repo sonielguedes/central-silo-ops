@@ -10,11 +10,12 @@ import 'leaflet/dist/leaflet.css';
 import {
   Activity, AlertTriangle, CheckCircle2, Clock,
   Gauge, Hash, Loader2, MapPin, Navigation,
-  PauseCircle, Route, Tractor, Truck, User, Zap,
+  PauseCircle, Route, User, Zap,
 } from 'lucide-react';
-import { renderToString } from 'react-dom/server';
-import type { LucideIcon } from 'lucide-react';
+
 import { EquipmentLiveState, EquipmentOperationalStatus, TrailPoint } from '@/lib/types';
+import { createEquipmentMarkerIcon } from '@/components/map/equipment-map-marker';
+import { resolveIconType } from '@/lib/equipment-icon-types';
 
 const LEAFLET_CSS = (
   '.leaflet-container{background:#050812!important}' +
@@ -53,6 +54,7 @@ export type LiveMapItem = EquipmentLiveState & {
   code: string;
   pos: [number, number] | null;
   typeIcon: 'Tractor' | 'Truck' | 'Zap' | 'Navigation';
+  iconType: string;
   displayOperator: string;
   displayOperation: string;
 };
@@ -137,6 +139,7 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   code:             item.fleetCode || item.equipmentId,
   pos:              hasValidPosition(item) ? [item.latitude, item.longitude] : null,
   typeIcon:         getTypeIcon(item.type),
+  iconType:         (item as unknown as Record<string, string>).iconType || resolveIconType(item.type),
   displayOperator:  formatValue(item.currentOperator || item.operatorName),
   displayOperation: formatValue(item.currentOperation || item.operationName),
 });
@@ -149,41 +152,6 @@ export const buildLiveMapCounts = (items: EquipmentLiveState[]): MapCounts => ({
   staleGps:       items.filter(i => !isRecent(i.lastGpsAt, GPS_RECENT_MS)).length,
   staleHeartbeat: items.filter(i => !isRecent(i.lastHeartbeatAt, HEARTBEAT_RECENT_MS)).length,
 });
-
-const createMachineIcon = (
-  iconName: LiveMapItem['typeIcon'],
-  statusKey: EquipmentOperationalStatus,
-  id: string
-) => {
-  const color = getStatus(statusKey).color;
-  const TypeIcon =
-    iconName === 'Tractor' ? Tractor :
-    iconName === 'Truck'   ? Truck   :
-    iconName === 'Zap'     ? Zap     : Navigation;
-
-  const html = renderToString(
-    <div className="relative flex flex-col items-center">
-      <div className="relative w-12 h-14 flex items-center justify-center">
-        <div className="absolute bottom-0 w-4 h-1.5 bg-black/40 rounded-full blur-[2px]" />
-        <div className="absolute inset-0 flex items-center justify-center"
-          style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))' }}>
-          <svg width="48" height="56" viewBox="0 0 48 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M24 56C24 56 48 36.4 48 24C48 10.7452 37.2548 0 24 0C10.7452 0 0 10.7452 0 24C0 36.4 24 56 24 56Z" fill={color} />
-            <circle cx="24" cy="24" r="21" fill="black" fillOpacity="0.1" />
-            <circle cx="24" cy="24" r="20" stroke="white" strokeOpacity="0.2" strokeWidth="1" />
-          </svg>
-        </div>
-        <div className="relative z-10 mb-3 text-white flex items-center justify-center">
-          <TypeIcon size={24} strokeWidth={2.5} />
-        </div>
-      </div>
-      <div className="mt-[-8px] bg-[#0a0e27]/90 backdrop-blur-md px-1.5 py-0.5 rounded border border-white/20 shadow-lg relative z-20">
-        <span className="text-[9px] font-black text-white italic tracking-tighter uppercase">{id}</span>
-      </div>
-    </div>
-  );
-  return L.divIcon({ className: 'silo-machine-icon', html, iconSize: [48, 64], iconAnchor: [24, 56] });
-};
 
 function MapController({
   selectedId,
@@ -374,7 +342,7 @@ export default function FullMapEnterprise({
           const sCfg = getStatus(machine.status);
           return (
             <Marker key={machine.id} position={machine.pos!}
-              icon={createMachineIcon(machine.typeIcon, machine.status, machine.code)}
+              icon={createEquipmentMarkerIcon({ iconType: machine.iconType, status: machine.status, label: machine.code })}
               eventHandlers={{
                 add:       (e) => { markerRefs.current[machine.id] = e.target as L.Marker; },
                 remove:    ()  => { delete markerRefs.current[machine.id]; },
@@ -402,7 +370,6 @@ export default function FullMapEnterprise({
 }
 
 type StatusCfg = { label: string; color: string };
-type IconType  = LucideIcon;
 
 function OperationalPopup({
   machine, statusCfg, onRequestTrail, onClearTrail, trailLoading, activeTrail,
@@ -414,11 +381,6 @@ function OperationalPopup({
   trailLoading: boolean;
   activeTrail: TrailState;
 }) {
-  const TypeIcon: IconType =
-    machine.typeIcon === 'Tractor' ? Tractor :
-    machine.typeIcon === 'Truck'   ? Truck   :
-    machine.typeIcon === 'Zap'     ? Zap     : Navigation;
-
   const gpsAge   = ageMs(machine.lastGpsAt);
   const hbAge    = ageMs(machine.lastHeartbeatAt);
   const gpsStale = gpsAge > GPS_ALERT_MS;
@@ -444,7 +406,7 @@ function OperationalPopup({
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0"
             style={{ backgroundColor: statusCfg.color }}>
-            <TypeIcon size={20} />
+            <Navigation size={20} />
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-base font-black italic tracking-tighter leading-none uppercase truncate">{machine.code}</span>
