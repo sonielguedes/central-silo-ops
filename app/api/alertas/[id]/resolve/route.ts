@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveAlert } from '@/lib/alertas-builder';
 import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
+import { requirePermission } from '@/lib/auth/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +17,11 @@ export async function POST(
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
-    const alertId = params.id;
 
+    const rbac = requirePermission(req, 'alertas', 'editar', tenantId);
+    if (rbac) return rbac;
+
+    const alertId = params.id;
     if (!alertId) {
       return NextResponse.json({ error: 'ID do alerta obrigatorio' }, { status: 400 });
     }

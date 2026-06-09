@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/lib/context/auth-context';
 import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
@@ -64,37 +65,46 @@ const menuItems: MenuGroup[] = [
   ]},
   { group: 'Mestres / Frota', items: [
     { icon: Users, label: 'Operadores', href: '/operadores' },
-    { icon: Factory, label: 'Fazendas / Talhões', href: '/fazendas-talhoes' },
+    { icon: Factory, label: 'Fazendas / Talhoes', href: '/fazendas-talhoes' },
     { icon: PauseCircle, label: 'Motivos de Parada', href: '/paradas' },
   ]},
   { group: 'Operacional', items: [
     { icon: BarChart2, label: 'Painel Operacional', href: '/operacional/painel' },
-    { icon: Play, label: 'Operações', href: '/operacoes' },
+    { icon: Play, label: 'Operacoes', href: '/operacoes' },
     { icon: HistoryIcon, label: 'Timeline', href: '/operacoes/timeline' },
     { icon: Fuel, label: 'Abastecimentos', href: '/abastecimentos' },
-    { icon: RefreshCw, label: 'Sincronização', href: '/sincronizacao' },
-    { icon: Bell, label: 'Alertas', href: '/alertas', badge: '7' },
+    { icon: RefreshCw, label: 'Sincronizacao', href: '/sincronizacao' },
+    { icon: Bell, label: 'Alertas', href: '/alertas' },
   ]},
   { group: 'Ferramentas', items: [
     { icon: FileText, label: 'Conf. Operacional', href: '/ferramentas/conferencia-operacional' },
     { icon: ClipboardList, label: 'Ficha Operador', href: '/ferramentas/ficha-operador' },
-    { icon: RefreshCw, label: 'Integrações', href: '/ferramentas/integracoes' },
-    { icon: Settings, label: 'Ordens de Serviço', href: '/ferramentas/ordens-servico' },
+    { icon: RefreshCw, label: 'Integracoes', href: '/ferramentas/integracoes' },
+    { icon: Settings, label: 'Ordens de Servico', href: '/ferramentas/ordens-servico' },
   ]},
-  { group: 'Administração', items: [
+  { group: 'Administracao', items: [
     { icon: Building2, label: 'Empresas / Tenants', href: '/administracao/empresas' },
-    { icon: UserCog, label: 'Usuários', href: '/administracao/usuarios' },
+    { icon: UserCog, label: 'Usuarios', href: '/administracao/usuarios' },
     { icon: ShieldCheck, label: 'Perfis / RBAC', href: '/administracao/grupos-acesso' },
     { icon: Activity, label: 'Intelligence', href: '/relatorios/intelligence' },
-    { icon: FileText, label: 'Relatórios', href: '/relatorios' },
+    { icon: FileText, label: 'Relatorios', href: '/relatorios' },
     { icon: Clock, label: 'Tempo Operacional', href: '/relatorios/tempo-operacional' },
-    { icon: Gauge, label: 'Eficiência Operacional', href: '/relatorios/eficiencia-operacional' },
-    { icon: Settings, label: 'Configurações', href: '/configuracoes' },
+    { icon: Gauge, label: 'Eficiencia Operacional', href: '/relatorios/eficiencia-operacional' },
+    { icon: Settings, label: 'Configuracoes', href: '/configuracoes' },
   ]}
 ];
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
+  const { canRoute, userRole, isAuthenticated } = useAuth();
+
+  // Filter menu items by role permissions
+  const filteredMenu = menuItems
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => canRoute(item.href)),
+    }))
+    .filter(group => group.items.length > 0);
 
   return (
     <aside className={cn("w-64 bg-[#0a0e27] border-r border-[#2d3647] flex flex-col h-screen z-[100]", className)}>
@@ -105,12 +115,12 @@ export function Sidebar({ className }: SidebarProps) {
           </h1>
         </Link>
         <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-tight font-black">
-          Inteligência Logística
+          Inteligencia Logistica
         </p>
       </div>
 
       <nav className="flex-1 px-4 py-2 space-y-6 overflow-y-auto custom-scrollbar pb-10">
-        {menuItems.map((group) => (
+        {filteredMenu.map((group) => (
           <div key={group.group}>
             <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-3 px-3">
               {group.group}
@@ -141,7 +151,9 @@ export function Sidebar({ className }: SidebarProps) {
           </div>
           <div>
             <p className="text-xs font-black italic tracking-tighter text-white uppercase leading-none">SILO <span className="text-primary">OPS</span></p>
-            <p className="text-[8px] text-muted-foreground font-bold mt-1 uppercase">v0.1.0-piloto</p>
+            <p className="text-[8px] text-muted-foreground font-bold mt-1 uppercase">
+              {isAuthenticated ? userRole.replace('_', ' ') : 'v0.9-piloto'}
+            </p>
           </div>
         </div>
       </div>

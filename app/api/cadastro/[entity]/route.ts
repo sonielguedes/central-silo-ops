@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CadastroStorage, ALLOWED_ENTITIES } from '@/lib/cadastro-storage';
 import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
+import { requirePermission } from '@/lib/auth/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,10 @@ export async function GET(
   const tenant = requireTenant(req);
   if (!tenant.ok) return tenant.response;
   const { tenantId } = tenant;
+
+  const rbac = requirePermission(req, 'cadastros', 'visualizar', tenantId);
+  if (rbac) return rbac;
+
   const data = CadastroStorage.getAll(tenantId, entity);
   return NextResponse.json(data);
 }
@@ -39,6 +44,10 @@ export async function POST(
   const tenant = requireTenant(req);
   if (!tenant.ok) return tenant.response;
   const { tenantId } = tenant;
+
+  const rbac = requirePermission(req, 'cadastros', 'criar', tenantId);
+  if (rbac) return rbac;
+
   try {
     const body = await req.json();
     const item = CadastroStorage.create(tenantId, entity, body);

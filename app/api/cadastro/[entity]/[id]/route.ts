@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CadastroStorage, ALLOWED_ENTITIES } from '@/lib/cadastro-storage';
 import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
+import { requirePermission } from '@/lib/auth/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,10 @@ export async function GET(
   const tenant = requireTenant(req);
   if (!tenant.ok) return tenant.response;
   const { tenantId } = tenant;
+
+  const rbac = requirePermission(req, 'cadastros', 'visualizar', tenantId);
+  if (rbac) return rbac;
+
   const item = CadastroStorage.getById(tenantId, entity, id);
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(item);
@@ -35,6 +40,10 @@ export async function PUT(
   const tenant = requireTenant(req);
   if (!tenant.ok) return tenant.response;
   const { tenantId } = tenant;
+
+  const rbac = requirePermission(req, 'cadastros', 'editar', tenantId);
+  if (rbac) return rbac;
+
   try {
     const before = CadastroStorage.getById(tenantId, entity, id);
     const body = await req.json();
@@ -62,6 +71,10 @@ export async function DELETE(
   const tenant = requireTenant(req);
   if (!tenant.ok) return tenant.response;
   const { tenantId } = tenant;
+
+  const rbac = requirePermission(req, 'cadastros', 'arquivar', tenantId);
+  if (rbac) return rbac;
+
   const before = CadastroStorage.getById(tenantId, entity, id);
   const ok = CadastroStorage.archive(tenantId, entity, id);
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
