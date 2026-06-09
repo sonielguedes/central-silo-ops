@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { INITIAL_COMPANIES, INITIAL_EQUIPMENT } from './mock/master-data';
 import { Company, Equipment, EquipmentLiveState, TrailPoint } from './types';
+import { shouldSeedDemoData } from './environment';
 
 const DEFAULT_TENANT_ID = process.env.SILO_TENANT_ID || 'silo-ops-001';
 const TENANT_STATUS = process.env.SILO_TENANT_STATUS;
@@ -261,8 +262,10 @@ export class ServerStorage {
       return JSON.parse(fs.readFileSync(companiesFile, 'utf-8'));
     }
 
-    fs.writeFileSync(companiesFile, JSON.stringify(INITIAL_COMPANIES, null, 2));
-    return INITIAL_COMPANIES;
+    const seed = shouldSeedDemoData() ? INITIAL_COMPANIES : [];
+    fs.writeFileSync(companiesFile, JSON.stringify(seed, null, 2));
+    console.info(`[ServerStorage] companies action=${seed.length ? 'seed' : 'init-empty'} count=${seed.length}`);
+    return seed;
   }
 
   private static getPortFromHost(host: string | null): number | undefined {
@@ -304,11 +307,14 @@ export class ServerStorage {
       return JSON.parse(fs.readFileSync(equipmentFile, 'utf-8'));
     }
 
-    const tenantEquipment = INITIAL_EQUIPMENT
-      .filter(e => e.tenantId === tenantId)
-      .map(e => ({ ...e, tenantId }));
+    const tenantEquipment = shouldSeedDemoData()
+      ? INITIAL_EQUIPMENT
+        .filter(e => e.tenantId === tenantId)
+        .map(e => ({ ...e, tenantId }))
+      : [];
 
     fs.writeFileSync(equipmentFile, JSON.stringify(tenantEquipment, null, 2));
+    console.info(`[ServerStorage] equipment action=${tenantEquipment.length ? 'seed' : 'init-empty'} tenantId=${tenantId} count=${tenantEquipment.length}`);
     return tenantEquipment;
   }
 

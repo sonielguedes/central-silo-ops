@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { DEMO_BADGE_LABEL, IS_DEMO_ENV, getAppVersionLabel } from '@/lib/environment';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,7 +22,7 @@ export default function LoginPage() {
       await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Falha na autenticação');
+      setError(err.message || 'Falha na autenticaÃ§Ã£o');
     } finally {
       setLoading(false);
     }
@@ -42,8 +43,13 @@ export default function LoginPage() {
             SILO <span className="text-primary">OPS</span>
           </h1>
           <p className="text-[10px] text-muted-foreground uppercase font-black tracking-[0.3em] mt-2">
-            Central de Inteligência Logística
+            Sistema de Inteligencia Logistica Operacional
           </p>
+          {IS_DEMO_ENV && (
+            <div className="mt-4 inline-flex text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+              {DEMO_BADGE_LABEL}
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -98,10 +104,11 @@ export default function LoginPage() {
              Ambiente Seguro & Monitorado
            </p>
            <p className="text-[8px] text-white/20 font-mono mt-2 uppercase">
-             v0.1.0-piloto • silo-ops-core
+             {getAppVersionLabel()} â€¢ silo-ops-core
            </p>
         </div>
       </div>
     </div>
   );
 }
+

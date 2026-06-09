@@ -10,6 +10,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { stopReasonSchema, StopReasonFormData } from '@/lib/validations/master-schemas';
 import { FormField } from '@/components/shared/form-field';
+import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   PauseCircle,
   Plus,
@@ -30,6 +32,8 @@ function ParadasPage() {
   const [search, setSearch] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<StopReason | null>(null);
+  const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<StopReason | null>(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<StopReasonFormData>({
     resolver: zodResolver(stopReasonSchema),
@@ -57,7 +61,25 @@ function ParadasPage() {
       else await StopReasonService.create(formData);
       setIsDrawerOpen(false);
       loadData();
-    } catch (error: any) { alert(error.message); }
+      setFeedback({ type: 'success', message: selectedItem ? 'Motivo atualizado com sucesso' : 'Motivo criado com sucesso' });
+    } catch (error: any) { setFeedback({ type: 'error', message: error.message || 'Falha ao salvar motivo' }); }
+  };
+
+  const handleDelete = (item: StopReason) => {
+    setConfirmDelete(item);
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      await StopReasonService.archive(confirmDelete.id);
+      setFeedback({ type: 'success', message: 'Motivo arquivado com sucesso' });
+      setConfirmDelete(null);
+      loadData();
+    } catch (error: any) {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao arquivar motivo' });
+    }
   };
 
   const filteredData = data.filter(item => item.description.toLowerCase().includes(search.toLowerCase()) || item.code.toLowerCase().includes(search.toLowerCase()));
@@ -71,6 +93,8 @@ function ParadasPage() {
           <PageHeader title="Motivos de Parada" description="Classificação e Gestão de Eventos Operacionais">
             <button onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"><Plus size={16} strokeWidth={3} /> Novo Motivo</button>
           </PageHeader>
+
+          <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" /><input type="text" placeholder="Buscar por código ou descrição..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40 shadow-inner" /></div>
@@ -87,7 +111,7 @@ function ParadasPage() {
                       <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg border border-[#2d3647]", item.type === 'PRODUTIVA' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500")}><PauseCircle size={24} /></div>
                       <div><h3 className="text-lg font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors">{item.description}</h3><p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Código: {item.code}</p></div>
                     </div>
-                    <div className="flex gap-1"><button onClick={() => { setSelectedItem(item); setIsDrawerOpen(true); }} className="p-2 text-muted-foreground hover:text-white transition-colors hover:bg-[#1a1f3a] rounded-lg"><Edit size={16} /></button><button onClick={async () => { if(confirm('Excluir motivo?')) { try { await StopReasonService.archive(item.id); loadData(); } catch(e:any) { alert(e.message); } } }} className="p-2 text-muted-foreground hover:text-red-500 transition-colors hover:bg-red-500/10 rounded-lg"><Trash2 size={16} /></button></div>
+                    <div className="flex gap-1"><button onClick={() => { setSelectedItem(item); setIsDrawerOpen(true); }} className="p-2 text-muted-foreground hover:text-white transition-colors hover:bg-[#1a1f3a] rounded-lg"><Edit size={16} /></button><button onClick={() => handleDelete(item)} className="p-2 text-muted-foreground hover:text-red-500 transition-colors hover:bg-red-500/10 rounded-lg"><Trash2 size={16} /></button></div>
                   </div>
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center justify-between"><span className="text-[10px] text-muted-foreground uppercase font-black">Categoria</span><span className="text-xs font-bold text-white uppercase">{item.category}</span></div>
@@ -121,6 +145,15 @@ function ParadasPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Arquivar motivo?"
+        description={`Deseja realmente arquivar ${confirmDelete?.description || 'este motivo'}?`}
+        confirmLabel="Arquivar"
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={executeDelete}
+      />
     </div>
   );
 }

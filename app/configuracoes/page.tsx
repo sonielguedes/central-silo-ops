@@ -60,7 +60,7 @@ export default function ConfiguracoesPage() {
 
               <div className="bg-gradient-to-br from-[#1a1f3a] to-[#0a0e27] border border-[#2d3647] p-6 rounded-3xl relative overflow-hidden">
                  <Globe size={120} className="absolute -bottom-10 -right-10 text-white/5" />
-                 <h4 className="text-sm font-black italic text-primary uppercase">SILO OPS Cloud</h4>
+                 <h4 className="text-sm font-black italic text-primary uppercase">SILO OPS Central</h4>
                  <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed uppercase font-bold tracking-tight">Infraestrutura dedicada e segura para operações de missão crítica.</p>
                  <button className="mt-6 text-[10px] font-black uppercase text-white hover:text-primary transition-colors flex items-center gap-2">Ver Status dos Servidores <CheckCircle2 size={12} /></button>
               </div>

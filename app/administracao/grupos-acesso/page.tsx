@@ -11,6 +11,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { accessGroupSchema, AccessGroupFormData } from '@/lib/validations/master-schemas';
 import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
+import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   ShieldCheck,
   Plus,
@@ -33,6 +35,8 @@ function PerfisPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AccessGroup | null>(null);
   const [viewAudit, setViewAudit] = useState(false);
+  const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<AccessGroup | null>(null);
 
   const {
     register,
@@ -76,15 +80,12 @@ function PerfisPage() {
 
   const handleDelete = async (id: string) => {
     if (id === 'ag-admin') {
-      alert('ERRO: O grupo Administrador Full não pode ser removido.');
+      setFeedback({ type: 'error', message: 'O grupo Administrador Full não pode ser removido.' });
       return;
     }
-    if (confirm('Deseja realmente arquivar este grupo de acesso?')) {
-      try {
-        await AccessGroupService.archive(id);
-        loadData();
-      } catch (e: any) { alert(e.message); }
-    }
+    const item = data.find((group) => group.id === id);
+    if (!item) return;
+    setConfirmDelete(item);
   };
 
   const onSubmit = async (formData: AccessGroupFormData) => {
@@ -96,8 +97,22 @@ function PerfisPage() {
       }
       setIsDrawerOpen(false);
       loadData();
+      setFeedback({ type: 'success', message: selectedItem ? 'Grupo atualizado com sucesso' : 'Grupo criado com sucesso' });
     } catch (error: any) {
-      alert(error.message);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao salvar grupo' });
+    }
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      await AccessGroupService.archive(confirmDelete.id);
+      setFeedback({ type: 'success', message: 'Grupo arquivado com sucesso' });
+      setConfirmDelete(null);
+      loadData();
+    } catch (error: any) {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao arquivar grupo' });
     }
   };
 
@@ -112,6 +127,8 @@ function PerfisPage() {
               <Plus size={16} strokeWidth={3} /> Novo Grupo
             </button>
           </PageHeader>
+
+          <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64 gap-4"><Loader2 size={40} className="text-primary animate-spin" /><p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Configurando Acessos...</p></div>
@@ -194,6 +211,15 @@ function PerfisPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Arquivar grupo?"
+        description={`Deseja realmente arquivar ${confirmDelete?.name || 'este grupo'}?`}
+        confirmLabel="Arquivar"
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={executeDelete}
+      />
     </div>
   );
 }

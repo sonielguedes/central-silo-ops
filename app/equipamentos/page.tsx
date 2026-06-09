@@ -13,6 +13,8 @@ import { equipmentSchema, EquipmentFormData } from '@/lib/validations/master-sch
 import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
 import { EquipmentIcon } from '@/components/icons/equipment-icons';
+import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   Truck,
   Search,
@@ -39,6 +41,8 @@ function EquipamentosPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Equipment | null>(null);
   const [viewAudit, setViewAudit] = useState(false);
+  const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Equipment | null>(null);
 
   const {
     register,
@@ -99,14 +103,9 @@ function EquipamentosPage() {
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      if (confirm('Deseja realmente arquivar este equipamento? Esta ação é reversível apenas por administradores.')) {
-        await EquipmentService.archive(id);
-        loadData();
-      }
-    } catch (error: any) {
-      alert(error.message);
-    }
+    const item = data.find((equipment) => equipment.id === id);
+    if (!item) return;
+    setConfirmDelete(item);
   };
 
   const onSubmit = async (formData: EquipmentFormData) => {
@@ -126,7 +125,20 @@ function EquipamentosPage() {
       setIsDrawerOpen(false);
       loadData();
     } catch (error: any) {
-      alert(error.message);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao salvar equipamento' });
+    }
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      await EquipmentService.archive(confirmDelete.id);
+      setFeedback({ type: 'success', message: 'Equipamento arquivado com sucesso' });
+      setConfirmDelete(null);
+      loadData();
+    } catch (error: any) {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao arquivar equipamento' });
     }
   };
 
@@ -163,6 +175,8 @@ function EquipamentosPage() {
               <Plus size={16} strokeWidth={3} /> Novo Equipamento
             </button>
           </PageHeader>
+
+          <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
@@ -436,6 +450,15 @@ function EquipamentosPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Arquivar equipamento?"
+        description={`Deseja realmente arquivar ${confirmDelete?.code || 'este equipamento'}?`}
+        confirmLabel="Arquivar"
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={executeDelete}
+      />
     </div>
   );
 }

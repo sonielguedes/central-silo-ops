@@ -29,6 +29,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/context/auth-context';
 import { canAccessRoute } from '@/lib/auth/rbac-shared';
+import { DEMO_BADGE_LABEL, IS_DEMO_ENV } from '@/lib/environment';
 import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
@@ -116,7 +117,7 @@ export function Sidebar({ className }: SidebarProps) {
           </h1>
         </Link>
         <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-tight font-black">
-          Inteligencia Logistica
+          Sistema de Inteligencia Logistica Operacional
         </p>
       </div>
 
@@ -153,8 +154,13 @@ export function Sidebar({ className }: SidebarProps) {
           <div>
             <p className="text-xs font-black italic tracking-tighter text-white uppercase leading-none">SILO <span className="text-primary">OPS</span></p>
             <p className="text-[8px] text-muted-foreground font-bold mt-1 uppercase">
-              {isAuthenticated ? userRole.replace('_', ' ') : 'v0.9-piloto'}
+              {isAuthenticated ? userRole.replace('_', ' ') : 'SILO OPS Central'}
             </p>
+            {IS_DEMO_ENV && (
+              <span className="mt-2 inline-flex text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                {DEMO_BADGE_LABEL}
+              </span>
+            )}
           </div>
         </div>
       </div>

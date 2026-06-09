@@ -420,10 +420,10 @@ function FleetPage() {
         </div>
       )}
 
-      {isChecklistOpen && selectedItem && (
+      {isChecklistOpen && selectedItem && operators[0] && (
          <ChecklistExecutionDrawer
             equipment={selectedItem}
-            operator={operators[0] || { id: 'mock', name: 'João Oliveira' }} // Mocking operator if none for demo
+            operator={operators[0]}
             onClose={() => setIsChecklistOpen(false)}
             onSuccess={() => {
                setIsChecklistOpen(false);

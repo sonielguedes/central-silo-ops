@@ -13,6 +13,8 @@ import { companyFormToCompanyPayload } from '@/lib/company-form';
 import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
 import { StatusBadge } from '@/components/shared/status-badge';
+import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useAuth } from '@/lib/context/auth-context';
 import {
   Building2,
@@ -61,6 +63,8 @@ function EmpresasPage() {
   const [selectedItem, setSelectedItem] = useState<Company | null>(null);
   const [viewAudit, setViewAudit] = useState(false);
   const [visibleCompanyTokens, setVisibleCompanyTokens] = useState<Record<string, boolean>>({});
+  const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'delete' | 'regenerate'; item: Company } | null>(null);
 
   const {
     register,
@@ -164,12 +168,9 @@ function EmpresasPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Deseja realmente arquivar esta empresa? Esta ação oculta todos os dados vinculados a este tenant.')) {
-      try {
-        await CompanyService.archive(id);
-        loadData();
-      } catch (e: any) { alert(e.message); }
-    }
+    const item = data.find((current) => current.id === id);
+    if (!item) return;
+    setConfirmAction({ type: 'delete', item });
   };
 
   const upsertCompanyInView = (company: Company) => {
@@ -205,8 +206,9 @@ function EmpresasPage() {
         upsertCompanyInView(saved);
       }
       setIsDrawerOpen(false);
+      setFeedback({ type: 'success', message: selectedItem ? 'Instância atualizada com sucesso' : 'Instância criada com sucesso' });
     } catch (error: any) {
-      alert(error.message);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao salvar instância' });
     }
   };
 
@@ -217,17 +219,30 @@ function EmpresasPage() {
 
   const handleRegenerateCompanyToken = async () => {
     if (!selectedItem || !canRegenerateToken) return;
-    if (!confirm('Regenerar token da empresa? O APK configurado com o token antigo deixara de autenticar.')) return;
+    setConfirmAction({ type: 'regenerate', item: selectedItem });
+  };
+
+  const executeConfirmAction = async () => {
+    if (!confirmAction) return;
 
     try {
-      const updated = await CompanyService.regenerateCompanyToken(selectedItem.id);
-      if (updated) {
-        setSelectedItem(updated);
-        upsertCompanyInView(updated);
-        setVisibleCompanyTokens(current => ({ ...current, [updated.id]: false }));
+      if (confirmAction.type === 'delete') {
+        await CompanyService.archive(confirmAction.item.id);
+        await loadData();
+        setFeedback({ type: 'success', message: 'Empresa arquivada com sucesso' });
+      } else {
+        const updated = await CompanyService.regenerateCompanyToken(confirmAction.item.id);
+        if (updated) {
+          setSelectedItem(updated);
+          upsertCompanyInView(updated);
+          setVisibleCompanyTokens(current => ({ ...current, [updated.id]: false }));
+        }
+        setFeedback({ type: 'success', message: 'Token da empresa regenerado com sucesso' });
       }
+      setConfirmAction(null);
     } catch (error: any) {
-      alert(error.message);
+      setConfirmAction(null);
+      setFeedback({ type: 'error', message: error.message || 'Falha na operação' });
     }
   };
 
@@ -240,12 +255,12 @@ function EmpresasPage() {
       const mqttPortValue = Number(formValues.portaMqtt || selectedItem.mqttPort);
 
       if (!apiPortValue) {
-        alert('Porta API obrigatoria para gerar token.');
+        setFeedback({ type: 'error', message: 'Porta API obrigatoria para gerar token.' });
         return;
       }
 
       if (!mqttPortValue) {
-        alert('Porta MQTT obrigatoria para gerar token.');
+        setFeedback({ type: 'error', message: 'Porta MQTT obrigatoria para gerar token.' });
         return;
       }
 
@@ -266,7 +281,7 @@ function EmpresasPage() {
         setVisibleCompanyTokens(current => ({ ...current, [updated.id]: false }));
       }
     } catch (error: any) {
-      alert(error.message);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao gerar token' });
     }
   };
 
@@ -300,6 +315,8 @@ function EmpresasPage() {
               <Plus size={16} strokeWidth={3} /> Nova Instância
             </button>
           </PageHeader>
+
+          <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
@@ -596,6 +613,17 @@ function EmpresasPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.type === 'delete' ? 'Arquivar empresa?' : 'Regenerar token da empresa?'}
+        description={confirmAction?.type === 'delete'
+          ? `Esta ação ocultará todos os dados vinculados ao tenant ${confirmAction?.item.tradingName}.`
+          : 'O APK configurado com o token antigo deixará de autenticar.'}
+        confirmLabel={confirmAction?.type === 'delete' ? 'Arquivar' : 'Regenerar'}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={executeConfirmAction}
+      />
     </div>
   );
 }

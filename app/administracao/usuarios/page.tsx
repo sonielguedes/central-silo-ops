@@ -12,6 +12,8 @@ import { userSchema, UserFormData } from '@/lib/validations/master-schemas';
 import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
 import { StatusBadge } from '@/components/shared/status-badge';
+import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   Search,
   Plus,
@@ -37,6 +39,8 @@ function UsuariosPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<User | null>(null);
   const [viewAudit, setViewAudit] = useState(false);
+  const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
 
   const {
     register,
@@ -101,12 +105,9 @@ function UsuariosPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Deseja realmente arquivar este usuário?')) {
-      try {
-        await UserService.archive(id);
-        loadAllData();
-      } catch (e: any) { alert(e.message); }
-    }
+    const item = data.find((user) => user.id === id);
+    if (!item) return;
+    setConfirmDelete(item);
   };
 
   const onSubmit = async (formData: UserFormData) => {
@@ -118,8 +119,22 @@ function UsuariosPage() {
       }
       setIsDrawerOpen(false);
       loadAllData();
+      setFeedback({ type: 'success', message: selectedItem ? 'Usuário atualizado com sucesso' : 'Usuário criado com sucesso' });
     } catch (error: any) {
-      alert(error.message);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao salvar usuário' });
+    }
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      await UserService.archive(confirmDelete.id);
+      setFeedback({ type: 'success', message: 'Usuário arquivado com sucesso' });
+      setConfirmDelete(null);
+      loadAllData();
+    } catch (error: any) {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', message: error.message || 'Falha ao arquivar usuário' });
     }
   };
 
@@ -140,6 +155,8 @@ function UsuariosPage() {
               <Plus size={16} strokeWidth={3} /> Criar Usuário
             </button>
           </PageHeader>
+
+          <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
           <div className="bg-[#0a0e27]/40 border border-[#2d3647] rounded-3xl overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-[#2d3647] bg-[#1a1f3a]/10 flex items-center justify-between gap-4">
@@ -302,6 +319,15 @@ function UsuariosPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Arquivar usuário?"
+        description={`Deseja realmente arquivar ${confirmDelete?.name || 'este usuário'}?`}
+        confirmLabel="Arquivar"
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={executeDelete}
+      />
     </div>
   );
 }

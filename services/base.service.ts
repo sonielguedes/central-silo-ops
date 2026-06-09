@@ -1,14 +1,22 @@
 import { BaseEntity } from "@/lib/mock/master-data";
+import { shouldSeedDemoData } from '@/lib/environment';
+
+const DEFAULT_TENANT_ID =
+  process.env.NEXT_PUBLIC_SILO_TENANT_ID ||
+  process.env.SILO_TENANT_ID ||
+  'silo-ops-001';
 
 export class BaseService<T extends BaseEntity> {
   protected data: T[];
+  private initialData: T[];
   private storageKey: string;
   private static currentUser = 'Usuário Sistema';
-  private static currentTenantId = 'silo-ops-001';
+  private static currentTenantId = DEFAULT_TENANT_ID;
 
   constructor(storageKey: string, initialData: T[]) {
     this.storageKey = `silo_ops_v2_${storageKey}`;
-    this.data = initialData;
+    this.initialData = initialData;
+    this.data = shouldSeedDemoData() ? [...initialData] : [];
     this.load();
   }
 
@@ -21,10 +29,21 @@ export class BaseService<T extends BaseEntity> {
     if (typeof window === 'undefined') return;
     const saved = localStorage.getItem(this.storageKey);
     if (saved) {
-      this.data = JSON.parse(saved);
-    } else {
-      this.save();
+      try {
+        this.data = JSON.parse(saved);
+      } catch {
+        this.data = [];
+      }
+      return;
     }
+
+    if (shouldSeedDemoData()) {
+      this.data = [...this.initialData];
+      this.save();
+      return;
+    }
+
+    this.data = [];
   }
 
   private save() {

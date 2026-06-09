@@ -7,6 +7,8 @@ import { PageHeader } from '@/components/shared/page-header';
 import { FormField } from '@/components/shared/form-field';
 import { EquipmentIconPicker } from '@/components/icons/equipment-icon-picker';
 import { EquipmentIcon } from '@/components/icons/equipment-icons';
+import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EquipmentTypeService } from '@/services/api-service';
 import { EquipmentType } from '@/lib/types';
 import { withAuth } from '@/components/shared/with-auth';
@@ -76,6 +78,8 @@ function TypesPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<EquipmentType | null>(null);
+  const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<EquipmentType | null>(null);
 
   const { register, handleSubmit, reset, control, watch, setValue, formState: { errors, isSubmitting } } =
     useForm<EquipmentTypeFormData>({ resolver: zodResolver(equipmentTypeSchema) });
@@ -173,14 +177,25 @@ function TypesPage() {
     try {
       await onSubmit(formData);
     } catch (error: any) {
-      alert(error?.message || 'Erro ao salvar');
+      setFeedback({ type: 'error', message: error?.message || 'Erro ao salvar' });
     }
   }
 
   async function archiveItem(item: EquipmentType) {
-    if (!confirm(`Arquivar o tipo "${item.name}"?`)) return;
-    await EquipmentTypeService.archive(item.id);
-    await loadData();
+    setConfirmDelete(item);
+  }
+
+  async function executeDelete() {
+    if (!confirmDelete) return;
+    try {
+      await EquipmentTypeService.archive(confirmDelete.id);
+      setFeedback({ type: 'success', message: 'Tipo arquivado com sucesso' });
+      setConfirmDelete(null);
+      await loadData();
+    } catch (error: any) {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', message: error?.message || 'Falha ao arquivar tipo' });
+    }
   }
 
   const filtered = useMemo(() => {
@@ -214,6 +229,8 @@ function TypesPage() {
               <Plus size={16} strokeWidth={3} /> Novo Tipo
             </button>
           </PageHeader>
+
+          <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
           <div className="flex flex-col xl:flex-row gap-3 mb-6">
             <div className="relative flex-1 min-w-[260px]">
@@ -395,6 +412,15 @@ function TypesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Arquivar tipo?"
+        description={`Deseja realmente arquivar o tipo ${confirmDelete?.name || confirmDelete?.code || 'selecionado'}?`}
+        confirmLabel="Arquivar"
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={executeDelete}
+      />
     </div>
   );
 }

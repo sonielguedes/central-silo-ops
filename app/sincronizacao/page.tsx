@@ -14,7 +14,7 @@ function SincronizacaoPage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <Header />
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <PageHeader title="Sincronização de Dados" description="Monitoramento de Fluxo APK - Central - Nuvem" />
+          <PageHeader title="Sincronização SILO OPS" description="Monitoramento do fluxo Field, Central e Nuvem." />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <SyncStat icon={<Wifi className="text-emerald-500" />} label="Conexão MQTT" value="ESTÁVEL" />

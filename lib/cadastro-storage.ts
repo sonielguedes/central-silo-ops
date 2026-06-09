@@ -22,6 +22,7 @@ import {
   INITIAL_TIMELINE_EVENTS,
   INITIAL_FLEET_ACTIVITIES,
 } from '@/lib/mock/master-data';
+import { shouldSeedDemoData } from '@/lib/environment';
 
 // ── Storage root (same resolver as ServerStorage) ─────────────────────────────
 const resolveStorageDir = () => {
@@ -87,12 +88,14 @@ export class CadastroStorage {
   private static readAll(tenantId: string, entity: string): StorageItem[] {
     const file = this.getFile(tenantId, entity);
     if (!fs.existsSync(file)) {
-      const seed = (SEED_MAP[entity] || []).map((item) => ({
-        ...(item as StorageItem),
-        tenantId,
-      }));
+      const seed = shouldSeedDemoData()
+        ? (SEED_MAP[entity] || []).map((item) => ({
+            ...(item as StorageItem),
+            tenantId,
+          }))
+        : [];
       fs.writeFileSync(file, JSON.stringify(seed, null, 2));
-      console.info('[storage-api] entity=' + entity + ' action=seed tenantId=' + tenantId + ' count=' + seed.length);
+      console.info('[storage-api] entity=' + entity + ' action=' + (seed.length ? 'seed' : 'init-empty') + ' tenantId=' + tenantId + ' count=' + seed.length);
       return seed;
     }
     return JSON.parse(fs.readFileSync(file, 'utf-8')) as StorageItem[];

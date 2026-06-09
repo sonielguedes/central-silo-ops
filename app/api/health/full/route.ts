@@ -5,7 +5,10 @@ import path from 'path';
 export const dynamic = 'force-dynamic';
 
 const DATA_ROOT = process.env.SILO_STORAGE_DIR || process.env.SILO_DATA_DIR || (process.env.NODE_ENV === 'production' ? '/app/data' : './data');
-const VERSION = process.env.npm_package_version || '0.1.0-piloto';
+const VERSION = (process.env.NEXT_PUBLIC_APP_VERSION || process.env.npm_package_version || '0.1.0').replace(/-piloto/gi, '').trim();
+const RESPONSE_TIME_THRESHOLD_MS = 800;
+const REQUIRED_ENV = ['SILO_AUTH_SECRET', 'NEXT_PUBLIC_CENTRAL_URL', 'NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_MQTT_WS_URL'];
+const OPTIONAL_ENV = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'];
 
 function checkFile(filePath: string): { exists: boolean; readable: boolean; sizeBytes?: number } {
   try {
@@ -53,6 +56,11 @@ interface TenantHealth {
   auditLog: { exists: boolean; readable: boolean; sizeBytes?: number };
 }
 
+interface HealthIssue {
+  check: string;
+  message: string;
+}
+
 function getTenantHealth(): TenantHealth[] {
   // Load companies to get tenant list (never expose tokens)
   try {
@@ -81,24 +89,60 @@ function getTenantHealth(): TenantHealth[] {
 }
 
 export async function GET() {
+  const startedAt = Date.now();
   const now = new Date().toISOString();
   const dataDir = checkDir(DATA_ROOT);
   const disk = getDiskInfo();
   const tenants = getTenantHealth();
+  const missingRequiredEnv = REQUIRED_ENV.filter((name) => !process.env[name]?.trim());
+  const missingOptionalEnv = OPTIONAL_ENV.filter((name) => !process.env[name]?.trim());
+  const responseTimeMs = Date.now() - startedAt;
+  const issues: HealthIssue[] = [];
 
-  const tenantsOk = tenants.length > 0 && tenants.every(t => t.dataDir.exists && t.dataDir.readable);
-  const allOk = dataDir.exists && dataDir.readable && dataDir.writable && tenantsOk;
-  const status = allOk ? 'healthy' : 'degraded';
+  if (!dataDir.exists) issues.push({ check: 'dataDir', message: 'Diretorio de dados nao encontrado' });
+  if (!dataDir.readable) issues.push({ check: 'dataDir', message: 'Diretorio de dados inacessivel para leitura' });
+  if (!dataDir.writable) issues.push({ check: 'dataDir', message: 'Diretorio de dados inacessivel para escrita' });
+  if (missingRequiredEnv.length > 0) {
+    issues.push({ check: 'env', message: `Variaveis obrigatorias ausentes: ${missingRequiredEnv.join(', ')}` });
+  }
+  if (tenants.length === 0) {
+    issues.push({ check: 'tenants', message: 'Nenhum tenant encontrado no storage' });
+  }
+  if (responseTimeMs > RESPONSE_TIME_THRESHOLD_MS) {
+    issues.push({ check: 'performance', message: `Tempo de resposta acima do limite (${responseTimeMs}ms)` });
+  }
+
+  const hasFatalIssue =
+    !dataDir.exists ||
+    !dataDir.readable ||
+    !dataDir.writable ||
+    missingRequiredEnv.length > 0;
+
+  const hasNonFatalIssue =
+    tenants.length === 0 ||
+    missingOptionalEnv.length > 0 ||
+    responseTimeMs > RESPONSE_TIME_THRESHOLD_MS ||
+    tenants.some((t) => !t.dataDir.exists || !t.dataDir.readable);
+
+  const status = hasFatalIssue ? 'ERROR' : (hasNonFatalIssue ? 'DEGRADED' : 'OK');
 
   const result = {
     status,
+    appOnline: true,
     version: VERSION,
     timestamp: now,
     environment: process.env.NEXT_PUBLIC_APP_ENV || process.env.NODE_ENV || 'unknown',
     uptime: process.uptime(),
+    responseTimeMs,
+    thresholds: { responseTimeMs: RESPONSE_TIME_THRESHOLD_MS },
     dataDir,
     tenants,
     tenantCount: tenants.length,
+    env: {
+      missingRequired: missingRequiredEnv,
+      missingOptional: missingOptionalEnv,
+    },
+    issues,
     disk,
     memory: {
       heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1048576 * 100) / 100,
@@ -108,7 +152,7 @@ export async function GET() {
   };
 
   return NextResponse.json(result, {
-    status: allOk ? 200 : 503,
+    status: status === 'ERROR' ? 503 : 200,
     headers: { 'Cache-Control': 'no-store' },
   });
 }

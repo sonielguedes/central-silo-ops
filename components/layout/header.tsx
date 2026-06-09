@@ -4,6 +4,7 @@ import React from 'react';
 import { Search, Bell, ChevronDown, Users, Menu } from 'lucide-react';
 import { useSidebar } from '@/lib/context/sidebar-context';
 import { useAuth } from '@/lib/context/auth-context';
+import { DEMO_BADGE_LABEL, IS_DEMO_ENV, getAppVersionLabel } from '@/lib/environment';
 
 function roleLabel(role?: string) {
   switch (role) {
@@ -45,8 +46,13 @@ export function Header() {
         </div>
         <div className="h-4 w-[1px] bg-[#2d3647] hidden sm:block"></div>
         <span className="text-[10px] text-muted-foreground font-mono bg-[#1a1f3a] px-2 py-0.5 rounded border border-[#2d3647]/50 hidden sm:block">
-          v0.1.0-piloto
+          {getAppVersionLabel()}
         </span>
+        {IS_DEMO_ENV && (
+          <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+            {DEMO_BADGE_LABEL}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-6">
