@@ -13,8 +13,13 @@ TMP_BODY=""
 TMP_WRITE=""
 
 cleanup() {
-  [[ -n "$TMP_BODY" && -f "$TMP_BODY" ]] && rm -f "$TMP_BODY"
-  [[ -n "$TMP_WRITE" && -f "$TMP_WRITE" ]] && rm -f "$TMP_WRITE"
+  if [[ -n "$TMP_BODY" && -f "$TMP_BODY" ]]; then
+    rm -f "$TMP_BODY"
+  fi
+  if [[ -n "$TMP_WRITE" && -f "$TMP_WRITE" ]]; then
+    rm -f "$TMP_WRITE"
+  fi
+  return 0
 }
 trap cleanup EXIT
 
