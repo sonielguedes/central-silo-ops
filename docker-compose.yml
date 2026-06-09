@@ -40,7 +40,7 @@ services:
       retries: 3
       start_period: 30s
 
-    logging:
+    logging: &default-logging
       driver: "json-file"
       options:
         max-size: "10m"
@@ -50,62 +50,111 @@ services:
     build: .
     container_name: silo-cliente-02-web
     restart: unless-stopped
+
+    env_file:
+      - .env.production
+
     environment:
+      NODE_ENV: production
       SILO_TENANT_ID: cliente-02
       SILO_TENANT_STATUS: ATIVO
       NEXT_PUBLIC_SILO_TENANT_ID: cliente-02
       SILO_DATA_DIR: /app/data
+
+      NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV}
+      NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+      NEXT_PUBLIC_CENTRAL_URL: ${NEXT_PUBLIC_CENTRAL_URL}
+
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL}
+
+      NEXT_PUBLIC_MQTT_WS_URL: ${NEXT_PUBLIC_MQTT_WS_URL}
+      SILO_AUTH_SECRET: ${SILO_AUTH_SECRET}
+      MOBILE_INGEST_TOKEN: ${MOBILE_INGEST_TOKEN}
+
     volumes:
       - ./data:/app/data
+
     expose:
       - "3000"
+
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health/full').then(async r => { const body = await r.json().catch(() => ({})); if (!r.ok || body.status === 'ERROR') process.exit(1); process.exit(0); }).catch(() => process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health/full').then(async r => { const result = await r.json().catch(() => ({})); if (!r.ok || result.status === 'ERROR') process.exit(1); process.exit(0); }).catch(() => process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
+
     logging: *default-logging
 
   silo-cliente-03:
     build: .
     container_name: silo-cliente-03-web
     restart: unless-stopped
+
+    env_file:
+      - .env.production
+
     environment:
+      NODE_ENV: production
       SILO_TENANT_ID: cliente-03
       SILO_TENANT_STATUS: ATIVO
       NEXT_PUBLIC_SILO_TENANT_ID: cliente-03
       SILO_DATA_DIR: /app/data
+
+      NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV}
+      NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+      NEXT_PUBLIC_CENTRAL_URL: ${NEXT_PUBLIC_CENTRAL_URL}
+
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL}
+
+      NEXT_PUBLIC_MQTT_WS_URL: ${NEXT_PUBLIC_MQTT_WS_URL}
+      SILO_AUTH_SECRET: ${SILO_AUTH_SECRET}
+      MOBILE_INGEST_TOKEN: ${MOBILE_INGEST_TOKEN}
+
     volumes:
       - ./data:/app/data
+
     expose:
       - "3000"
+
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health/full').then(async r => { const body = await r.json().catch(() => ({})); if (!r.ok || body.status === 'ERROR') process.exit(1); process.exit(0); }).catch(() => process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health/full').then(async r => { const result = await r.json().catch(() => ({})); if (!r.ok || result.status === 'ERROR') process.exit(1); process.exit(0); }).catch(() => process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
+
     logging: *default-logging
 
   nginx:
     image: nginx:1.27-alpine
     container_name: silo-nginx
     restart: unless-stopped
+
     depends_on:
       - silo-piloto
       - silo-cliente-02
       - silo-cliente-03
+
     ports:
       - "3001:3001"
       - "3002:3002"
       - "3003:3003"
+
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
     healthcheck:
-      test: ["CMD-SHELL", "body=$(wget -qO- http://127.0.0.1:3001/api/health/full) || exit 1; echo \"$body\" | grep -q '\"status\":\"ERROR\"' && exit 1; exit 0"]
+      test: ["CMD-SHELL", "body=$$(wget -qO- http://127.0.0.1:3001/api/health/full) || exit 1; echo \"$$body\" | grep -q '\"status\":\"ERROR\"' && exit 1; exit 0"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
+
     logging: *default-logging
