@@ -3,6 +3,7 @@ import { ServerStorage } from '@/lib/server-storage';
 import { Company } from '@/lib/types';
 import { blockWriteInDemo, maskToken } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
+import { normalizeCompanyPortPayload } from '@/lib/company-form';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,6 +11,8 @@ export async function POST(req: NextRequest) {
     if (demoBlock) return demoBlock;
 
     const company = await req.json() as Company;
+    const normalized = normalizeCompanyPortPayload(company);
+    const { portaApi, portaMqtt, ...companyPayload } = normalized as unknown as Record<string, unknown>;
 
     if (!company.id || !company.code) {
       return NextResponse.json({ error: 'company id/code is required' }, { status: 400 });
@@ -19,18 +22,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'companyToken is required' }, { status: 400 });
     }
 
-    if (!company.apiPort) {
-      return NextResponse.json({ error: 'apiPort is required' }, { status: 400 });
+    if (!normalized.apiPort) {
+      return NextResponse.json({ error: 'Porta API obrigatoria' }, { status: 400 });
+    }
+
+    if (!normalized.mqttPort) {
+      return NextResponse.json({ error: 'Porta MQTT obrigatoria' }, { status: 400 });
     }
 
     const saved = ServerStorage.upsertCompany({
-      ...company,
+      ...(companyPayload as unknown as Company),
       tenantId: company.tenantId || company.id,
-      apiPort: Number(company.apiPort),
-      mqttPort: Number(company.mqttPort || 0),
+      apiPort: normalized.apiPort,
+      mqttPort: normalized.mqttPort,
       status: company.status || 'ATIVO',
-      apiBaseUrl: 'https://api.siloops.com.br:' + Number(company.apiPort),
-      mqttUrl: company.mqttPort ? 'mqtt.siloops.com.br:' + Number(company.mqttPort) : (company.mqttUrl || ''),
+      apiBaseUrl: normalized.apiBaseUrl || ('https://api.siloops.com.br:' + normalized.apiPort),
+      mqttUrl: normalized.mqttUrl || (company.mqttUrl || ''),
     });
 
     console.info('[mobile/company] company synced', {

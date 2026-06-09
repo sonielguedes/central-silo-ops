@@ -6,6 +6,7 @@ import { blockWriteInDemo, maskToken } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 import { requirePermission } from '@/lib/auth/rbac-server';
+import { normalizeCompanyPortPayload } from '@/lib/company-form';
 
 const generateCompanyToken = () => `CTK-${randomBytes(18).toString('hex').toUpperCase()}`;
 
@@ -35,15 +36,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'company id/code is required' }, { status: 400 });
     }
 
-    const apiPort = Number(company.apiPort);
-    const mqttPort = Number(company.mqttPort);
+    const normalized = normalizeCompanyPortPayload(company);
+    const { portaApi, portaMqtt, ...companyPayload } = normalized as unknown as Record<string, unknown>;
+    const apiPort = normalized.apiPort;
+    const mqttPort = normalized.mqttPort;
 
     if (!apiPort) {
-      return NextResponse.json({ error: 'apiPort is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Porta API obrigatoria' }, { status: 400 });
     }
 
     if (!mqttPort) {
-      return NextResponse.json({ error: 'mqttPort is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Porta MQTT obrigatoria' }, { status: 400 });
     }
 
     const companyToken = body.regenerate || !company.companyToken
@@ -51,14 +54,14 @@ export async function POST(req: NextRequest) {
       : company.companyToken;
 
     const saved = ServerStorage.upsertCompany({
-      ...company,
+      ...(companyPayload as unknown as Company),
       tenantId: company.tenantId || company.id,
       apiPort,
       mqttPort,
       status: company.status || 'ATIVO',
       companyToken,
-      apiBaseUrl: `https://api.siloops.com.br:${apiPort}`,
-      mqttUrl: `mqtt.siloops.com.br:${mqttPort}`,
+      apiBaseUrl: normalized.apiBaseUrl || `https://api.siloops.com.br:${apiPort}`,
+      mqttUrl: normalized.mqttUrl || `mqtt.siloops.com.br:${mqttPort}`,
     });
 
     const persisted = ServerStorage.getCompanyByTenantId(saved.tenantId) || ServerStorage.getCompanyByApiPort(apiPort) || saved;

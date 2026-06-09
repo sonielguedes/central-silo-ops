@@ -60,6 +60,7 @@ import {
 } from '@/lib/mock/master-data';
 import type { MobileSyncEventInput } from '@/lib/types';
 import { BaseService } from './base.service';
+import { normalizeCompanyPortPayload } from '@/lib/company-form';
 
 // --- Services ---
 
@@ -96,8 +97,9 @@ export const CompanyService = new (class extends BaseService<Company> {
   }
 
   private withGeneratedUrls<T extends Partial<Company>>(item: T): T {
-    const apiPort = item.apiPort ? Number(item.apiPort) : item.apiPort;
-    const mqttPort = item.mqttPort ? Number(item.mqttPort) : item.mqttPort;
+    const normalized = normalizeCompanyPortPayload(item);
+    const apiPort = normalized.apiPort;
+    const mqttPort = normalized.mqttPort;
     const domain = item.domain
       ? item.domain.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split('/')[0].split(':')[0]
       : item.domain;
@@ -107,8 +109,8 @@ export const CompanyService = new (class extends BaseService<Company> {
       domain,
       apiPort,
       mqttPort,
-      apiBaseUrl: apiPort ? `https://api.siloops.com.br:${apiPort}` : item.apiBaseUrl,
-      mqttUrl: mqttPort ? `mqtt.siloops.com.br:${mqttPort}` : item.mqttUrl,
+      apiBaseUrl: normalized.apiBaseUrl || item.apiBaseUrl,
+      mqttUrl: normalized.mqttUrl || item.mqttUrl,
     };
   }
 

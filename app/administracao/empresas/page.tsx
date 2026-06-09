@@ -9,6 +9,7 @@ import { Company } from '@/lib/mock/master-data';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { companySchema, CompanyFormData } from '@/lib/validations/master-schemas';
+import { companyFormToCompanyPayload } from '@/lib/company-form';
 import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -56,12 +57,14 @@ function EmpresasPage() {
     formState: { errors, isSubmitting }
   } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
+    mode: 'onChange',
+    reValidateMode: 'onChange',
   });
 
-  const apiPort = watch('apiPort');
-  const mqttPort = watch('mqttPort');
-  const normalizedApiPort = Number(apiPort || selectedItem?.apiPort || 0);
-  const normalizedMqttPort = Number(mqttPort || selectedItem?.mqttPort || 0);
+  const portaApi = watch('portaApi');
+  const portaMqtt = watch('portaMqtt');
+  const normalizedApiPort = Number(portaApi || selectedItem?.apiPort || 0);
+  const normalizedMqttPort = Number(portaMqtt || selectedItem?.mqttPort || 0);
   const generatedApiBaseUrl = normalizedApiPort ? `https://api.siloops.com.br:${normalizedApiPort}` : 'https://api.siloops.com.br:{portaApi}';
   const generatedMqttUrl = normalizedMqttPort ? `mqtt.siloops.com.br:${normalizedMqttPort}` : 'mqtt.siloops.com.br:{portaMqtt}';
   const canRegenerateToken = accessGroup?.id === 'ag-admin' || checkPermission('ALL', 'administrar');
@@ -95,8 +98,8 @@ function EmpresasPage() {
           corporateName: selectedItem.corporateName,
           cnpj: selectedItem.cnpj,
           domain: selectedItem.domain || '',
-          apiPort: selectedItem.apiPort || ('' as unknown as number),
-          mqttPort: selectedItem.mqttPort || ('' as unknown as number),
+          portaApi: selectedItem.apiPort || ('' as unknown as number),
+          portaMqtt: selectedItem.mqttPort || ('' as unknown as number),
           apiBaseUrl: selectedItem.apiBaseUrl || '',
           mqttUrl: selectedItem.mqttUrl || '',
           companyToken: selectedItem.companyToken || '',
@@ -110,8 +113,8 @@ function EmpresasPage() {
           corporateName: '',
           cnpj: '',
           domain: '',
-          apiPort: '' as unknown as number,
-          mqttPort: '' as unknown as number,
+          portaApi: '' as unknown as number,
+          portaMqtt: '' as unknown as number,
           apiBaseUrl: '',
           mqttUrl: '',
           companyToken: '',
@@ -153,11 +156,12 @@ function EmpresasPage() {
 
   const onSubmit = async (formData: CompanyFormData) => {
     try {
+      const payload = companyFormToCompanyPayload(formData);
       let saved: Company | undefined;
       if (selectedItem) {
-        saved = await CompanyService.update(selectedItem.id, { ...formData, version: selectedItem.version });
+        saved = await CompanyService.update(selectedItem.id, { ...payload, version: selectedItem.version });
       } else {
-        saved = await CompanyService.create(formData);
+        saved = await CompanyService.create(payload as Omit<Company, keyof import('@/lib/types').BaseEntity>);
       }
       if (saved) {
         setSelectedItem(saved);
@@ -195,8 +199,8 @@ function EmpresasPage() {
 
     try {
       const formValues = getValues();
-      const apiPortValue = Number(formValues.apiPort || selectedItem.apiPort);
-      const mqttPortValue = Number(formValues.mqttPort || selectedItem.mqttPort);
+      const apiPortValue = Number(formValues.portaApi || selectedItem.apiPort);
+      const mqttPortValue = Number(formValues.portaMqtt || selectedItem.mqttPort);
 
       if (!apiPortValue) {
         alert('Porta API obrigatoria para gerar token.');
@@ -404,11 +408,11 @@ function EmpresasPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <FormField label="Porta API" error={errors.apiPort?.message} required>
-                      <input type="number" min={1} max={65535} {...register('apiPort')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.apiPort && "border-red-500/50")} placeholder="3001" />
+                    <FormField label="Porta API" error={errors.portaApi?.message} required>
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" {...register('portaApi')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.portaApi && "border-red-500/50")} placeholder="3001" />
                     </FormField>
-                    <FormField label="Porta MQTT" error={errors.mqttPort?.message} required>
-                      <input type="number" min={1} max={65535} {...register('mqttPort')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.mqttPort && "border-red-500/50")} placeholder="18831" />
+                    <FormField label="Porta MQTT" error={errors.portaMqtt?.message} required>
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" {...register('portaMqtt')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.portaMqtt && "border-red-500/50")} placeholder="18831" />
                     </FormField>
                   </div>
 

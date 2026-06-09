@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EQUIPMENT_ICON_TYPES } from '@/lib/equipment-icon-types';
+import { normalizePort } from '@/lib/company-form';
 import {
   FLEET_OPERATIONAL_GROUPS,
   FLEET_TYPE_CATEGORIES,
@@ -19,8 +20,26 @@ export const companySchema = z.object({
     const withoutProtocol = trimmed.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
     return withoutProtocol.split('/')[0].split(':')[0];
   }),
-  apiPort: z.coerce.number().int('Porta API deve ser inteira').min(1, 'Porta API obrigatoria').max(65535, 'Porta API invalida'),
-  mqttPort: z.coerce.number().int('Porta MQTT deve ser inteira').min(1, 'Porta MQTT obrigatoria').max(65535, 'Porta MQTT invalida'),
+  portaApi: z.preprocess(
+    (value) => normalizePort(value),
+    z.number({
+      required_error: 'Porta API obrigatoria',
+      invalid_type_error: 'Porta API obrigatoria',
+    })
+      .int('Porta API deve ser inteira')
+      .min(1, 'Porta API obrigatoria')
+      .max(65535, 'Porta API invalida'),
+  ),
+  portaMqtt: z.preprocess(
+    (value) => normalizePort(value),
+    z.number({
+      required_error: 'Porta MQTT obrigatoria',
+      invalid_type_error: 'Porta MQTT obrigatoria',
+    })
+      .int('Porta MQTT deve ser inteira')
+      .min(1, 'Porta MQTT obrigatoria')
+      .max(65535, 'Porta MQTT invalida'),
+  ),
   apiBaseUrl: z.string().optional(),
   mqttUrl: z.string().optional(),
   companyToken: z.string().optional(),
