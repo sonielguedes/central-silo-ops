@@ -1,12 +1,15 @@
 "use client";
+/* ─────────────────────────────────────────────────────────────────────────────
+ * SILO OPS — Mapa Operacional (C4.7)
+ * Mapa avançado com filtros, busca, rastro por jornada e ficha operador.
+ * ────────────────────────────────────────────────────────────────────────── */
 
 import React from 'react';
 import dynamic from 'next/dynamic';
 import {
-  AlertTriangle, Clock, Filter, Globe, Hash,
-  LayoutGrid, Map as MapIcon, Maximize2,
-  Menu, MoreVertical, Search, Settings2,
-  X as CloseIcon,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock, Filter,
+  Globe, Hash, LayoutGrid, Map as MapIcon, Maximize2,
+  Menu, MoreVertical, Search, Settings2, X as CloseIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -14,7 +17,16 @@ import { useSidebar } from '@/lib/context/sidebar-context';
 import { withAuth } from '@/components/shared/with-auth';
 import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import { MapLegend } from '@/components/map/equipment-map-legend';
-import type { LiveMapItem, MapCounts } from '@/components/mapa/full-map-enterprise';
+import type { LiveMapItem, MapCounts, MapFilters } from '@/components/mapa/map-filters';
+import { EMPTY_FILTERS, applyFilters } from '@/components/mapa/map-filters';
+
+const STATUS_OPTIONS = [
+  { key: 'ONLINE',     label: 'Online',     tw: 'bg-blue-500'    },
+  { key: 'OPERANDO',   label: 'Operando',   tw: 'bg-emerald-500' },
+  { key: 'PARADO',     label: 'Parado',     tw: 'bg-orange-500'  },
+  { key: 'FINALIZADO', label: 'Finalizado', tw: 'bg-gray-500'    },
+  { key: 'OFFLINE',    label: 'Offline',    tw: 'bg-gray-500'    },
+];
 
 const STATUS_CONFIG = {
   online:     { label: 'Online',     tailwind: 'bg-blue-500',    text: 'text-blue-500'    },
@@ -26,8 +38,9 @@ const STATUS_CONFIG = {
 
 const EMPTY_COUNTS: MapCounts = { online: 0, operando: 0, parado: 0, offline: 0, staleGps: 0, staleHeartbeat: 0 };
 
-const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
-  ssr: false,
+const FullMap = dynamic(
+  () => import('@/components/mapa/full-map-enterprise').then((m) => ({ default: m.default })),
+  { ssr: false,
   loading: () => (
     <div className="flex-1 bg-[#050812] flex items-center justify-center">
       <div className="flex flex-col items-center gap-6">
@@ -41,27 +54,66 @@ const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
   ),
 });
 
+/* ── Main page ─────────────────────────────────────────────────────────── */
+
 function MapaOperacionalPage() {
   const { toggle } = useSidebar();
   const [isFleetSidebarOpen, setIsFleetSidebarOpen] = React.useState(true);
-  const [fleetData, setFleetData]   = React.useState<LiveMapItem[]>([]);
-  const [counts, setCounts]         = React.useState<MapCounts>(EMPTY_COUNTS);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [noGpsCode, setNoGpsCode]   = React.useState<string | null>(null);
+  const [showFilters, setShowFilters]     = React.useState(false);
+  const [allFleetData, setAllFleetData]   = React.useState<LiveMapItem[]>([]);
+  const [counts, setCounts]               = React.useState<MapCounts>(EMPTY_COUNTS);
+  const [selectedId, setSelectedId]       = React.useState<string | null>(null);
+  const [noGpsCode, setNoGpsCode]         = React.useState<string | null>(null);
+  const [filters, setFilters]             = React.useState<MapFilters>(EMPTY_FILTERS);
+
+  // Filtered fleet for sidebar display
+  const filteredFleetData = React.useMemo(
+    () => applyFilters(allFleetData, filters),
+    [allFleetData, filters],
+  );
+
+  const activeFilterCount = React.useMemo(() => {
+    let c = 0;
+    if (filters.search) c++;
+    if (filters.status.length > 0) c++;
+    if (filters.operation) c++;
+    if (filters.operator) c++;
+    if (filters.withOpenStop) c++;
+    if (filters.withFinishedJourney) c++;
+    if (filters.withInconsistency) c++;
+    return c;
+  }, [filters]);
 
   const handleFleetUpdate = React.useCallback((data: { fleet: LiveMapItem[]; counts: MapCounts }) => {
-    setFleetData(data.fleet);
+    setAllFleetData(data.fleet);
     setCounts(data.counts);
   }, []);
 
   const handleMachineSelect = React.useCallback((machine: LiveMapItem) => {
-    console.info('[map-ui] sidebar click fleetCode=' + machine.code);
     setSelectedId(machine.id);
     if (!machine.pos) {
       setNoGpsCode(machine.code);
     } else {
       setNoGpsCode(null);
     }
+  }, []);
+
+  const handleSearchChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters(prev => ({ ...prev, search: e.target.value }));
+  }, []);
+
+  const toggleStatusFilter = React.useCallback((status: string) => {
+    setFilters(prev => ({
+      ...prev,
+      status: prev.status.includes(status)
+        ? prev.status.filter(s => s !== status)
+        : [...prev.status, status],
+    }));
+  }, []);
+
+  const clearFilters = React.useCallback(() => {
+    setFilters(EMPTY_FILTERS);
+    setShowFilters(false);
   }, []);
 
   const kpis = [
@@ -78,6 +130,7 @@ function MapaOperacionalPage() {
 
       <Sidebar className="hidden lg:flex shrink-0" />
 
+      {/* ── Fleet sidebar ──────────────────────────────────────────── */}
       <aside className={cn(
         "fixed inset-y-0 left-0 lg:static w-full sm:w-[380px] bg-[#0a0e27]/95 border-r border-[#2d3647] flex flex-col z-[1500] shadow-[10px_0_30px_rgba(0,0,0,0.5)] transition-transform duration-300 lg:translate-x-0",
         isFleetSidebarOpen ? "translate-x-0" : "-translate-x-full lg:hidden"
@@ -87,6 +140,7 @@ function MapaOperacionalPage() {
           <CloseIcon size={20} />
         </button>
 
+        {/* Header */}
         <div className="p-6 border-b border-[#2d3647]">
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-lg font-black tracking-tighter">
@@ -97,6 +151,7 @@ function MapaOperacionalPage() {
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Monitoramento de Frota</p>
         </div>
 
+        {/* KPIs */}
         <div className="grid grid-cols-3 gap-2 p-4 bg-[#050812]/50">
           {kpis.map((kpi) => (
             <div key={kpi.label}
@@ -107,31 +162,119 @@ function MapaOperacionalPage() {
           ))}
         </div>
 
-        <div className="p-4 space-y-4">
+        {/* Search + filter toggle */}
+        <div className="p-4 space-y-3">
           <div className="relative group">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input type="text"
-              placeholder="Pesquise por equipamento, fazenda, talhao ou operador..."
+              value={filters.search}
+              onChange={handleSearchChange}
+              placeholder="Pesquise por frota, operador, operacao..."
               className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl py-3 pl-11 pr-4 text-xs focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40 text-white font-medium shadow-inner" />
           </div>
           <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#252d4a] hover:border-primary/30 transition-all shadow-lg">
-              <LayoutGrid size={14} className="text-primary" /> Busca Avancada
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 border rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg",
+                showFilters
+                  ? "bg-primary/10 border-primary/40 text-primary"
+                  : "bg-[#1a1f3a] border-[#2d3647] hover:bg-[#252d4a] hover:border-primary/30"
+              )}>
+              <Filter size={14} />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-primary/20 rounded-full text-[9px] font-black text-primary">{activeFilterCount}</span>
+              )}
+              <ChevronDown size={12} className={cn("transition-transform", showFilters && "rotate-180")} />
             </button>
-            <button className="px-4 py-2.5 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-[11px] font-black uppercase hover:bg-[#252d4a] transition-all shadow-lg">
-              <Filter size={14} className="text-muted-foreground" />
-            </button>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearFilters}
+                className="px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-[11px] font-black uppercase text-red-400 hover:bg-red-500/20 transition-all">
+                Limpar
+              </button>
+            )}
           </div>
         </div>
 
+        {/* ── Filter panel (collapsible) ─────────────────────────── */}
+        {showFilters && (
+          <div className="px-4 pb-4 space-y-3 border-b border-[#2d3647] animate-in slide-in-from-top-2 duration-200">
+            {/* Status chips */}
+            <div>
+              <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 block">Status</label>
+              <div className="flex flex-wrap gap-1.5">
+                {STATUS_OPTIONS.map(opt => {
+                  const active = filters.status.includes(opt.key);
+                  return (
+                    <button key={opt.key}
+                      onClick={() => toggleStatusFilter(opt.key)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all",
+                        active
+                          ? "bg-primary/15 border-primary/40 text-white"
+                          : "bg-[#1a1f3a]/50 border-[#2d3647] text-muted-foreground hover:border-primary/30"
+                      )}>
+                      <div className={cn("w-2 h-2 rounded-full", opt.tw)} />
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Operacao */}
+            <div>
+              <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 block">Operacao</label>
+              <input type="text"
+                value={filters.operation}
+                onChange={(e) => setFilters(prev => ({ ...prev, operation: e.target.value }))}
+                placeholder="Ex: Colheita, Transbordo..."
+                className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-lg py-2 px-3 text-[10px] focus:outline-none focus:border-primary/50 text-white placeholder:text-muted-foreground/40" />
+            </div>
+
+            {/* Operador */}
+            <div>
+              <label className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 block">Operador</label>
+              <input type="text"
+                value={filters.operator}
+                onChange={(e) => setFilters(prev => ({ ...prev, operator: e.target.value }))}
+                placeholder="Nome do operador..."
+                className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-lg py-2 px-3 text-[10px] focus:outline-none focus:border-primary/50 text-white placeholder:text-muted-foreground/40" />
+            </div>
+
+            {/* Toggle flags */}
+            <div className="flex flex-wrap gap-2">
+              <FilterToggle
+                label="Com parada aberta"
+                active={filters.withOpenStop}
+                onClick={() => setFilters(prev => ({ ...prev, withOpenStop: !prev.withOpenStop }))} />
+              <FilterToggle
+                label="Jornada finalizada"
+                active={filters.withFinishedJourney}
+                onClick={() => setFilters(prev => ({ ...prev, withFinishedJourney: !prev.withFinishedJourney }))} />
+              <FilterToggle
+                label="Com inconsistencia"
+                active={filters.withInconsistency}
+                onClick={() => setFilters(prev => ({ ...prev, withInconsistency: !prev.withInconsistency }))} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Fleet list ─────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-6 space-y-3">
           <div className="flex items-center justify-between py-2 sticky top-0 bg-[#0a0e27] z-10 mb-1">
             <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Frota Ativa</h3>
-            <span className="text-[10px] text-primary font-black uppercase">{fleetData.length} UNIDADES</span>
+            <span className="text-[10px] text-primary font-black uppercase">
+              {filteredFleetData.length === allFleetData.length
+                ? allFleetData.length + ' UNIDADES'
+                : filteredFleetData.length + ' / ' + allFleetData.length + ' UNIDADES'}
+            </span>
           </div>
 
-          {fleetData.length > 0 ? (
-            fleetData.map((machine) => (
+          {filteredFleetData.length > 0 ? (
+            filteredFleetData.map((machine) => (
               <EquipmentMapCard
                 key={machine.id}
                 machine={machine}
@@ -139,6 +282,18 @@ function MapaOperacionalPage() {
                 onSelect={handleMachineSelect}
               />
             ))
+          ) : allFleetData.length > 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-[#1a1f3a]/20 border border-[#2d3647] rounded-2xl border-dashed">
+              <div className="w-12 h-12 bg-[#1a1f3a] rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                <Filter size={20} />
+              </div>
+              <p className="text-[11px] font-black uppercase text-white mb-1">Nenhum resultado</p>
+              <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">Ajuste os filtros para ver equipamentos.</p>
+              <button onClick={clearFilters}
+                className="mt-3 text-[10px] font-black uppercase text-primary hover:underline">
+                Limpar filtros
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-[#1a1f3a]/20 border border-[#2d3647] rounded-2xl border-dashed">
               <div className="w-12 h-12 bg-[#1a1f3a] rounded-full flex items-center justify-center mb-4 text-muted-foreground">
@@ -150,15 +305,17 @@ function MapaOperacionalPage() {
           )}
         </div>
 
+        {/* Footer */}
         <div className="p-4 bg-[#050812] border-t border-[#2d3647] flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground">
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             SINCRO: ONLINE
           </div>
-          <span className="text-[10px] text-muted-foreground font-medium">v0.1.0-piloto</span>
+          <span className="text-[10px] text-muted-foreground font-medium">v0.2.0-c4.7</span>
         </div>
       </aside>
 
+      {/* ── Map area ───────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
         <header className="absolute top-4 left-4 right-4 h-14 bg-[#0a0e27]/80 backdrop-blur-xl border border-[#2d3647] rounded-2xl flex items-center justify-between px-4 sm:px-6 z-[1400] shadow-2xl">
           <div className="flex items-center gap-3 sm:gap-6">
@@ -208,7 +365,7 @@ function MapaOperacionalPage() {
           </div>
         </header>
 
-        <FullMap onFleetUpdate={handleFleetUpdate} selectedId={selectedId} />
+        <FullMap onFleetUpdate={handleFleetUpdate} selectedId={selectedId} filters={filters} />
 
         {noGpsCode && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1450] flex items-center gap-2 bg-[#1a0f08] border border-orange-500/40 text-orange-300 px-4 py-2.5 rounded-xl shadow-2xl text-[11px] font-bold uppercase tracking-wide">
@@ -220,10 +377,14 @@ function MapaOperacionalPage() {
           </div>
         )}
 
-        {/* Legenda dinâmica */}
-        {fleetData.length > 0 && (
+        {allFleetData.length > 0 && (
           <div className="absolute bottom-8 left-4 z-[1400]">
-            <MapLegend items={fleetData.map(m => ({ iconType: m.iconType, status: m.status }))} />
+            <MapLegend items={filteredFleetData.map(m => ({ iconType: m.iconType, status: m.status }))} />
+            {filteredFleetData.length !== allFleetData.length && (
+              <div className="mt-1 text-[9px] font-bold text-muted-foreground text-center">
+                {filteredFleetData.filter(m => m.pos).length} visiveis no mapa
+              </div>
+            )}
           </div>
         )}
 
@@ -239,7 +400,6 @@ function MapaOperacionalPage() {
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const NOT_INFORMED = 'Nao informado';
 
 const formatLiveTime = (value?: string) => {
@@ -254,86 +414,54 @@ const formatLiveValue = (value: unknown) => {
   return String(value);
 };
 
-// ── Equipment card in sidebar ─────────────────────────────────────────────────
-function EquipmentMapCard({
-  machine, isSelected, onSelect,
-}: {
-  machine: LiveMapItem;
-  isSelected: boolean;
-  onSelect: (machine: LiveMapItem) => void;
-}) {
-  const status   = STATUS_CONFIG[machine.status.toLowerCase() as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
-  const hasGps   = machine.pos !== null;
+function FilterToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={cn(
+      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all",
+      active ? "bg-primary/15 border-primary/40 text-primary" : "bg-[#1a1f3a]/50 border-[#2d3647] text-muted-foreground hover:border-primary/30"
+    )}>
+      {active ? <CheckCircle2 size={10} /> : <div className="w-2.5 h-2.5 rounded border border-muted-foreground/40" />}
+      {label}
+    </button>
+  );
+}
+
+function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapItem; isSelected: boolean; onSelect: (machine: LiveMapItem) => void }) {
+  const status = STATUS_CONFIG[machine.status.toLowerCase() as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
+  const hasGps = machine.pos !== null;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(machine)}
+    <button type="button" onClick={() => onSelect(machine)}
       className={cn(
         "group w-full relative flex items-center gap-4 p-4 border rounded-2xl transition-all cursor-pointer shadow-lg overflow-hidden text-left",
-        isSelected
-          ? "bg-primary/10 border-primary/60 shadow-primary/10"
-          : "bg-[#1a1f3a]/30 border-[#2d3647] hover:border-primary/50 hover:bg-[#1a1f3a]/50"
-      )}
-    >
-      <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 opacity-80 transition-all group-hover:w-2", status.tailwind, isSelected && "w-2")} />
-
-      <div className={cn(
-        "p-2.5 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-110",
-        status.tailwind.replace('bg-', 'bg-').replace('500', '500/10'),
-        status.text.replace('text-', 'border-').replace('500', '500/20')
+        isSelected ? "bg-primary/10 border-primary/60 shadow-primary/10" : "bg-[#1a1f3a]/30 border-[#2d3647] hover:border-primary/50 hover:bg-[#1a1f3a]/50"
       )}>
+      <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 opacity-80 transition-all group-hover:w-2", status.tailwind, isSelected && "w-2")} />
+      <div className={cn("p-2.5 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-110", status.tailwind.replace('bg-', 'bg-').replace('500', '500/10'), status.text.replace('text-', 'border-').replace('500', '500/20'))}>
         <EquipmentIcon type={machine.iconType} size={18} />
       </div>
-
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <span className={cn(
-              "text-sm font-black italic tracking-tighter leading-none transition-colors",
-              isSelected ? "text-primary" : "text-white group-hover:text-primary"
-            )}>{machine.code}</span>
+            <span className={cn("text-sm font-black italic tracking-tighter leading-none transition-colors", isSelected ? "text-primary" : "text-white group-hover:text-primary")}>{machine.code}</span>
             <div className="h-3 w-[1px] bg-white/10" />
-            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">
-              {formatLiveValue(machine.type || machine.name)}
-            </span>
+            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">{formatLiveValue(machine.type || machine.name)}</span>
           </div>
-          <span className="text-[8px] text-muted-foreground font-bold uppercase">
-            {formatLiveTime(machine.lastHeartbeatAt || machine.lastGpsAt)}
-          </span>
+          <span className="text-[8px] text-muted-foreground font-bold uppercase">{formatLiveTime(machine.lastHeartbeatAt || machine.lastGpsAt)}</span>
         </div>
-
         <p className="text-[10px] text-white/60 font-bold uppercase truncate mb-1 tracking-tight">{machine.displayOperation}</p>
-
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <div className={cn("w-1.5 h-1.5 rounded-full", status.tailwind)} />
             <span className={cn("text-[9px] font-black uppercase tracking-tighter", status.text)}>{status.label}</span>
           </div>
-          {!hasGps && (
-            <div className="flex items-center gap-1 text-[9px] text-orange-400 font-bold">
-              <AlertTriangle size={9} />
-              <span>Sem GPS</span>
-            </div>
-          )}
-          {hasGps && (
-            <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold">
-              <Clock size={10} />
-              <span>{machine.hourmeterCurrent != null ? machine.hourmeterCurrent + 'h' : NOT_INFORMED}</span>
-            </div>
-          )}
-          {isSelected && (
-            <div className="ml-auto flex items-center gap-1 text-[9px] text-primary font-bold">
-              <Hash size={9} />
-              <span>Selecionado</span>
-            </div>
-          )}
+          {!hasGps && (<div className="flex items-center gap-1 text-[9px] text-orange-400 font-bold"><AlertTriangle size={9} /><span>Sem GPS</span></div>)}
+          {hasGps && (<div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold"><Clock size={10} /><span>{machine.hourmeterCurrent != null ? machine.hourmeterCurrent + 'h' : NOT_INFORMED}</span></div>)}
+          {machine.hourmeterInconsistent && (<div className="flex items-center gap-1 text-[9px] text-red-400 font-bold"><AlertTriangle size={9} /><span>Incons.</span></div>)}
+          {isSelected && (<div className="ml-auto flex items-center gap-1 text-[9px] text-primary font-bold"><Hash size={9} /><span>Selecionado</span></div>)}
         </div>
       </div>
-
-      <div className="p-1.5 text-muted-foreground">
-        <MoreVertical size={16} />
-      </div>
+      <div className="p-1.5 text-muted-foreground"><MoreVertical size={16} /></div>
     </button>
   );
 }

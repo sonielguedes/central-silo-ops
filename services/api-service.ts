@@ -26,10 +26,52 @@ const TENANT_ID =
   process.env.NEXT_PUBLIC_TENANT_ID ||
   'silo-ops-001';
 
-const JSON_HEADERS = {
-  'Content-Type': 'application/json',
-  'X-Silo-Tenant': TENANT_ID,
-};
+/** Map accessGroupId → SystemRole (same mapping as auth-context) */
+function resolveRoleFromAccessGroup(accessGroupId: string | undefined): string {
+  if (!accessGroupId) return 'CONSULTA';
+  const map: Record<string, string> = {
+    'role-super-admin': 'SUPER_ADMIN',
+    'ag-admin': 'SUPER_ADMIN',
+    'role-admin-empresa': 'ADMIN_EMPRESA',
+    'ag-admin-empresa': 'ADMIN_EMPRESA',
+    'role-gestor': 'GESTOR',
+    'ag-gestor': 'GESTOR',
+    'role-coa': 'COA',
+    'ag-coa': 'COA',
+    'role-consulta': 'CONSULTA',
+    'ag-consulta': 'CONSULTA',
+    'role-auditor': 'AUDITOR',
+    'ag-auditor': 'AUDITOR',
+  };
+  return map[accessGroupId] || 'CONSULTA';
+}
+
+/** Build headers with session info from localStorage */
+function getHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Silo-Tenant': TENANT_ID,
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('silo_auth_user');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u.id) headers['x-silo-user-id'] = u.id;
+        if (u.name) headers['x-silo-user-name'] = u.name;
+        if (u.email) headers['x-silo-user-email'] = u.email;
+        headers['x-silo-user-role'] =
+          u.role || resolveRoleFromAccessGroup(u.accessGroupId);
+        if (u.tenantId) headers['X-Silo-Tenant'] = u.tenantId;
+      }
+    } catch {
+      // localStorage parse failed — send without session headers
+    }
+  }
+
+  return headers;
+}
 
 type ApiRecord = { id: string };
 type JsonBody<T extends ApiRecord> = Partial<T> | Record<string, unknown>;
@@ -39,19 +81,19 @@ function makeService<T extends ApiRecord>(entity: string) {
   return {
     async getAll(): Promise<T[]> {
       try {
-        const res = await fetch(base, { cache: 'no-store', headers: JSON_HEADERS });
+        const res = await fetch(base, { cache: 'no-store', headers: getHeaders() });
         return res.ok ? res.json() : [];
       } catch { return []; }
     },
     async getById(id: string): Promise<T | undefined> {
       try {
-        const res = await fetch(base + '/' + id, { cache: 'no-store', headers: JSON_HEADERS });
+        const res = await fetch(base + '/' + id, { cache: 'no-store', headers: getHeaders() });
         return res.ok ? res.json() : undefined;
       } catch { return undefined; }
     },
     async create(data: JsonBody<T>): Promise<T> {
       const res = await fetch(base, {
-        method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(data),
+        method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Create failed' })) as { error?: string };
@@ -62,14 +104,14 @@ function makeService<T extends ApiRecord>(entity: string) {
     async update(id: string, data: JsonBody<T>): Promise<T | undefined> {
       try {
         const res = await fetch(base + '/' + id, {
-          method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(data),
+          method: 'PUT', headers: getHeaders(), body: JSON.stringify(data),
         });
         return res.ok ? res.json() : undefined;
       } catch { return undefined; }
     },
     async archive(id: string): Promise<boolean> {
       try {
-        const res = await fetch(base + '/' + id, { method: 'DELETE' });
+        const res = await fetch(base + '/' + id, { method: 'DELETE', headers: getHeaders() });
         return res.ok;
       } catch { return false; }
     },
