@@ -67,12 +67,6 @@ export function resolveWebTenant(req: NextRequest): TenantContext | TenantError 
     }
   }
 
-  // Strategy 3: Single-tenant fallback (only if exactly 1 company exists)
-  const companies = ServerStorage.getCompanies();
-  if (companies.length === 1 && companies[0].tenantId) {
-    return { ok: true, tenantId: companies[0].tenantId, company: companies[0], source: 'api-port' };
-  }
-
   return tenantError(400, 'Tenant nao identificado. Envie header x-silo-tenant ou configure apiPort.');
 }
 
