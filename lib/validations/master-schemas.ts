@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import { EQUIPMENT_ICON_TYPES } from '@/lib/equipment-icon-types';
+import {
+  FLEET_OPERATIONAL_GROUPS,
+  FLEET_TYPE_CATEGORIES,
+  PRIMARY_METRIC_OPTIONS,
+} from '@/lib/fleet-type-catalog';
 
 // --- ADMINISTRAÇÃO ---
 
@@ -68,17 +74,50 @@ export const userSchema = z.object({
 // --- FROTA OPERACIONAL ---
 
 export const equipmentTypeSchema = z.object({
+  code: z.string().min(1, 'Código é obrigatório').transform(v => v.trim().toUpperCase()),
   name: z.string().min(2, 'Nome é obrigatório'),
   description: z.string().optional(),
-  category: z.enum(['MOTORIZADO', 'IMPLEMENTO', 'ESTATICO', 'OUTROS']),
-  icon: z.string().optional(),
+  category: z.enum(FLEET_TYPE_CATEGORIES),
+  iconType: z.enum(EQUIPMENT_ICON_TYPES).default('PADRAO_GENERICO'),
+  primaryMetric: z.enum(PRIMARY_METRIC_OPTIONS).default('HORIMETRO'),
+  telemetryEnabledDefault: z.boolean().default(true),
+  canEnabledDefault: z.boolean().default(true),
+  mobileEnabledDefault: z.boolean().default(true),
+  mapEnabled: z.boolean().default(true),
+  operationalGroup: z.enum(FLEET_OPERATIONAL_GROUPS).default('OUTROS'),
+  active: z.boolean().default(true),
+  notes: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.primaryMetric) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Unidade principal é obrigatória', path: ['primaryMetric'] });
+  }
+  if (!data.operationalGroup) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Grupo operacional é obrigatório', path: ['operationalGroup'] });
+  }
 });
 
 export const equipmentModelSchema = z.object({
-  name: z.string().min(2, 'Nome do modelo é obrigatório'),
-  brand: z.string().min(2, 'Fabricante é obrigatório'),
-  typeId: z.string().min(1, 'Tipo de equipamento é obrigatório'),
-  iconType: z.string().optional(),
+  // legados (compatibilidade)
+  name:   z.string().min(1, 'Modelo é obrigatório'),
+  brand:  z.string().min(1, 'Fabricante é obrigatório'),
+  typeId: z.string().optional().default(''),
+  iconType: z.string().min(1, 'Ícone é obrigatório').default('PADRAO_GENERICO'),
+  // técnicos
+  description:       z.string().optional(),
+  manufacturer:      z.string().optional(),
+  model:             z.string().optional(),
+  operationalType:   z.string().optional(),
+  category:          z.string().optional(),
+  primaryMetric:     z.enum(['HORIMETRO', 'KM', 'HORAS', 'UNIDADE']).default('HORIMETRO'),
+  nominalCapacity:   z.coerce.number().min(0).optional(),
+  averageConsumption:z.coerce.number().min(0).optional(),
+  workingWidth:      z.coerce.number().min(0).optional(),
+  fuelType:          z.enum(['DIESEL', 'GASOLINA', 'ETANOL', 'FLEX', 'ELETRICO', 'NAO_APLICA']).optional(),
+  telemetryEnabled:  z.boolean().default(false),
+  canEnabled:        z.boolean().default(false),
+  mobileEnabled:     z.boolean().default(true),
+  notes:             z.string().optional(),
+  active:            z.boolean().default(true),
 });
 
 export const equipmentGroupSchema = z.object({

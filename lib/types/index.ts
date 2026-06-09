@@ -153,19 +153,53 @@ export interface Equipment extends BaseEntity {
 
 // --- Fleet Module Masters ---
 
+export type PrimaryMetric = 'HORIMETRO' | 'KM' | 'HORAS' | 'UNIDADE';
+export type FleetTypeCategory = 'Agrícola' | 'Implemento' | 'Rodoviário' | 'Apoio' | 'Infraestrutura' | 'Construção' | 'Tecnologia' | 'Outros';
+export type FleetOperationalGroup = 'MAQUINA_AGRICOLA' | 'APOIO_AGRICOLA' | 'IMPLEMENTO' | 'RODOVIARIO' | 'APOIO' | 'INFRAESTRUTURA' | 'MAQUINA_PESADA' | 'TECNOLOGIA' | 'OUTROS';
+
 export interface EquipmentType extends BaseEntity {
+  code: string;
   name: string;
   description?: string;
-  category: 'MOTORIZADO' | 'IMPLEMENTO' | 'ESTATICO' | 'OUTROS';
+  category: FleetTypeCategory;
   icon?: string;
+  iconType: string;
+  primaryMetric: PrimaryMetric;
+  telemetryEnabledDefault: boolean;
+  canEnabledDefault: boolean;
+  mobileEnabledDefault: boolean;
+  mapEnabled: boolean;
+  operationalGroup: FleetOperationalGroup;
+  active: boolean;
+  notes?: string;
 }
 
+export type FuelType = 'DIESEL' | 'GASOLINA' | 'ETANOL' | 'FLEX' | 'ELETRICO' | 'NAO_APLICA';
+export type ModelCategory = FleetTypeCategory;
+
 export interface EquipmentModel extends BaseEntity {
+  // campos legados (mantidos para compatibilidade)
   name: string;
   brand: string;
   typeId: string;
   iconType?: string;
   technicalSpecs?: Record<string, string>;
+  // campos técnicos novos
+  description?: string;
+  manufacturer?: string;  // alias de brand (fallback mútuo)
+  model?: string;         // alias de name  (fallback mútuo)
+  operationalType?: string;
+  category?: ModelCategory | string;
+  primaryMetric?: PrimaryMetric;
+  nominalCapacity?: number;
+  averageConsumption?: number;
+  workingWidth?: number;
+  fuelType?: FuelType;
+  telemetryEnabled?: boolean;
+  canEnabled?: boolean;
+  mobileEnabled?: boolean;
+  notes?: string;
+  active?: boolean;
 }
 
 export interface EquipmentGroup extends BaseEntity {

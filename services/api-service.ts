@@ -102,12 +102,16 @@ function makeService<T extends ApiRecord>(entity: string) {
       return res.json();
     },
     async update(id: string, data: JsonBody<T>): Promise<T | undefined> {
-      try {
-        const res = await fetch(base + '/' + id, {
-          method: 'PUT', headers: getHeaders(), body: JSON.stringify(data),
-        });
-        return res.ok ? res.json() : undefined;
-      } catch { return undefined; }
+      const res = await fetch(base + '/' + id, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Update failed' })) as { error?: string };
+        throw new Error(err.error ?? 'Update failed');
+      }
+      return res.json();
     },
     async archive(id: string): Promise<boolean> {
       try {

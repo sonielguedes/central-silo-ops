@@ -3,6 +3,8 @@ import { CadastroStorage, ALLOWED_ENTITIES } from '@/lib/cadastro-storage';
 import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 import { requirePermission } from '@/lib/auth/rbac-server';
+import { equipmentTypeSchema } from '@/lib/validations/master-schemas';
+import { resolveIconType } from '@/lib/equipment-icon-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,11 +52,46 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const item = CadastroStorage.create(tenantId, entity, body);
+    let payload = entity === 'tipos'
+      ? normalizeFleetTypePayload(body)
+      : body;
+
+    if (entity === 'tipos') {
+      const parsed = equipmentTypeSchema.safeParse(payload);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: parsed.error.issues[0]?.message || 'Bad request' },
+          { status: 400 }
+        );
+      }
+      payload = {
+        ...payload,
+        ...parsed.data,
+        icon: parsed.data.iconType,
+      };
+      const all = CadastroStorage.getAllRaw(tenantId, entity);
+      if (all.some((item) => String(item.code ?? '').toUpperCase() === parsed.data.code)) {
+        return NextResponse.json({ error: 'Código já cadastrado' }, { status: 409 });
+      }
+    }
+
+    const item = CadastroStorage.create(tenantId, entity, payload);
     auditFromRequest(req, tenantId, { action: 'CREATE', entity, entityId: (item as Record<string, string>).id });
     return NextResponse.json(item, { status: 201 });
   } catch (err) {
     console.error('[storage-api] create error entity=' + entity, err);
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
+}
+
+function normalizeFleetTypePayload(body: unknown) {
+  const source = (body ?? {}) as Record<string, unknown>;
+  return {
+    ...source,
+    code: String(source.code ?? '').trim().toUpperCase(),
+    iconType: resolveIconType(String(source.iconType ?? source.icon ?? 'PADRAO_GENERICO')),
+    icon: resolveIconType(String(source.iconType ?? source.icon ?? 'PADRAO_GENERICO')),
+    mapEnabled: source.mapEnabled ?? true,
+    active: source.active ?? true,
+  };
 }

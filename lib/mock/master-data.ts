@@ -31,6 +31,11 @@ import {
   ChecklistExecution,
   TimelineEvent
 } from '../types';
+import {
+  FLEET_OPERATIONAL_GROUPS,
+  FLEET_TYPE_CATEGORIES,
+  PRIMARY_METRIC_OPTIONS,
+} from '../fleet-type-catalog';
 
 export * from '../types';
 
@@ -55,6 +60,11 @@ export const INITIAL_COMPANIES: Company[] = [
     corporateName: 'Modelo Agropecuária LTDA',
     cnpj: '00.000.000/0001-91',
     domain: 'fazendamodelo.com',
+    apiPort: 3001,
+    mqttPort: 18831,
+    apiBaseUrl: 'https://api.siloops.com.br:3001',
+    mqttUrl: 'mqtt.siloops.com.br:18831',
+    companyToken: 'CMP-SILO-OPS-001',
     plan: 'ENTERPRISE',
     status: 'ATIVO'
   }
@@ -210,19 +220,174 @@ export const INITIAL_STOP_REASONS: StopReason[] = [
   { ...DEFAULT_AUDIT, id: 'sr-2', code: '201', description: 'Chuva Intermitente', category: 'CLIMA', type: 'IMPRODUTIVA', requiresObservation: true, isActive: true },
 ];
 
+function mkType(
+  id: string,
+  code: string,
+  name: string,
+  description: string,
+  category: (typeof FLEET_TYPE_CATEGORIES)[number],
+  iconType: string,
+  primaryMetric: (typeof PRIMARY_METRIC_OPTIONS)[number],
+  telemetryEnabledDefault: boolean,
+  canEnabledDefault: boolean,
+  mobileEnabledDefault: boolean,
+  mapEnabled: boolean,
+  operationalGroup: (typeof FLEET_OPERATIONAL_GROUPS)[number],
+  active = true,
+  notes = '',
+): EquipmentType {
+  return {
+    ...DEFAULT_AUDIT,
+    id,
+    code,
+    name,
+    description,
+    category,
+    icon: iconType,
+    iconType,
+    primaryMetric,
+    telemetryEnabledDefault,
+    canEnabledDefault,
+    mobileEnabledDefault,
+    mapEnabled,
+    operationalGroup,
+    active,
+    notes,
+  };
+}
+
 export const INITIAL_EQUIPMENT_TYPES: EquipmentType[] = [
-  { ...DEFAULT_AUDIT, id: 'et-1', name: 'COLHEDORA', category: 'MOTORIZADO', icon: 'Tractor' },
-  { ...DEFAULT_AUDIT, id: 'et-2', name: 'TRATOR', category: 'MOTORIZADO', icon: 'Tractor' },
-  { ...DEFAULT_AUDIT, id: 'et-3', name: 'CAMINHÃO', category: 'MOTORIZADO', icon: 'Truck' },
-  { ...DEFAULT_AUDIT, id: 'et-4', name: 'TRANSBORDO', category: 'IMPLEMENTO', icon: 'Zap' },
-  { ...DEFAULT_AUDIT, id: 'et-5', name: 'CARREGADEIRA', category: 'MOTORIZADO', icon: 'Tractor' },
-  { ...DEFAULT_AUDIT, id: 'et-6', name: 'IMPLEMENTO', category: 'IMPLEMENTO', icon: 'Zap' },
+  mkType('et-1', 'TRATOR', 'Trator', 'Máquina agrícola de tração e operação de implementos', 'Agrícola', 'TRATOR', 'HORIMETRO', true, true, true, true, 'MAQUINA_AGRICOLA'),
+  mkType('et-2', 'COLHEDORA', 'Colhedora', 'Máquina agrícola para colheita mecanizada', 'Agrícola', 'COLHEDORA', 'HORIMETRO', true, true, true, true, 'MAQUINA_AGRICOLA'),
+  mkType('et-3', 'TRANSBORDO', 'Transbordo', 'Equipamento de apoio para transporte interno de carga agrícola', 'Agrícola', 'TRANSBORDO', 'HORIMETRO', true, true, true, true, 'APOIO_AGRICOLA'),
+  mkType('et-4', 'PULVERIZADOR', 'Pulverizador', 'Equipamento para aplicação de defensivos e insumos líquidos', 'Agrícola', 'PULVERIZADOR', 'HORIMETRO', true, true, true, true, 'MAQUINA_AGRICOLA'),
+  mkType('et-5', 'PLANTADEIRA', 'Plantadeira', 'Implemento ou conjunto para plantio mecanizado', 'Implemento', 'PLANTADEIRA', 'HORIMETRO', false, false, true, true, 'IMPLEMENTO'),
+  mkType('et-6', 'GRADE', 'Grade / Implemento', 'Implemento de preparo de solo', 'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, true, true, 'IMPLEMENTO'),
+  mkType('et-7', 'IMPLEMENTO', 'Implemento Genérico', 'Implemento agrícola sem classificação específica', 'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, true, true, 'IMPLEMENTO'),
+  mkType('et-8', 'CAMINHAO', 'Caminhão', 'Veículo rodoviário ou interno para transporte', 'Rodoviário', 'CAMINHAO', 'KM', true, true, true, true, 'RODOVIARIO'),
+  mkType('et-9', 'CAMINHAO_BASCULANTE', 'Caminhão Basculante', 'Caminhão com caçamba basculante para transporte de carga', 'Rodoviário', 'CAMINHAO_BASCULANTE', 'KM', true, true, true, true, 'RODOVIARIO'),
+  mkType('et-10', 'CAMINHAO_PIPA', 'Caminhão Pipa', 'Veículo para transporte e aplicação de água', 'Rodoviário', 'CAMINHAO_PIPA', 'KM', true, true, true, true, 'RODOVIARIO'),
+  mkType('et-11', 'COMBOIO', 'Comboio', 'Veículo de apoio para abastecimento/manutenção em campo', 'Apoio', 'COMBOIO', 'KM', true, true, true, true, 'APOIO'),
+  mkType('et-12', 'BOMBA_COMBUSTIVEL', 'Bomba de Combustível', 'Ponto ou equipamento de abastecimento', 'Infraestrutura', 'BOMBA_COMBUSTIVEL', 'UNIDADE', false, false, false, true, 'INFRAESTRUTURA'),
+  mkType('et-13', 'PA_CARREGADEIRA', 'Pá Carregadeira', 'Máquina de carregamento e movimentação de material', 'Construção', 'PA_CARREGADEIRA', 'HORIMETRO', true, true, true, true, 'MAQUINA_PESADA'),
+  mkType('et-14', 'MOTONIVELADORA', 'Motoniveladora', 'Máquina para nivelamento e manutenção de estradas', 'Construção', 'MOTONIVELADORA', 'HORIMETRO', true, true, true, true, 'MAQUINA_PESADA'),
+  mkType('et-15', 'ESCAVADEIRA', 'Escavadeira', 'Máquina para escavação e movimentação de solo', 'Construção', 'ESCAVADEIRA', 'HORIMETRO', true, true, true, true, 'MAQUINA_PESADA'),
+  mkType('et-16', 'TRATOR_ESTEIRA', 'Trator de Esteira', 'Máquina pesada de esteira para preparo e movimentação', 'Construção', 'TRATOR_ESTEIRA', 'HORIMETRO', true, true, true, true, 'MAQUINA_PESADA'),
+  mkType('et-17', 'CARRETA_PRANCHA', 'Carreta / Prancha', 'Equipamento para transporte de máquinas', 'Rodoviário', 'CARRETA_PRANCHA', 'KM', false, false, false, true, 'RODOVIARIO'),
+  mkType('et-18', 'SILO', 'Silo', 'Estrutura de armazenamento agrícola', 'Infraestrutura', 'SILO', 'UNIDADE', false, false, false, true, 'INFRAESTRUTURA'),
+  mkType('et-19', 'TORRE', 'Torre / Rádio', 'Infraestrutura de comunicação ou telemetria', 'Infraestrutura', 'TORRE', 'UNIDADE', true, false, false, true, 'INFRAESTRUTURA'),
+  mkType('et-20', 'LEITOR_RFID', 'Leitor RFID', 'Dispositivo de identificação e controle operacional', 'Infraestrutura', 'LEITOR_RFID', 'UNIDADE', true, false, false, true, 'INFRAESTRUTURA'),
+  mkType('et-21', 'MOBILE', 'Dispositivo Mobile', 'Tablet ou celular usado em campo', 'Tecnologia', 'MOBILE', 'UNIDADE', true, false, true, true, 'TECNOLOGIA'),
+  mkType('et-22', 'VEICULO', 'Veículo Leve', 'Veículo de apoio operacional', 'Apoio', 'VEICULO', 'KM', true, true, true, true, 'APOIO'),
+  mkType('et-23', 'MOTO', 'Moto', 'Motocicleta de apoio operacional', 'Apoio', 'MOTO', 'KM', true, false, true, true, 'APOIO'),
+  mkType('et-24', 'PLUVIOMETRO', 'Pluviômetro', 'Dispositivo de medição de chuva', 'Infraestrutura', 'PLUVIOMETRO', 'UNIDADE', true, false, false, true, 'INFRAESTRUTURA'),
+  mkType('et-25', 'PADRAO_GENERICO', 'Padrão / Genérico', 'Tipo genérico para equipamentos sem classificação', 'Outros', 'PADRAO_GENERICO', 'UNIDADE', false, false, false, true, 'OUTROS'),
 ];
 
+function mkModel(
+  id: string,
+  brand: string,
+  name: string,
+  operationalType: string,
+  iconType: string,
+  category: string,
+  primaryMetric: 'HORIMETRO' | 'KM',
+): EquipmentModel {
+  return {
+    ...DEFAULT_AUDIT,
+    id,
+    brand,
+    name,
+    typeId: '',
+    // aliases técnicos
+    manufacturer: brand,
+    model: name,
+    operationalType,
+    iconType,
+    category,
+    primaryMetric,
+    active: true,
+    telemetryEnabled: false,
+    canEnabled: false,
+    mobileEnabled: true,
+  };
+}
+
 export const INITIAL_EQUIPMENT_MODELS: EquipmentModel[] = [
-  { ...DEFAULT_AUDIT, id: 'em-1', name: 'S770', brand: 'John Deere', typeId: 'et-1' },
-  { ...DEFAULT_AUDIT, id: 'em-2', name: 'R540', brand: 'Scania', typeId: 'et-3' },
-  { ...DEFAULT_AUDIT, id: 'em-3', name: 'Magnum 340', brand: 'Case IH', typeId: 'et-2' },
+  // ── John Deere ─────────────────────────────────────────────────────────
+  mkModel('em-001', 'John Deere', '7200J',           'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-002', 'John Deere', '7230J',           'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-003', 'John Deere', '8370R',           'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-004', 'John Deere', '3520',            'COLHEDORA',   'COLHEDORA',          'Agrícola',    'HORIMETRO'),
+  mkModel('em-005', 'John Deere', 'CH570',           'COLHEDORA',   'COLHEDORA',          'Agrícola',    'HORIMETRO'),
+  mkModel('em-006', 'John Deere', 'CH670',           'COLHEDORA',   'COLHEDORA',          'Agrícola',    'HORIMETRO'),
+  // ── Case IH ────────────────────────────────────────────────────────────
+  mkModel('em-007', 'Case IH',   'Magnum 340',       'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-008', 'Case IH',   'Magnum 380',       'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-009', 'Case IH',   'A8800',            'COLHEDORA',   'COLHEDORA',          'Agrícola',    'HORIMETRO'),
+  mkModel('em-010', 'Case IH',   'A9900',            'COLHEDORA',   'COLHEDORA',          'Agrícola',    'HORIMETRO'),
+  // ── New Holland ────────────────────────────────────────────────────────
+  mkModel('em-011', 'New Holland','T7.245',           'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-012', 'New Holland','T8.385',           'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  // ── Valtra ─────────────────────────────────────────────────────────────
+  mkModel('em-013', 'Valtra',    'BH 194',           'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-014', 'Valtra',    'BH 224',           'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  // ── Massey Ferguson ────────────────────────────────────────────────────
+  mkModel('em-015', 'Massey Ferguson','MF 6713',      'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  mkModel('em-016', 'Massey Ferguson','MF 7725',      'TRATOR',      'TRATOR',             'Agrícola',    'HORIMETRO'),
+  // ── Jacto ──────────────────────────────────────────────────────────────
+  mkModel('em-017', 'Jacto',     'Uniport 3030',     'PULVERIZADOR','PULVERIZADOR',        'Agrícola',    'HORIMETRO'),
+  mkModel('em-018', 'Jacto',     'Uniport 4530',     'PULVERIZADOR','PULVERIZADOR',        'Agrícola',    'HORIMETRO'),
+  // ── Stara ──────────────────────────────────────────────────────────────
+  mkModel('em-019', 'Stara',     'Imperador 3.0',    'PULVERIZADOR','PULVERIZADOR',        'Agrícola',    'HORIMETRO'),
+  mkModel('em-020', 'Stara',     'Absoluta',         'PLANTADEIRA', 'PLANTADEIRA',         'Implemento',  'HORIMETRO'),
+  // ── Baldan ─────────────────────────────────────────────────────────────
+  mkModel('em-021', 'Baldan',    'PPSO',             'PLANTADEIRA', 'PLANTADEIRA',         'Implemento',  'HORIMETRO'),
+  mkModel('em-022', 'Baldan',    'GACR',             'GRADE',       'GRADE_IMPLEMENTO',    'Implemento',  'HORIMETRO'),
+  // ── Tatu Marchesan ────────────────────────────────────────────────────
+  mkModel('em-023', 'Tatu Marchesan','GATCR',        'GRADE',       'GRADE_IMPLEMENTO',    'Implemento',  'HORIMETRO'),
+  // ── Civemasa ──────────────────────────────────────────────────────────
+  mkModel('em-024', 'Civemasa',  'GICR',             'GRADE',       'GRADE_IMPLEMENTO',    'Implemento',  'HORIMETRO'),
+  // ── Santal ────────────────────────────────────────────────────────────
+  mkModel('em-025', 'Santal',    'VT10000',          'TRANSBORDO',  'TRANSBORDO',          'Agrícola',    'HORIMETRO'),
+  mkModel('em-026', 'Santal',    'VT12000',          'TRANSBORDO',  'TRANSBORDO',          'Agrícola',    'HORIMETRO'),
+  // ── Antoniosi ────────────────────────────────────────────────────────
+  mkModel('em-027', 'Antoniosi', 'VT 12.000',        'TRANSBORDO',  'TRANSBORDO',          'Agrícola',    'HORIMETRO'),
+  mkModel('em-028', 'Antoniosi', 'VT 14.000',        'TRANSBORDO',  'TRANSBORDO',          'Agrícola',    'HORIMETRO'),
+  // ── Grunner ──────────────────────────────────────────────────────────
+  mkModel('em-029', 'Grunner',   'Smart Machine 4.0','TRANSBORDO',  'TRANSBORDO',          'Agrícola',    'HORIMETRO'),
+  mkModel('em-030', 'Grunner',   'Smart Machine 5.0','TRANSBORDO',  'TRANSBORDO',          'Agrícola',    'HORIMETRO'),
+  // ── Mercedes-Benz ────────────────────────────────────────────────────
+  mkModel('em-031', 'Mercedes-Benz','Atego 2730',    'CAMINHAO',    'CAMINHAO',            'Rodoviário',  'KM'),
+  mkModel('em-032', 'Mercedes-Benz','Arocs 3348',    'CAMINHAO_BASCULANTE','CAMINHAO_BASCULANTE','Rodoviário','KM'),
+  // ── Volkswagen ───────────────────────────────────────────────────────
+  mkModel('em-033', 'Volkswagen','Constellation 31.330','CAMINHAO', 'CAMINHAO',            'Rodoviário',  'KM'),
+  mkModel('em-034', 'Volkswagen','Constellation 32.360','CAMINHAO_BASCULANTE','CAMINHAO_BASCULANTE','Rodoviário','KM'),
+  // ── Volvo ────────────────────────────────────────────────────────────
+  mkModel('em-035', 'Volvo',     'VM 330',           'CAMINHAO',    'CAMINHAO',            'Rodoviário',  'KM'),
+  mkModel('em-036', 'Volvo',     'FH 540',           'CAMINHAO',    'CAMINHAO',            'Rodoviário',  'KM'),
+  // ── Scania ───────────────────────────────────────────────────────────
+  mkModel('em-037', 'Scania',    'R 450',            'CAMINHAO',    'CAMINHAO',            'Rodoviário',  'KM'),
+  mkModel('em-038', 'Scania',    'P 360',            'CAMINHAO_BASCULANTE','CAMINHAO_BASCULANTE','Rodoviário','KM'),
+  // ── Caterpillar ──────────────────────────────────────────────────────
+  mkModel('em-039', 'Caterpillar','320D',            'ESCAVADEIRA', 'ESCAVADEIRA',         'Construção',  'HORIMETRO'),
+  mkModel('em-040', 'Caterpillar','D6T',             'TRATOR_ESTEIRA','TRATOR_ESTEIRA',    'Construção',  'HORIMETRO'),
+  mkModel('em-041', 'Caterpillar','924K',            'PA_CARREGADEIRA','PA_CARREGADEIRA',  'Construção',  'HORIMETRO'),
+  mkModel('em-042', 'Caterpillar','120K',            'MOTONIVELADORA','MOTONIVELADORA',    'Construção',  'HORIMETRO'),
+  // ── Komatsu ──────────────────────────────────────────────────────────
+  mkModel('em-043', 'Komatsu',   'PC200',            'ESCAVADEIRA', 'ESCAVADEIRA',         'Construção',  'HORIMETRO'),
+  mkModel('em-044', 'Komatsu',   'D61EX',            'TRATOR_ESTEIRA','TRATOR_ESTEIRA',    'Construção',  'HORIMETRO'),
+  mkModel('em-045', 'Komatsu',   'WA200',            'PA_CARREGADEIRA','PA_CARREGADEIRA',  'Construção',  'HORIMETRO'),
+  // ── Apoio ────────────────────────────────────────────────────────────
+  mkModel('em-046', 'Toyota',    'Hilux',            'VEICULO',     'VEICULO',             'Apoio',       'KM'),
+  mkModel('em-047', 'Chevrolet', 'S10',              'VEICULO',     'VEICULO',             'Apoio',       'KM'),
+  mkModel('em-048', 'Fiat',      'Strada',           'VEICULO',     'VEICULO',             'Apoio',       'KM'),
+  mkModel('em-049', 'Honda',     'Bros 160',         'MOTO',        'MOTO',                'Apoio',       'KM'),
+  mkModel('em-050', 'Yamaha',    'Factor 150',       'MOTO',        'MOTO',                'Apoio',       'KM'),
+  // ── Legados (IDs originais mantidos) ─────────────────────────────────
+  mkModel('em-1',   'John Deere','S770',             'COLHEDORA',   'COLHEDORA',           'Agrícola',    'HORIMETRO'),
+  mkModel('em-2',   'Scania',    'R540',             'CAMINHAO',    'CAMINHAO',            'Rodoviário',  'KM'),
+  mkModel('em-3',   'Case IH',   'Magnum 340 (Legado)','TRATOR',   'TRATOR',              'Agrícola',    'HORIMETRO'),
 ];
 
 export const INITIAL_EQUIPMENT_GROUPS: EquipmentGroup[] = [

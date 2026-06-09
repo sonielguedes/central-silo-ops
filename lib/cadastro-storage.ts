@@ -109,6 +109,10 @@ export class CadastroStorage {
     );
   }
 
+  static getAllRaw(tenantId: string, entity: string): StorageItem[] {
+    return this.readAll(tenantId, entity);
+  }
+
   static getById(tenantId: string, entity: string, id: string): StorageItem | undefined {
     return this.readAll(tenantId, entity).find(
       (item) => item.id === id && item.tenantId === tenantId
