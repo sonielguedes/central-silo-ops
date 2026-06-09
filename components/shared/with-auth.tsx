@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useAuth } from '@/lib/context/auth-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2, ShieldAlert } from 'lucide-react';
+import { MODULE_ALIAS } from '@/lib/auth/rbac-shared';
 
 interface WithAuthOptions {
   /** Module name — accepts uppercase or lowercase (normalized internally) */
@@ -11,28 +12,6 @@ interface WithAuthOptions {
   /** Action — defaults to 'visualizar' */
   action?: string;
 }
-
-/** Map legacy uppercase module names to RBAC module keys */
-const MODULE_ALIAS: Record<string, string> = {
-  ABASTECIMENTOS: 'operacoes',
-  EMPRESAS: 'administracao',
-  PERFIS: 'administracao',
-  USUARIOS: 'administracao',
-  ALERTAS: 'alertas',
-  EQUIPAMENTOS: 'equipamentos',
-  FAZENDAS: 'cadastros',
-  FICHA_OPERADOR: 'operadores',
-  FROTA: 'equipamentos',
-  MAPA: 'mapa',
-  CONECTIVIDADE: 'dashboard',
-  PAINEL: 'operacoes',
-  OPERACOES: 'operacoes',
-  OPERACIONAL: 'operacoes',
-  OPERADORES: 'operadores',
-  PARADAS: 'cadastros',
-  RELATORIOS: 'relatorios',
-  SINCRONIZACAO: 'sincronizacao',
-};
 
 function normalizeModule(mod: string): string {
   const upper = mod.toUpperCase();

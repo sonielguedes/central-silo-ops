@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { acknowledgeAlert } from '@/lib/alertas-builder';
 import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
-import { requirePermission } from '@/lib/auth/rbac';
+import { requirePermission } from '@/lib/auth/rbac-server';
 
 export const dynamic = 'force-dynamic';
 

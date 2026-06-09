@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/context/auth-context';
+import { canAccessRoute } from '@/lib/auth/rbac-shared';
 import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
@@ -96,13 +97,13 @@ const menuItems: MenuGroup[] = [
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
-  const { canRoute, userRole, isAuthenticated } = useAuth();
+  const { userRole, isAuthenticated } = useAuth();
 
   // Filter menu items by role permissions
   const filteredMenu = menuItems
     .map(group => ({
       ...group,
-      items: group.items.filter(item => canRoute(item.href)),
+      items: group.items.filter(item => canAccessRoute(userRole, item.href)),
     }))
     .filter(group => group.items.length > 0);
 

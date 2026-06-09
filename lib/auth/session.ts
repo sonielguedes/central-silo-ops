@@ -10,7 +10,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { SystemRole, SessionUser } from './rbac';
+import { SystemRole } from './rbac-shared';
+import type { SessionUser } from './rbac-server';
 
 const VALID_ROLES: SystemRole[] = [
   'SUPER_ADMIN', 'ADMIN_EMPRESA', 'GESTOR', 'COA', 'CONSULTA', 'AUDITOR',

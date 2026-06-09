@@ -3,7 +3,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, AccessGroup, Company } from '@/lib/types';
 import { UserService, AccessGroupService, CompanyService, BaseService, AuditService } from '@/services/master.service';
-import { SystemRole, hasPermission, canAccessModule, canAccessRoute, Module, Action } from '@/lib/auth/rbac';
+import {
+  SystemRole,
+  hasPermission,
+  canAccessModule,
+  canAccessRoute,
+  Module,
+  Action,
+} from '@/lib/auth/rbac-shared';
 
 interface AuthContextType {
   user: User | null;

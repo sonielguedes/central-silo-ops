@@ -5,7 +5,7 @@ import { Company } from '@/lib/types';
 import { blockWriteInDemo, maskToken } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { auditFromRequest } from '@/lib/audit/audit-log';
-import { requirePermission } from '@/lib/auth/rbac';
+import { requirePermission } from '@/lib/auth/rbac-server';
 
 const generateCompanyToken = () => `CTK-${randomBytes(18).toString('hex').toUpperCase()}`;
 

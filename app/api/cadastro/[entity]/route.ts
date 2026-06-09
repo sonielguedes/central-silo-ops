@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CadastroStorage, ALLOWED_ENTITIES } from '@/lib/cadastro-storage';
 import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
-import { requirePermission } from '@/lib/auth/rbac';
+import { requirePermission } from '@/lib/auth/rbac-server';
 
 export const dynamic = 'force-dynamic';
 
