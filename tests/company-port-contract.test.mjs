@@ -51,7 +51,19 @@ function jsonReq(url, { method = 'GET', headers = {}, body } = {}) {
 function cookieHeader(response) {
   const setCookie = response.headers.get('set-cookie');
   assert.ok(setCookie, 'set-cookie ausente');
-  return setCookie.split(';')[0];
+  const fragments = setCookie.split(/, (?=[^;,=]+=[^;,]*)/g);
+  const sessionCookie = fragments.find((item) => item.startsWith('silo_session='))?.split(';')[0] || null;
+  const csrfCookie = fragments.find((item) => item.startsWith('silo_csrf='))?.split(';')[0] || null;
+  return sessionCookie ? (csrfCookie ? sessionCookie + '; ' + csrfCookie : sessionCookie) : null;
+}
+
+function cookieValue(response, name) {
+  const setCookie = response.headers.get('set-cookie');
+  assert.ok(setCookie, 'set-cookie ausente');
+  const fragments = setCookie.split(/, (?=[^;,=]+=[^;,]*)/g);
+  const fragment = fragments.find((item) => item.startsWith(name + '='));
+  assert.ok(fragment, `cookie ${name} ausente`);
+  return fragment.split(';')[0].split('=').slice(1).join('=');
 }
 
 async function asJson(response) {
@@ -62,6 +74,7 @@ const authLoginRoute = () => loadRoute('api/auth/login/route.js');
 const adminRoute = () => loadRoute('api/admin/companies/token/route.js');
 
 let ownerCookie;
+let ownerCsrf;
 
 before(async () => {
   const login = await authLoginRoute().POST(jsonReq('/api/auth/login', {
@@ -70,6 +83,7 @@ before(async () => {
   }));
   assert.equal(login.status, 200);
   ownerCookie = cookieHeader(login);
+  ownerCsrf = cookieValue(login, 'silo_csrf');
 });
 
 after(() => {
@@ -79,7 +93,7 @@ after(() => {
 test('SEEME instance accepts portaApi/portaMqtt and persists normalized ports', async () => {
   const res = await adminRoute().POST(jsonReq('/api/admin/companies/token', {
     method: 'POST',
-    headers: { cookie: ownerCookie },
+    headers: { cookie: ownerCookie, 'x-csrf-token': ownerCsrf },
     body: {
       regenerate: true,
       company: {

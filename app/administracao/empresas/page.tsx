@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
@@ -38,6 +38,20 @@ import {
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
 
+const API_PORT_START = 3001;
+const MQTT_PORT_START = 18831;
+
+function findNextFreePort(usedPorts: Array<number | undefined>, startAt: number) {
+  const used = new Set<number>();
+  usedPorts.forEach((port) => {
+    const candidate = port ?? 0;
+    if (Number.isInteger(candidate) && candidate > 0) used.add(candidate);
+  });
+  let candidate = startAt;
+  while (used.has(candidate)) candidate += 1;
+  return candidate;
+}
+
 function EmpresasPage() {
   const { accessGroup, checkPermission } = useAuth();
   const [data, setData] = useState<Company[]>([]);
@@ -63,10 +77,23 @@ function EmpresasPage() {
 
   const portaApi = watch('portaApi');
   const portaMqtt = watch('portaMqtt');
+  const existingPorts = useMemo(() => data.filter((item) => item.status !== 'INATIVO'), [data]);
+  const suggestedApiPort = useMemo(
+    () => findNextFreePort(existingPorts.map((item) => item.apiPort), API_PORT_START),
+    [existingPorts],
+  );
+  const suggestedMqttPort = useMemo(
+    () => findNextFreePort(existingPorts.map((item) => item.mqttPort), MQTT_PORT_START),
+    [existingPorts],
+  );
   const normalizedApiPort = Number(portaApi || selectedItem?.apiPort || 0);
   const normalizedMqttPort = Number(portaMqtt || selectedItem?.mqttPort || 0);
   const generatedApiBaseUrl = normalizedApiPort ? `https://api.siloops.com.br:${normalizedApiPort}` : 'https://api.siloops.com.br:{portaApi}';
   const generatedMqttUrl = normalizedMqttPort ? `mqtt.siloops.com.br:${normalizedMqttPort}` : 'mqtt.siloops.com.br:{portaMqtt}';
+  const apiPortConflict = data.some((item) => item.id !== selectedItem?.id && Number(item.apiPort) === normalizedApiPort);
+  const mqttPortConflict = data.some((item) => item.id !== selectedItem?.id && Number(item.mqttPort) === normalizedMqttPort);
+  const apiPortSuggestion = apiPortConflict ? findNextFreePort(data.map((item) => item.apiPort), normalizedApiPort || API_PORT_START) : suggestedApiPort;
+  const mqttPortSuggestion = mqttPortConflict ? findNextFreePort(data.map((item) => item.mqttPort), normalizedMqttPort || MQTT_PORT_START) : suggestedMqttPort;
   const canRegenerateToken = accessGroup?.id === 'ag-admin' || checkPermission('ALL', 'administrar');
 
   const maskCompanyToken = (token?: string) => {
@@ -113,8 +140,8 @@ function EmpresasPage() {
           corporateName: '',
           cnpj: '',
           domain: '',
-          portaApi: '' as unknown as number,
-          portaMqtt: '' as unknown as number,
+          portaApi: suggestedApiPort as unknown as number,
+          portaMqtt: suggestedMqttPort as unknown as number,
           apiBaseUrl: '',
           mqttUrl: '',
           companyToken: '',
@@ -125,7 +152,7 @@ function EmpresasPage() {
     } else {
       setViewAudit(false);
     }
-  }, [selectedItem, reset, isDrawerOpen]);
+  }, [selectedItem, reset, isDrawerOpen, suggestedApiPort, suggestedMqttPort]);
 
 
   const loadData = async () => {
@@ -157,6 +184,16 @@ function EmpresasPage() {
   const onSubmit = async (formData: CompanyFormData) => {
     try {
       const payload = companyFormToCompanyPayload(formData);
+      const nextApiPort = Number(payload.apiPort);
+      const nextMqttPort = Number(payload.mqttPort);
+      const duplicateApi = data.some((item) => item.id !== selectedItem?.id && Number(item.apiPort) === nextApiPort);
+      const duplicateMqtt = data.some((item) => item.id !== selectedItem?.id && Number(item.mqttPort) === nextMqttPort);
+      if (duplicateApi) {
+        throw new Error(`Porta API já está em uso por outra empresa. Sugestão: ${findNextFreePort(data.map((item) => item.apiPort), nextApiPort || API_PORT_START)}`);
+      }
+      if (duplicateMqtt) {
+        throw new Error(`Porta MQTT já está em uso por outra empresa. Sugestão: ${findNextFreePort(data.map((item) => item.mqttPort), nextMqttPort || MQTT_PORT_START)}`);
+      }
       let saved: Company | undefined;
       if (selectedItem) {
         saved = await CompanyService.update(selectedItem.id, { ...payload, version: selectedItem.version });
@@ -237,6 +274,14 @@ function EmpresasPage() {
     item.tradingName.toLowerCase().includes(search.toLowerCase()) ||
     item.cnpj.includes(search)
   );
+
+  const applySuggestedPorts = () => {
+    reset({
+      ...getValues(),
+      portaApi: apiPortSuggestion as unknown as number,
+      portaMqtt: mqttPortSuggestion as unknown as number,
+    });
+  };
 
   return (
     <div className="flex h-screen bg-[#050812] text-white overflow-hidden font-sans">
@@ -409,12 +454,56 @@ function EmpresasPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField label="Porta API" error={errors.portaApi?.message} required>
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" {...register('portaApi')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.portaApi && "border-red-500/50")} placeholder="3001" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        {...register('portaApi')}
+                        className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.portaApi && "border-red-500/50")}
+                        placeholder={String(suggestedApiPort)}
+                      />
+                      {!selectedItem && (
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                          Sugestão: {suggestedApiPort}
+                        </p>
+                      )}
+                      {apiPortConflict && (
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-red-300">
+                          Porta API já está em uso por outra empresa. Sugestão: {apiPortSuggestion}
+                        </p>
+                      )}
                     </FormField>
                     <FormField label="Porta MQTT" error={errors.portaMqtt?.message} required>
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" {...register('portaMqtt')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.portaMqtt && "border-red-500/50")} placeholder="18831" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        {...register('portaMqtt')}
+                        className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-black", errors.portaMqtt && "border-red-500/50")}
+                        placeholder={String(suggestedMqttPort)}
+                      />
+                      {!selectedItem && (
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                          Sugestão: {suggestedMqttPort}
+                        </p>
+                      )}
+                      {mqttPortConflict && (
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-red-300">
+                          Porta MQTT já está em uso por outra empresa. Sugestão: {mqttPortSuggestion}
+                        </p>
+                      )}
                     </FormField>
                   </div>
+
+                  {!selectedItem && (
+                    <button
+                      type="button"
+                      onClick={applySuggestedPorts}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/15 transition-colors"
+                    >
+                      Usar próxima porta livre
+                    </button>
+                  )}
 
                   <div className="space-y-3 rounded-xl border border-[#2d3647] bg-[#050812]/70 p-4">
                     <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
