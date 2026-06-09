@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { test, before, after } from 'node:test';
 import { createRequire } from 'node:module';
 import { NextRequest } from 'next/server.js';
@@ -10,11 +11,16 @@ const require = createRequire(import.meta.url);
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'silo-tenant-audit-'));
 const nextAppRoot = path.resolve('.next/server/app');
 
+// ── Senhas de teste geradas em runtime — nunca fixas ─────────────────────────
+const TEST_OWNER_PASSWORD    = `test-owner-${crypto.randomUUID()}!A1`;
+const TEST_TENANT_PASSWORD   = `test-tenant-${crypto.randomUUID()}!A1`;
+const TEST_TENANT_B_PASSWORD = `test-tenant-b-${crypto.randomUUID()}!A1`;
+
 process.env.SILO_STORAGE_DIR = tmpRoot;
 process.env.SILO_DATA_DIR = tmpRoot;
-process.env.SILO_AUTH_SECRET = 'test-auth-secret-2026';
-process.env.SILO_PLATFORM_OWNER_PASSWORD = 'OwnerPass!2026';
-process.env.SILO_DEMO_ADMIN_PASSWORD = 'TenantPass!2026';
+process.env.SILO_AUTH_SECRET = crypto.randomBytes(32).toString('hex');
+process.env.SILO_PLATFORM_OWNER_PASSWORD = TEST_OWNER_PASSWORD;
+process.env.SILO_DEMO_ADMIN_PASSWORD = TEST_TENANT_PASSWORD;
 process.env.NEXT_PUBLIC_SILO_TENANT_ID = 'silo-ops-001';
 process.env.SILO_TENANT_ID = 'silo-ops-001';
 
@@ -51,7 +57,19 @@ function jsonReq(url, { method = 'GET', headers = {}, body } = {}) {
 function cookieHeader(response) {
   const setCookie = response.headers.get('set-cookie');
   assert.ok(setCookie, 'set-cookie ausente');
-  return setCookie.split(';')[0];
+  const fragments = setCookie.split(/, (?=[^;,=]+=[^;,]*)/g);
+  const sessionCookie = fragments.find((item) => item.startsWith('silo_session='))?.split(';')[0] || null;
+  const csrfCookie = fragments.find((item) => item.startsWith('silo_csrf='))?.split(';')[0] || null;
+  return sessionCookie ? (csrfCookie ? sessionCookie + '; ' + csrfCookie : sessionCookie) : null;
+}
+
+function cookieValue(response, name) {
+  const setCookie = response.headers.get('set-cookie');
+  assert.ok(setCookie, 'set-cookie ausente');
+  const fragments = setCookie.split(/, (?=[^;,=]+=[^;,]*)/g);
+  const fragment = fragments.find((item) => item.startsWith(name + '='));
+  assert.ok(fragment, `cookie ${name} ausente`);
+  return fragment.split(';')[0].split('=').slice(1).join('=');
 }
 
 async function asJson(response) {
@@ -84,18 +102,19 @@ async function login(identifier, password) {
   }));
   assert.equal(res.status, 200);
   const body = await asJson(res);
-  return { cookie: cookieHeader(res), session: body.session, user: body.user };
+  return { cookie: cookieHeader(res), csrf: cookieValue(res, 'silo_csrf'), session: body.session, user: body.user };
 }
 
 before(async () => {
-  const owner = await login('sonieloficial@gmail.com', 'OwnerPass!2026');
+  const owner = await login('sonieloficial@gmail.com', TEST_OWNER_PASSWORD);
   ownerCookie = owner.cookie;
+  const ownerCsrf = owner.csrf;
   assert.equal(owner.session.role, 'SUPER_ADMIN_SILO');
   assert.equal(owner.session.scope, 'PLATFORM');
 
   const demoRes = await adminRoute().POST(jsonReq('/api/admin/companies/token', {
     method: 'POST',
-    headers: { cookie: ownerCookie },
+    headers: { cookie: ownerCookie, 'x-csrf-token': ownerCsrf },
     body: {
       company: {
         id: 'silo-demo',
@@ -118,7 +137,7 @@ before(async () => {
 
   const adminRes = await adminRoute().POST(jsonReq('/api/admin/companies/token', {
     method: 'POST',
-    headers: { cookie: ownerCookie },
+    headers: { cookie: ownerCookie, 'x-csrf-token': ownerCsrf },
     body: {
       company: {
         id: 'tenant-b',
@@ -141,24 +160,24 @@ before(async () => {
 
   const createTenantUser = await usersRoute().POST(jsonReq('/api/cadastro/users', {
     method: 'POST',
-    headers: { cookie: ownerCookie },
+    headers: { cookie: ownerCookie, 'x-csrf-token': ownerCsrf },
     body: {
       name: 'Tenant B Admin',
       username: 'tenantb.admin',
-      email: 'tenantb.admin@siloops.com.br',
+      email: 'tenantb.admin@example.test',
       accessGroupId: 'role-admin-empresa',
       scope: 'TENANT',
       tenantId: 'tenant-b',
       defaultTenantId: 'tenant-b',
       status: 'ATIVO',
       mustChangePassword: false,
-      password: 'TenantBPass!2026',
+      password: TEST_TENANT_B_PASSWORD,
     },
   }), { params: { entity: 'users' } });
   assert.equal(createTenantUser.status, 201);
 
-  tenantACookie = (await login('admin@siloops.com.br', 'TenantPass!2026')).cookie;
-  tenantBCookie = (await login('tenantb.admin@siloops.com.br', 'TenantBPass!2026')).cookie;
+  tenantACookie = (await login('admin@siloops.com.br', TEST_TENANT_PASSWORD)).cookie;
+  tenantBCookie = (await login('tenantb.admin@example.test', TEST_TENANT_B_PASSWORD)).cookie;
 
   const aRes = await mobileEquipmentRoute().POST(jsonReq('/api/mobile/equipment', {
     method: 'POST',

@@ -32,7 +32,7 @@ export interface GuardError {
 
 const IS_DEMO = process.env.NEXT_PUBLIC_APP_ENV === 'demo';
 
-function maskToken(token: string | undefined | null): string {
+export function maskToken(token: string | undefined | null): string {
   if (!token || token.length < 8) return '***';
   return token.slice(0, 4) + '...' + token.slice(-4);
 }
@@ -92,8 +92,12 @@ export function requireMobileAuth(req: NextRequest): MobileAuthResult | GuardErr
 }
 
 // ── requireTenant ───────────────────────────────────────────────────────────
-// Resolves tenantId from headers for web/internal routes.
-// Now uses tenant-resolver (no silent fallback to default tenant).
+// Resolves tenantId exclusively from the session cookie.
+// For TENANT-scope users: rejects any request that supplies an x-tenant-id
+// header (or x-silo-tenant) that does not match the session tenant, preventing
+// cross-tenant injection attacks.
+// PLATFORM-scope users (SUPER_ADMIN_SILO) must activate a tenant via
+// session.activeTenantId; a bare x-tenant-id header is never trusted.
 
 export function requireTenant(req: NextRequest): TenantResult | GuardError {
   const session = resolveSessionFromRequest(req);
@@ -103,21 +107,58 @@ export function requireTenant(req: NextRequest): TenantResult | GuardError {
       response: NextResponse.json({ error: 'Sessao nao identificada. Faca login novamente.' }, { status: 401 }),
     };
   }
-  if (session.scope === 'TENANT' && (session.activeTenantId || session.tenantId)) {
-    return { ok: true, tenantId: session.activeTenantId || session.tenantId as string };
+
+  if (session.scope === 'TENANT') {
+    const sessionTenantId = session.activeTenantId || session.tenantId;
+    if (!sessionTenantId) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: 'Tenant nao identificado.' }, { status: 400 }),
+      };
+    }
+
+    // Reject cross-tenant header injection attempts.
+    // TENANT-scope users may never operate on a tenant other than their own,
+    // regardless of what x-tenant-id or x-silo-tenant headers they send.
+    const requestedTenant =
+      req.headers.get('x-tenant-id')?.trim() ||
+      req.headers.get('x-silo-tenant')?.trim() ||
+      req.nextUrl.searchParams.get('companyId')?.trim();
+
+    if (requestedTenant && requestedTenant !== sessionTenantId) {
+      console.warn('[api-guard] cross-tenant injection rejected', {
+        sessionTenantId,
+        requestedTenant,
+        userId: session.id,
+        role: session.role,
+        path: req.nextUrl.pathname,
+        ip: getClientIp(req),
+      });
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: 'Acesso a tenant nao autorizado.' },
+          { status: 403 },
+        ),
+      };
+    }
+
+    return { ok: true, tenantId: sessionTenantId };
   }
+
+  // PLATFORM scope — tenant must come from session.activeTenantId (set via
+  // /api/auth/set-tenant after support-mode activation). Headers are ignored.
   if (session.scope === 'PLATFORM' && session.activeTenantId) {
     return { ok: true, tenantId: session.activeTenantId };
   }
-  if (session.scope === 'TENANT' && session.tenantId) {
-    return { ok: true, tenantId: session.tenantId };
-  }
+
   if (session.scope === 'PLATFORM') {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Selecione um tenant ativo para operar.' }, { status: 403 }),
     };
   }
+
   return {
     ok: false,
     response: NextResponse.json({ error: 'Tenant nao identificado.' }, { status: 400 }),
@@ -148,7 +189,6 @@ export function blockWriteInDemo(req: NextRequest): NextResponse | null {
 
 // ── requireWebAdmin ─────────────────────────────────────────────────────────
 // For admin routes. Currently validates tenant + demo check.
-// Extend with session/JWT auth when user auth is implemented.
 
 export function requireWebAdmin(req: NextRequest): TenantResult | GuardError {
   const demoBlock = blockWriteInDemo(req);
@@ -159,4 +199,4 @@ export function requireWebAdmin(req: NextRequest): TenantResult | GuardError {
 
 // ── Exports ─────────────────────────────────────────────────────────────────
 
-export { maskToken, getClientIp, IS_DEMO };
+export { getClientIp, IS_DEMO };

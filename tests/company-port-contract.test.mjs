@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { test, before, after } from 'node:test';
 import { createRequire } from 'node:module';
 import { NextRequest } from 'next/server.js';
@@ -10,10 +11,13 @@ const require = createRequire(import.meta.url);
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'silo-company-port-'));
 const nextAppRoot = path.resolve('.next/server/app');
 
+// ── Senhas de teste geradas em runtime — nunca fixas ─────────────────────────
+const TEST_OWNER_PASSWORD = `test-owner-${crypto.randomUUID()}!A1`;
+
 process.env.SILO_STORAGE_DIR = tmpRoot;
 process.env.SILO_DATA_DIR = tmpRoot;
-process.env.SILO_AUTH_SECRET = 'test-auth-secret-2026';
-process.env.SILO_PLATFORM_OWNER_PASSWORD = 'OwnerPass!2026';
+process.env.SILO_AUTH_SECRET = crypto.randomBytes(32).toString('hex');
+process.env.SILO_PLATFORM_OWNER_PASSWORD = TEST_OWNER_PASSWORD;
 
 fs.mkdirSync(path.join(tmpRoot, 'auth'), { recursive: true });
 fs.writeFileSync(path.join(tmpRoot, 'companies.json'), JSON.stringify([], null, 2));
@@ -79,7 +83,7 @@ let ownerCsrf;
 before(async () => {
   const login = await authLoginRoute().POST(jsonReq('/api/auth/login', {
     method: 'POST',
-    body: { email: 'sonieloficial@gmail.com', password: 'OwnerPass!2026' },
+    body: { email: 'sonieloficial@gmail.com', password: TEST_OWNER_PASSWORD },
   }));
   assert.equal(login.status, 200);
   ownerCookie = cookieHeader(login);
