@@ -13,7 +13,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { useSidebar } from '@/lib/context/sidebar-context';
 import { withAuth } from '@/components/shared/with-auth';
 import { EquipmentIcon } from '@/components/icons/equipment-icons';
-import { MapLegend } from '@/components/map/equipment-map-marker';
+import { MapLegend } from '@/components/map/equipment-map-legend';
 import type { LiveMapItem, MapCounts } from '@/components/mapa/full-map-enterprise';
 
 const STATUS_CONFIG = {
