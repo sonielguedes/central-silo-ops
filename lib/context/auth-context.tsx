@@ -19,11 +19,11 @@ interface SessionUser {
   role: SystemRole;
   scope: 'PLATFORM' | 'TENANT';
   tenantId: string | null;
+  activeTenantId: string | null;
   defaultTenantId: string;
   accessGroupId: string;
   expiresAt: string;
   mustChangePassword: boolean;
-  activeTenantId?: string;
 }
 
 interface AuthContextType {
@@ -78,11 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadSession = async (sessionUser: SessionUser) => {
     try {
       setIsLoading(true);
-      BaseService.setContext(sessionUser.name, sessionUser.tenantId || '');
+      BaseService.setContext(sessionUser.name, sessionUser.activeTenantId || sessionUser.tenantId || '');
 
       const group = await AccessGroupService.getById(sessionUser.accessGroupId);
       const companies = await CompanyService.getAllGlobal();
-      const currentTenant = companies.find(c => c.id === sessionUser.tenantId) || companies.find(c => c.id === sessionUser.defaultTenantId) || null;
+      const currentTenant =
+        companies.find(c => c.id === sessionUser.activeTenantId) ||
+        companies.find(c => c.id === sessionUser.tenantId) ||
+        companies.find(c => c.id === sessionUser.defaultTenantId) ||
+        null;
 
       setUser(sessionUser);
       setUserRole(sessionUser.role || resolveRole(sessionUser.accessGroupId));
@@ -127,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error((body as { error?: string }).error || 'usuario ou senha invalidos');
       }
 
-      const sessionUser = (body as { user: SessionUser }).user;
+      const sessionUser = (body as { session: SessionUser }).session;
       localStorage.setItem('silo_auth_user', JSON.stringify(sessionUser));
       await loadSession(sessionUser);
     } finally {
@@ -138,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
     localStorage.removeItem('silo_auth_user');
+    sessionStorage.removeItem('silo_auth_user');
     setUser(null);
     setUserRole('CONSULTA');
     setAccessGroup(null);

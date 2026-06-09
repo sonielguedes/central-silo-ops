@@ -103,6 +103,12 @@ export function requireTenant(req: NextRequest): TenantResult | GuardError {
       response: NextResponse.json({ error: 'Sessao nao identificada. Faca login novamente.' }, { status: 401 }),
     };
   }
+  if (session.scope === 'TENANT' && (session.activeTenantId || session.tenantId)) {
+    return { ok: true, tenantId: session.activeTenantId || session.tenantId as string };
+  }
+  if (session.scope === 'PLATFORM' && session.activeTenantId) {
+    return { ok: true, tenantId: session.activeTenantId };
+  }
   if (session.scope === 'TENANT' && session.tenantId) {
     return { ok: true, tenantId: session.tenantId };
   }

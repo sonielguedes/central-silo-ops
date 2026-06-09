@@ -45,8 +45,10 @@ export interface AuthUserRecord {
 }
 
 export interface AuthSessionRecord {
-  id: string;
+  sessionIdHash: string;
   userId: string;
+  scope: AuthScope;
+  activeTenantId: string | null;
   expiresAt: string;
   createdAt: string;
   updatedAt: string;
@@ -60,6 +62,7 @@ export interface AuthSessionPayload {
   role: AuthRole;
   scope: AuthScope;
   tenantId: string | null;
+  activeTenantId: string | null;
   defaultTenantId: string;
   accessGroupId: string;
   expiresAt: string;
@@ -111,12 +114,17 @@ function signSessionId(sessionId: string): string {
   return crypto.createHmac('sha256', getAuthSecret()).update(sessionId).digest('hex');
 }
 
+function hashSessionId(sessionId: string): string {
+  return signSessionId(sessionId);
+}
+
 function packCookie(sessionId: string): string {
   return `${sessionId}.${signSessionId(sessionId)}`;
 }
 
 function unpackCookie(cookieValue: string): string | null {
   const parts = cookieValue.split('.');
+  if (parts.length === 1) return cookieValue.trim() || null;
   if (parts.length !== 2) return null;
   const [sessionId, signature] = parts;
   const expected = signSessionId(sessionId);
@@ -136,15 +144,11 @@ function hashPassword(password: string): string {
 function ensureSeedUsers(): AuthUserRecord[] {
   ensureDir();
   const current = readJson<AuthUserRecord[]>(USERS_FILE, []);
-  if (current.length > 0) return current;
 
   const ownerPassword = process.env.SILO_PLATFORM_OWNER_PASSWORD;
   const demoPassword = process.env.SILO_DEMO_ADMIN_PASSWORD || ownerPassword;
-  if (!ownerPassword) {
-    throw new Error('SILO_PLATFORM_OWNER_PASSWORD ausente. Nao foi possivel seedar o dono da plataforma.');
-  }
 
-  const seed: AuthUserRecord[] = [
+  const seedBase: AuthUserRecord[] = [
     {
       id: 'usr-soniel-platform',
       tenantId: null,
@@ -157,7 +161,7 @@ function ensureSeedUsers(): AuthUserRecord[] {
       email: 'sonieloficial@gmail.com',
       status: 'ATIVO',
       mustChangePassword: true,
-      passwordHash: hashPassword(ownerPassword),
+      passwordHash: '',
       createdAt: nowIso(),
       updatedAt: nowIso(),
       passwordLastChangedAt: nowIso(),
@@ -174,20 +178,90 @@ function ensureSeedUsers(): AuthUserRecord[] {
       email: 'admin@siloops.com.br',
       status: 'ATIVO',
       mustChangePassword: true,
-      passwordHash: hashPassword(demoPassword || ownerPassword),
+      passwordHash: '',
       createdAt: nowIso(),
       updatedAt: nowIso(),
       passwordLastChangedAt: nowIso(),
     },
   ];
 
-  writeJson(USERS_FILE, seed);
-  return seed;
+  const upsertSeedUser = (users: AuthUserRecord[], seed: AuthUserRecord, passwordSeed?: string) => {
+    const index = users.findIndex(
+      (user) =>
+        user.id === seed.id ||
+        user.email.toLowerCase() === seed.email.toLowerCase() ||
+        user.username.toLowerCase() === seed.username.toLowerCase(),
+    );
+    const existing = index >= 0 ? users[index] : undefined;
+    const passwordHash = existing?.passwordHash || (passwordSeed ? hashPassword(passwordSeed) : '');
+
+    if (!existing && !passwordHash) {
+      throw new Error(`Seed obrigatoria ausente para ${seed.email}`);
+    }
+
+    const next: AuthUserRecord = {
+      ...seed,
+      ...existing,
+      id: existing?.id || seed.id,
+      tenantId: existing?.tenantId ?? seed.tenantId,
+      defaultTenantId: existing?.defaultTenantId || seed.defaultTenantId,
+      scope: existing?.scope || seed.scope,
+      role: existing?.role || seed.role,
+      accessGroupId: existing?.accessGroupId || seed.accessGroupId,
+      name: existing?.name || seed.name,
+      username: existing?.username || seed.username,
+      email: existing?.email || seed.email,
+      status: existing?.status || seed.status,
+      mustChangePassword: existing?.mustChangePassword ?? seed.mustChangePassword,
+      passwordHash,
+      createdAt: existing?.createdAt || seed.createdAt,
+      updatedAt: existing?.updatedAt || seed.updatedAt,
+      passwordLastChangedAt: existing?.passwordLastChangedAt || seed.passwordLastChangedAt,
+      resetPasswordTokenHash: existing?.resetPasswordTokenHash,
+      resetPasswordExpiresAt: existing?.resetPasswordExpiresAt,
+      resetPasswordUsedAt: existing?.resetPasswordUsedAt,
+    };
+
+    if (index >= 0) users[index] = next;
+    else users.push(next);
+  };
+
+  const merged = [...current];
+  upsertSeedUser(merged, seedBase[0], ownerPassword);
+  upsertSeedUser(merged, seedBase[1], demoPassword || ownerPassword);
+
+  const changed = JSON.stringify(merged) !== JSON.stringify(current);
+  if (changed) writeJson(USERS_FILE, merged);
+  return merged;
 }
 
 function loadSessions(): AuthSessionRecord[] {
   ensureDir();
-  return readJson<AuthSessionRecord[]>(SESSIONS_FILE, []);
+  const raw = readJson<Array<Partial<AuthSessionRecord> & { id?: string }>>(SESSIONS_FILE, []);
+  const sessions = raw
+    .map((session) => {
+      const sessionIdHash = session.sessionIdHash || (session.id ? hashSessionId(session.id) : '');
+      if (!sessionIdHash || !session.userId || !session.expiresAt || !session.createdAt || !session.updatedAt) {
+        return null;
+      }
+      return {
+        sessionIdHash,
+        userId: session.userId,
+        scope: session.scope || 'TENANT',
+        activeTenantId: session.activeTenantId ?? null,
+        expiresAt: session.expiresAt,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        revokedAt: session.revokedAt,
+      } as AuthSessionRecord;
+    })
+    .filter((session): session is AuthSessionRecord => Boolean(session));
+
+  if (JSON.stringify(raw) !== JSON.stringify(sessions)) {
+    saveSessions(sessions);
+  }
+
+  return sessions;
 }
 
 function saveSessions(sessions: AuthSessionRecord[]) {
@@ -241,8 +315,10 @@ export const AuthStore = {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     const sessions = loadSessions();
     sessions.push({
-      id: sessionId,
+      sessionIdHash: hashSessionId(sessionId),
       userId: user.id,
+      scope: user.scope,
+      activeTenantId: user.scope === 'TENANT' ? user.tenantId : null,
       createdAt,
       updatedAt: createdAt,
       expiresAt,
@@ -258,6 +334,7 @@ export const AuthStore = {
         role: user.role,
         scope: user.scope,
         tenantId: user.tenantId,
+        activeTenantId: user.scope === 'TENANT' ? user.tenantId : null,
         defaultTenantId: user.defaultTenantId,
         accessGroupId: user.accessGroupId,
         expiresAt,
@@ -270,9 +347,10 @@ export const AuthStore = {
     if (!cookieValue) return null;
     const sessionId = unpackCookie(cookieValue);
     if (!sessionId) return null;
+    const sessionIdHash = hashSessionId(sessionId);
 
     const sessions = cleanupExpiredSessions(loadSessions());
-    const session = sessions.find((item) => item.id === sessionId && !item.revokedAt);
+    const session = sessions.find((item) => item.sessionIdHash === sessionIdHash && !item.revokedAt);
     if (!session) return null;
 
     const user = this.getUserById(session.userId);
@@ -286,6 +364,7 @@ export const AuthStore = {
       role: user.role,
       scope: user.scope,
       tenantId: user.tenantId,
+      activeTenantId: session.activeTenantId ?? (user.scope === 'TENANT' ? user.tenantId : null),
       defaultTenantId: user.defaultTenantId,
       accessGroupId: user.accessGroupId,
       expiresAt: session.expiresAt,
@@ -297,13 +376,32 @@ export const AuthStore = {
     if (!cookieValue) return;
     const sessionId = unpackCookie(cookieValue);
     if (!sessionId) return;
+    const sessionIdHash = hashSessionId(sessionId);
 
     const sessions = loadSessions();
-    const session = sessions.find((item) => item.id === sessionId);
+    const session = sessions.find((item) => item.sessionIdHash === sessionIdHash);
     if (!session || session.revokedAt) return;
     session.revokedAt = nowIso();
     session.updatedAt = nowIso();
     saveSessions(sessions);
+  },
+
+  setActiveTenant(cookieValue: string | undefined | null, activeTenantId: string | null): AuthSessionPayload | null {
+    if (!cookieValue) return null;
+    const sessionId = unpackCookie(cookieValue);
+    if (!sessionId) return null;
+    const sessionIdHash = hashSessionId(sessionId);
+    const sessions = loadSessions();
+    const session = sessions.find((item) => item.sessionIdHash === sessionIdHash && !item.revokedAt);
+    if (!session) return null;
+    const user = this.getUserById(session.userId);
+    if (!user || user.status !== 'ATIVO') return null;
+
+    session.activeTenantId = activeTenantId;
+    session.updatedAt = nowIso();
+    saveSessions(sessions);
+
+    return this.resolveSession(cookieValue);
   },
 
   async updatePassword(userId: string, password: string, mustChangePassword = false): Promise<AuthUserRecord> {
