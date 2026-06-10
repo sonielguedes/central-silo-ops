@@ -146,16 +146,30 @@ export function requireTenant(req: NextRequest): TenantResult | GuardError {
     return { ok: true, tenantId: sessionTenantId };
   }
 
-  // PLATFORM scope — tenant must come from session.activeTenantId (set via
-  // /api/auth/set-tenant after support-mode activation). Headers are ignored.
-  if (session.scope === 'PLATFORM' && session.activeTenantId) {
-    return { ok: true, tenantId: session.activeTenantId };
-  }
-
+  // PLATFORM scope (SUPER_ADMIN_SILO)
+  // activeTenantId is set after explicit tenant selection / support-mode activation.
+  // Headers are never trusted — tenant comes only from session.
   if (session.scope === 'PLATFORM') {
+    if (session.activeTenantId) {
+      return { ok: true, tenantId: session.activeTenantId };
+    }
+
+    const method = req.method.toUpperCase();
+    const isReadOnly = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+
+    if (isReadOnly && session.defaultTenantId) {
+      // Read-only access: fall back to defaultTenantId so the UI dashboard
+      // loads after login without requiring explicit tenant selection.
+      return { ok: true, tenantId: session.defaultTenantId };
+    }
+
+    // Writes without an active tenant are always blocked.
     return {
       ok: false,
-      response: NextResponse.json({ error: 'Selecione um tenant ativo para operar.' }, { status: 403 }),
+      response: NextResponse.json(
+        { error: 'Selecione um tenant ativo para operacoes de escrita.' },
+        { status: 403 },
+      ),
     };
   }
 

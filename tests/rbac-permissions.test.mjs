@@ -246,19 +246,35 @@ test('Cenario 4: ADMIN_EMPRESA nao acessa dados de outro tenant — espera 403',
   );
 });
 
-// ── Cenário 5: SUPER_ADMIN_SILO sem activeTenantId não escreve ───────────────
-test('Cenario 5: SUPER_ADMIN_SILO sem activeTenantId nao escreve dados operacionais — espera 400 ou 403', async () => {
+// ── Cenário 5a: SUPER_ADMIN_SILO sem activeTenantId não escreve ──────────────
+test('Cenario 5a: SUPER_ADMIN_SILO sem activeTenantId nao escreve dados operacionais — espera 400 ou 403', async () => {
   const res = await cadastroRoute().POST(
     jsonReq('/api/cadastro/equipamentos', {
       method: 'POST',
       headers: { cookie: ownerCookie, 'x-csrf-token': ownerCsrf },
-      // sem x-tenant-id intencional
+      // sem x-tenant-id intencional: PLATFORM sem activeTenantId bloqueado em writes
       body: { nome: 'Equipamento Invalido', tipo: 'TRATOR' },
     }),
     { params: { entity: 'equipamentos' } },
   );
   assert.ok(
     res.status === 400 || res.status === 403,
-    `SUPER_ADMIN_SILO sem tenant: esperado 400|403, recebido ${res.status}`,
+    `SUPER_ADMIN_SILO sem tenant escrevendo: esperado 400|403, recebido ${res.status}`,
+  );
+});
+
+// ── Cenário 5b: SUPER_ADMIN_SILO sem activeTenantId pode ler via defaultTenantId ──
+test('Cenario 5b: SUPER_ADMIN_SILO sem activeTenantId pode ler dashboard usando defaultTenantId — espera 200', async () => {
+  // O owner tem defaultTenantId = 'silo-demo' (seed). Sem activeTenantId,
+  // GETs devem cair no defaultTenantId automaticamente — nunca 403.
+  const res = await dashSummRoute().GET(
+    jsonReq('/api/dashboard/summary', {
+      headers: { cookie: ownerCookie },
+      // sem x-tenant-id: a rota deve resolver via session.defaultTenantId
+    }),
+  );
+  assert.ok(
+    res.status === 200 || res.status === 206,
+    `SUPER_ADMIN_SILO GET dashboard sem activeTenantId: esperado 200, recebido ${res.status}`,
   );
 });
