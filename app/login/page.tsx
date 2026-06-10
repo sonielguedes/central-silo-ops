@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/context/auth-context';
@@ -22,7 +22,7 @@ export default function LoginPage() {
       await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Falha na autenticaÃ§Ã£o');
+      setError(err.message || 'Falha na autenticação');
     } finally {
       setLoading(false);
     }
@@ -104,11 +104,10 @@ export default function LoginPage() {
              Ambiente Seguro & Monitorado
            </p>
            <p className="text-[8px] text-white/20 font-mono mt-2 uppercase">
-             {getAppVersionLabel()} â€¢ silo-ops-core
+             {getAppVersionLabel()} • silo-ops-core
            </p>
         </div>
       </div>
     </div>
   );
 }
-

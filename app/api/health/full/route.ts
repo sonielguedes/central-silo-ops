@@ -62,7 +62,6 @@ interface HealthIssue {
 }
 
 function getTenantHealth(): TenantHealth[] {
-  // Load companies to get tenant list (never expose tokens)
   try {
     const companiesFile = path.join(DATA_ROOT, 'companies.json');
     if (!fs.existsSync(companiesFile)) return [];

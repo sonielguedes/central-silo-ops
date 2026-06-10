@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
+import { requirePermission } from '@/lib/auth/rbac-server';
 import { buildEfficiencyReport } from '@/lib/eficiencia-operacional-builder';
 
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,8 @@ export async function GET(req: NextRequest) {
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
+    const permCheck = requirePermission(req, 'relatorios', 'visualizar', tenantId);
+    if (permCheck) return permCheck;
     const result = buildEfficiencyReport({
       tenantId,
       from: searchParams.get('from')?.trim() || null,

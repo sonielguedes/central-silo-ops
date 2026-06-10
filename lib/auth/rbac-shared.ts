@@ -3,9 +3,33 @@ export type SystemRole =
   | 'SUPER_ADMIN'
   | 'ADMIN_EMPRESA'
   | 'GESTOR'
+  | 'GESTOR_COA'          // alias: GESTOR com visibilidade COA
   | 'COA'
+  | 'SUPERVISOR_FRENTE'   // visualiza operações da frente
+  | 'OPERADOR_CENTRAL'    // operador via Central web
+  | 'MANUTENCAO'          // acesso a equipamentos e ordens de serviço
+  | 'CLIENTE_RELATORIOS'  // só relatórios e exportação
+  | 'OPERADOR_APK'        // só mobile, sem acesso web
   | 'CONSULTA'
   | 'AUDITOR';
+
+/**
+ * Roles que são aliases de outra role canônica.
+ * Usado por resolveSessionFromRequest e auth-store para normalizar.
+ */
+export const ROLE_ALIAS: Partial<Record<SystemRole, SystemRole>> = {
+  GESTOR_COA:        'GESTOR',
+  SUPERVISOR_FRENTE: 'CONSULTA',
+  OPERADOR_CENTRAL:  'COA',
+  MANUTENCAO:        'CONSULTA',
+  CLIENTE_RELATORIOS:'CONSULTA',
+  OPERADOR_APK:      'CONSULTA',
+};
+
+/** Resolve alias → role canônica usada na matriz de permissões */
+export function canonicalRole(role: SystemRole): SystemRole {
+  return ROLE_ALIAS[role] ?? role;
+}
 
 export type Module =
   | 'dashboard'
@@ -37,13 +61,19 @@ export interface Permission {
 }
 
 const ROLE_LEVEL: Record<SystemRole, number> = {
-  SUPER_ADMIN_SILO: 110,
-  SUPER_ADMIN: 100,
-  ADMIN_EMPRESA: 80,
-  GESTOR: 60,
-  COA: 40,
-  CONSULTA: 20,
-  AUDITOR: 30,
+  SUPER_ADMIN_SILO:   110,
+  SUPER_ADMIN:        100,
+  ADMIN_EMPRESA:       80,
+  GESTOR:              60,
+  GESTOR_COA:          60,  // mesmo nível que GESTOR
+  COA:                 40,
+  SUPERVISOR_FRENTE:   25,
+  OPERADOR_CENTRAL:    40,  // mesmo nível que COA
+  MANUTENCAO:          25,
+  CLIENTE_RELATORIOS:  15,
+  OPERADOR_APK:        10,
+  CONSULTA:            20,
+  AUDITOR:             30,
 };
 
 export function getRoleLevel(role: SystemRole): number {
@@ -137,15 +167,37 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'audit-log', actions: READ_EXPORT },
     { module: 'alertas', actions: ALL_READ },
   ],
+  // ── roles aliased via canonicalRole() — entradas dummy para satisfazer o tipo Record ──
+  GESTOR_COA:         [],  // → GESTOR (resolvido em canonicalRole)
+  SUPERVISOR_FRENTE:  [],  // → CONSULTA
+  OPERADOR_CENTRAL:   [],  // → COA
+  MANUTENCAO:         [],  // tratado diretamente em hasPermission
+  CLIENTE_RELATORIOS: [],  // tratado diretamente em hasPermission
+  OPERADOR_APK:       [],  // sem acesso web
 };
 
 export function getPermissions(role: SystemRole): Permission[] {
-  return ROLE_PERMISSIONS[role] ?? [];
+  const canonical = canonicalRole(role);
+  return ROLE_PERMISSIONS[canonical] ?? [];
 }
 
 export function hasPermission(role: SystemRole, module: Module, action: Action): boolean {
-  if (role === 'SUPER_ADMIN' || role === 'SUPER_ADMIN_SILO') return true;
-  const perms = ROLE_PERMISSIONS[role];
+  const canonical = canonicalRole(role);
+  if (canonical === 'SUPER_ADMIN' || canonical === 'SUPER_ADMIN_SILO') return true;
+  // OPERADOR_APK: sem acesso web nenhum
+  if (role === 'OPERADOR_APK') return false;
+  // MANUTENCAO: acesso restrito a equipamentos (read + ordens de serviço via operacoes)
+  if (role === 'MANUTENCAO') {
+    if (module === 'equipamentos' && (action === 'visualizar' || action === 'editar')) return true;
+    if (module === 'operacoes'    &&  action === 'visualizar') return true;
+    if (module === 'dashboard'   &&  action === 'visualizar') return true;
+    return false;
+  }
+  // CLIENTE_RELATORIOS: só relatórios + exportar
+  if (role === 'CLIENTE_RELATORIOS') {
+    return module === 'relatorios' && (action === 'visualizar' || action === 'exportar');
+  }
+  const perms = ROLE_PERMISSIONS[canonical];
   const modPerm = perms?.find((p) => p.module === module);
   return !!modPerm && modPerm.actions.includes(action);
 }
@@ -159,29 +211,36 @@ export function canWrite(role: SystemRole, module: Module): boolean {
 }
 
 export const MODULE_ALIAS: Record<string, Module> = {
-  ABASTECIMENTOS: 'operacoes',
-  ALERTAS: 'alertas',
-  CHECKLISTS: 'equipamentos',
-  CONECTIVIDADE: 'dashboard',
-  EMPRESAS: 'administracao',
-  EQUIPAMENTOS: 'equipamentos',
-  FAZENDAS: 'cadastros',
-  FICHA_OPERADOR: 'operadores',
-  FROTA: 'equipamentos',
-  GRUPOS: 'equipamentos',
-  IMPLEMENTOS: 'equipamentos',
-  MAPA: 'mapa',
-  MODELOS: 'equipamentos',
-  OPERACOES: 'operacoes',
-  OPERACIONAL: 'operacoes',
-  OPERADORES: 'operadores',
-  PAINEL: 'operacoes',
-  PARADAS: 'cadastros',
-  PERFIS: 'administracao',
-  RELATORIOS: 'relatorios',
-  SINCRONIZACAO: 'sincronizacao',
-  TIPOS: 'equipamentos',
-  USUARIOS: 'administracao',
+  ABASTECIMENTOS:       'operacoes',
+  ALERTAS:              'alertas',
+  CHECKLISTS:           'equipamentos',
+  CONECTIVIDADE:        'dashboard',
+  EMPRESAS:             'administracao',
+  EQUIPAMENTOS:         'equipamentos',
+  ESTADOS_OPERACIONAIS: 'equipamentos',
+  FAZENDAS:             'cadastros',
+  FAZENDAS_TALHOES:     'cadastros',
+  FICHA_OPERADOR:       'operadores',
+  FROTA:                'equipamentos',
+  GRUPOS:               'equipamentos',
+  HISTORICO_ATIVIDADE:  'operacoes',
+  IMPLEMENTOS:          'equipamentos',
+  MAPA:                 'mapa',
+  MAPA_OPERACIONAL:     'mapa',
+  MODELOS:              'equipamentos',
+  MODELOS_FROTA:        'equipamentos',
+  OPERACOES:            'operacoes',
+  OPERACIONAL:          'operacoes',
+  OPERADORES:           'operadores',
+  ORDENS_SERVICO:       'operacoes',
+  PAINEL:               'operacoes',
+  PARADAS:              'cadastros',
+  PERFIS:               'administracao',
+  RELATORIOS:           'relatorios',
+  SINCRONIZACAO:        'sincronizacao',
+  TIPOS:                'equipamentos',
+  TIPOS_FROTA:          'equipamentos',
+  USUARIOS:             'administracao',
 };
 
 export const ROUTE_MODULE_MAP: Array<{ pattern: RegExp; module: Module }> = [
@@ -228,11 +287,17 @@ export const SYSTEM_ROLES: Array<{
   name: string;
   description: string;
 }> = [
-  { id: 'role-super-admin-silo', role: 'SUPER_ADMIN_SILO', name: 'Super Administrador SILO', description: 'Acesso total à plataforma SILO OPS' },
-  { id: 'role-super-admin', role: 'SUPER_ADMIN', name: 'Super Administrador', description: 'Acesso total a todas as empresas e configuracoes globais' },
-  { id: 'role-admin-empresa', role: 'ADMIN_EMPRESA', name: 'Admin Empresa', description: 'Gestao completa da propria empresa: cadastros, configuracoes, usuarios' },
-  { id: 'role-gestor', role: 'GESTOR', name: 'Gestor', description: 'Dashboard, relatorios, alertas, operacoes. Sem configuracoes de sistema' },
-  { id: 'role-coa', role: 'COA', name: 'Centro de Operacoes', description: 'Visualizacao em tempo real, mapa, alertas. Sem escrita em cadastros' },
-  { id: 'role-consulta', role: 'CONSULTA', name: 'Consulta', description: 'Somente leitura em dashboard e relatorios' },
-  { id: 'role-auditor', role: 'AUDITOR', name: 'Auditor', description: 'Acesso ao audit-log e relatorios de auditoria. Sem escrita' },
+  { id: 'role-super-admin-silo',    role: 'SUPER_ADMIN_SILO',    name: 'Super Admin SILO',        description: 'Acesso total à plataforma. Requer tenant ativo para dados operacionais.' },
+  { id: 'role-super-admin',         role: 'SUPER_ADMIN',          name: 'Super Administrador',     description: 'Acesso total a todas as empresas e configuracoes globais.' },
+  { id: 'role-admin-empresa',       role: 'ADMIN_EMPRESA',        name: 'Admin Empresa',           description: 'Gestao completa da propria empresa: cadastros, configuracoes, usuarios.' },
+  { id: 'role-gestor',              role: 'GESTOR',               name: 'Gestor',                  description: 'Dashboard, relatorios, alertas, operacoes. Sem configuracoes de sistema.' },
+  { id: 'role-gestor-coa',          role: 'GESTOR_COA',           name: 'Gestor / COA',            description: 'Permissoes de Gestor com visibilidade operacional em tempo real.' },
+  { id: 'role-coa',                 role: 'COA',                  name: 'Centro de Operacoes',     description: 'Visualizacao em tempo real, mapa, alertas. Sem escrita em cadastros.' },
+  { id: 'role-supervisor-frente',   role: 'SUPERVISOR_FRENTE',    name: 'Supervisor de Frente',    description: 'Visualiza operacoes e equipamentos da frente de trabalho.' },
+  { id: 'role-operador-central',    role: 'OPERADOR_CENTRAL',     name: 'Operador Central Web',    description: 'Opera via Central web: mapa e operacoes em tempo real.' },
+  { id: 'role-manutencao',          role: 'MANUTENCAO',           name: 'Manutencao',              description: 'Acesso a equipamentos e ordens de servico. Sem cadastros gerais.' },
+  { id: 'role-cliente-relatorios',  role: 'CLIENTE_RELATORIOS',   name: 'Cliente (Relatorios)',    description: 'Somente acesso a relatorios e exportacao. Sem dados operacionais.' },
+  { id: 'role-operador-apk',        role: 'OPERADOR_APK',         name: 'Operador APK',            description: 'Somente mobile. Sem acesso ao portal web.' },
+  { id: 'role-consulta',            role: 'CONSULTA',             name: 'Consulta',                description: 'Somente leitura em dashboard e relatorios.' },
+  { id: 'role-auditor',             role: 'AUDITOR',              name: 'Auditor',                 description: 'Acesso ao audit-log e relatorios de auditoria. Sem escrita.' },
 ];

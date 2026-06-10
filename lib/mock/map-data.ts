@@ -19,11 +19,15 @@ export const MAP_KPIS = [
 
 export const STATUS_CONFIG = {
   trabalhando: { label: 'Trabalhando', color: '#10b981', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  operando: { label: 'Operando', color: '#10b981', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  online: { label: 'Online', color: '#3b82f6', tailwind: 'bg-blue-500', text: 'text-blue-500' },
   deslocando: { label: 'Deslocando', color: '#fbbf24', tailwind: 'bg-amber-500', text: 'text-amber-500' },
   parada: { label: 'Parada', color: '#f97316', tailwind: 'bg-orange-500', text: 'text-orange-500' },
+  parado: { label: 'Parado', color: '#f97316', tailwind: 'bg-orange-500', text: 'text-orange-500' },
   alarme: { label: 'Alerta', color: '#ef4444', tailwind: 'bg-red-500', text: 'text-red-500' },
   manutencao: { label: 'Manutenção', color: '#a855f7', tailwind: 'bg-purple-500', text: 'text-purple-500' },
   offline: { label: 'Offline', color: '#6b7280', tailwind: 'bg-gray-500', text: 'text-gray-500' },
+  finalizado: { label: 'Finalizado', color: '#6b7280', tailwind: 'bg-gray-500', text: 'text-gray-500' },
 };
 
 export const MACHINE_TYPES = {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
+import { requirePermission } from '@/lib/auth/rbac-server';
 import { buildTempoReport, buildTempoCsv } from '@/lib/tempo-operacional-builder';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,8 @@ export async function GET(req: NextRequest) {
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
+    const permCheck = requirePermission(req, 'relatorios', 'exportar', tenantId);
+    if (permCheck) return permCheck;
     const result = buildTempoReport({
       tenantId,
       from: searchParams.get('from')?.trim() || null,

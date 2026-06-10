@@ -7,6 +7,7 @@ import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 import { requirePermission } from '@/lib/auth/rbac-server';
 import { normalizeCompanyPortPayload } from '@/lib/company-form';
+import { requireCsrf } from '@/lib/auth/csrf';
 
 const generateCompanyToken = () => `CTK-${randomBytes(18).toString('hex').toUpperCase()}`;
 
@@ -26,6 +27,8 @@ export async function POST(req: NextRequest) {
 
     const demoBlock = blockWriteInDemo(req);
     if (demoBlock) return demoBlock;
+    const csrf = requireCsrf(req);
+    if (csrf) return csrf;
 
     const rbac = requirePermission(req, 'administracao', 'administrar', 'global');
     if (rbac) return rbac;

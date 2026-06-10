@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
+import { requirePermission } from '@/lib/auth/rbac-server';
 import { buildOperatorSheet } from '@/lib/operator-sheet-builder';
 
 export type { FichaOperador } from '@/lib/operator-sheet-builder';
@@ -19,6 +20,8 @@ export async function GET(req: NextRequest) {
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
+    const permCheck = requirePermission(req, 'operadores', 'visualizar', tenantId);
+    if (permCheck) return permCheck;
     const result   = buildOperatorSheet({ tenantId, fleetCode, journeyId });
 
     if (!result.ok) {

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
+import { requirePermission } from '@/lib/auth/rbac-server';
 import { ServerStorage, MobileEvent } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
 
 export const dynamic = 'force-dynamic';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────────────
 
 export interface FleetStatusCounts {
   OPERANDO:   number;
@@ -56,16 +57,16 @@ export interface DashboardSummary {
   activeOperations:  number;
   criticalAlerts:    number;
   openStops:         number;
-  productionToday:   number;          // productive hours today
+  productionToday:   number;
   fleetStatusCounts: FleetStatusCounts;
-  recentAlerts:      RecentAlert[];   // latest 5
-  productivitySeries: number[];       // 24 values, hours per hour-of-day (today)
+  recentAlerts:      RecentAlert[];
+  productivitySeries: number[];
   syncSummary:       SyncSummary;
   activeFleet:       ActiveFleetItem[];
   generatedAt:       string;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────────────
 
 const MAX_HB_GAP_H = 10 / 60;
 
@@ -122,24 +123,22 @@ function computeProductivity(events: MobileEvent[]): ProductivityAccum {
   return { totalH, hourly };
 }
 
-// ── Route ─────────────────────────────────────────────────────────────────────
+// ── Route ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   try {
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
+    const permCheck = requirePermission(req, 'dashboard', 'visualizar', tenantId);
+    if (permCheck) return permCheck;
     const { from, to } = todayRange();
 
-    // ── Live fleet ──────────────────────────────────────────────────────────
     const fleet = ServerStorage.getLiveFleet(tenantId);
 
-    const totalFleet      = fleet.length;
-    const onlineCount     = fleet.filter(m => m.status !== 'OFFLINE').length;
+    const totalFleet       = fleet.length;
+    const onlineCount      = fleet.filter(m => m.status !== 'OFFLINE').length;
     const activeOperations = fleet.filter(m => m.status === 'OPERANDO').length;
-    // openStops: máquina com parada em aberto (stopCode/stopDescription/stopReason
-    // presente e sem stopEndedAt). Máquinas FINALIZADO não contam — a jornada encerrou
-    // e a parada foi fechada no JOURNEY_END.
     const openStops = fleet.filter(m => {
       const raw = m as unknown as Record<string, unknown>;
       if (m.status === 'FINALIZADO') return false;
@@ -158,7 +157,6 @@ export async function GET(req: NextRequest) {
       if (k in fleetStatusCounts) fleetStatusCounts[k]++;
     }
 
-    // ── Alerts ──────────────────────────────────────────────────────────────
     interface RawAlert {
       id: string;
       title: string;
@@ -186,15 +184,12 @@ export async function GET(req: NextRequest) {
         equipmentId: a.equipmentId,
       }));
 
-    // ── Events (today) ──────────────────────────────────────────────────────
-    const allEvents    = ServerStorage.getEvents(tenantId);
-    const todayEvents  = allEvents.filter(e => inRange(e.timestamp, from, to));
+    const allEvents   = ServerStorage.getEvents(tenantId);
+    const todayEvents = allEvents.filter(e => inRange(e.timestamp, from, to));
 
-    // Productive hours + hourly series
     const { totalH: productionToday, hourly: productivitySeries } =
       computeProductivity(todayEvents);
 
-    // Sync summary
     const machinesWithData = new Set(todayEvents.map(e => e.equipmentId)).size;
     const lastEventAt      = todayEvents.length > 0
       ? todayEvents.reduce((latest, e) =>
@@ -207,8 +202,6 @@ export async function GET(req: NextRequest) {
       machinesWithData,
     };
 
-    // ── Active fleet detail ─────────────────────────────────────────────────
-    // Inclui toda máquina com sinal recente OU parada em aberto OU operador atribuído
     const activeFleet: ActiveFleetItem[] = fleet
       .filter(m =>
         m.status !== 'OFFLINE' ||

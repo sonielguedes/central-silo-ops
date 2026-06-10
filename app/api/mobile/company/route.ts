@@ -4,13 +4,29 @@ import { Company } from '@/lib/types';
 import { blockWriteInDemo, maskToken } from '@/lib/auth/api-guard';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 import { normalizeCompanyPortPayload } from '@/lib/company-form';
+import { requireCsrf } from '@/lib/auth/csrf';
+import { resolveSessionFromRequest } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/rbac-server';
 
 export async function POST(req: NextRequest) {
   try {
     const demoBlock = blockWriteInDemo(req);
     if (demoBlock) return demoBlock;
+    const session = resolveSessionFromRequest(req);
+    if (!session) {
+      return NextResponse.json({ error: 'Sessao nao identificada. Faca login novamente.' }, { status: 401 });
+    }
+    const csrf = requireCsrf(req);
+    if (csrf) return csrf;
 
     const company = await req.json() as Company;
+    const companyTenantId = company.tenantId || company.id;
+    if (session.scope === 'TENANT' && session.tenantId && companyTenantId !== session.tenantId) {
+      return NextResponse.json({ error: 'Tenant divergente da sessao' }, { status: 403 });
+    }
+    const rbac = requirePermission(req, 'administracao', 'editar', companyTenantId);
+    if (rbac) return rbac;
+
     const normalized = normalizeCompanyPortPayload(company);
     const { portaApi, portaMqtt, ...companyPayload } = normalized as unknown as Record<string, unknown>;
 

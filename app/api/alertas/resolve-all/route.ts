@@ -4,6 +4,7 @@ import { blockWriteInDemo, requireTenant } from '@/lib/auth/api-guard';
 import { resolveSessionFromRequest } from '@/lib/auth/session';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 import { hasPermission } from '@/lib/auth/rbac-shared';
+import { requireCsrf } from '@/lib/auth/csrf';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,8 @@ export async function POST(req: NextRequest) {
   try {
     const demoBlock = blockWriteInDemo(req);
     if (demoBlock) return demoBlock;
+    const csrf = requireCsrf(req);
+    if (csrf) return csrf;
 
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;

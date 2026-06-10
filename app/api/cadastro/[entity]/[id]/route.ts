@@ -7,6 +7,7 @@ import { equipmentTypeSchema } from '@/lib/validations/master-schemas';
 import { resolveIconType } from '@/lib/equipment-icon-types';
 import { AuthStore, roleFromAccessGroupId } from '@/lib/auth/auth-store';
 import { resolveSessionFromRequest } from '@/lib/auth/session';
+import { requireCsrf } from '@/lib/auth/csrf';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,8 @@ export async function PUT(
 ) {
   const demoBlock = blockWriteInDemo(req);
   if (demoBlock) return demoBlock;
+  const csrf = requireCsrf(req);
+  if (csrf) return csrf;
 
   const { entity, id } = params;
   if (!ALLOWED_ENTITIES.includes(entity)) {
@@ -151,7 +154,7 @@ export async function PUT(
       };
       const all = CadastroStorage.getAllRaw(tenantId, entity);
       if (all.some((item) => item.id !== id && String(item.code ?? '').toUpperCase() === parsed.data.code)) {
-        return NextResponse.json({ error: 'Código já cadastrado' }, { status: 409 });
+        return NextResponse.json({ error: 'Codigo ja cadastrado' }, { status: 409 });
       }
     }
 
@@ -183,6 +186,8 @@ export async function DELETE(
 ) {
   const demoBlock = blockWriteInDemo(req);
   if (demoBlock) return demoBlock;
+  const csrf = requireCsrf(req);
+  if (csrf) return csrf;
 
   const { entity, id } = params;
   if (!ALLOWED_ENTITIES.includes(entity)) {

@@ -1,6 +1,9 @@
 import {
   UserService,
   StopReasonService,
+  SyncService,
+  EquipmentService,
+  CompanyService,
 } from "@/services/master.service";
 
 /**
@@ -91,6 +94,115 @@ export async function runCriticalTests() {
       // In current implementation StopReasonService doesn't check duplication, adding check would be a fix.
       // But user said "don't implement new features". However, P0 says "bloquear códigos repetidos" in status doc.
       // Let's assume it should be there.
+    }
+  });
+
+  // 5. Validação de evento mobile de frota
+  await test("Aceita apenas evento mobile válido da frota", async () => {
+    const before = await SyncService.getAll(true);
+    const equipment = await EquipmentService.getById('e-1');
+    if (!equipment?.mobileToken) throw new Error("Seed de equipamento móvel inválida");
+
+    await SyncService.createMobileEvent({
+      type: 'TELEMETRY',
+      status: 'PENDENTE',
+      origin: 'APK',
+      attempts: 0,
+      payload: {
+        fleetCode: equipment.code,
+        mobileToken: equipment.mobileToken,
+      }
+    });
+
+    const after = await SyncService.getAll(true);
+    if (after.length !== before.length + 1) {
+      throw new Error("Evento válido não foi persistido");
+    }
+  });
+
+  await test("Rejeita evento mobile inválido sem persistir", async () => {
+    const before = await SyncService.getAll(true);
+    const equipment = await EquipmentService.getById('e-1');
+    if (!equipment?.mobileToken) throw new Error("Seed de equipamento móvel inválida");
+
+    try {
+      await SyncService.createMobileEvent({
+        type: 'TELEMETRY',
+        status: 'PENDENTE',
+        origin: 'APK',
+        attempts: 0,
+        payload: {
+          fleetCode: equipment.code,
+          mobileToken: 'TOKEN-ERRADO',
+        }
+      });
+      throw new Error("Deveria ter rejeitado token inválido");
+    } catch (e: any) {
+      if (e.statusCode !== 403) throw e;
+    }
+
+    const after = await SyncService.getAll(true);
+    if (after.length !== before.length) {
+      throw new Error("Evento inválido foi gravado");
+    }
+  });
+
+  // 7. Configuração de portas por instância
+  await test("Gera URLs e bloqueia duplicidade de portas/código por instância", async () => {
+    const suffix = Date.now().toString().slice(-6);
+    const apiPort = 41000 + Number(suffix.slice(-3));
+    const mqttPort = 42000 + Number(suffix.slice(-3));
+
+    const created = await CompanyService.create({
+      code: `TST-${suffix}`,
+      tradingName: `Instância Teste ${suffix}`,
+      corporateName: `Instância Teste ${suffix} LTDA`,
+      cnpj: `00.000.000/${suffix.slice(-4)}-00`,
+      domain: `teste-${suffix}.siloops.com.br`,
+      apiPort,
+      mqttPort,
+      plan: 'PILOTO',
+      status: 'ATIVO'
+    });
+
+    if (created.apiBaseUrl !== `https://api.siloops.com.br:${apiPort}`) {
+      throw new Error("API URL não foi gerada corretamente");
+    }
+
+    if (created.mqttUrl !== `mqtt.siloops.com.br:${mqttPort}`) {
+      throw new Error("MQTT URL não foi gerada corretamente");
+    }
+
+    try {
+      await CompanyService.create({
+        code: `TST-API-${suffix}`,
+        tradingName: `Instância API Duplicada ${suffix}`,
+        corporateName: `Instância API Duplicada ${suffix} LTDA`,
+        cnpj: `00.000.001/${suffix.slice(-4)}-00`,
+        apiPort,
+        mqttPort: mqttPort + 1,
+        plan: 'PILOTO',
+        status: 'ATIVO'
+      });
+      throw new Error("Deveria bloquear porta API duplicada");
+    } catch (e: any) {
+      if (e.message !== 'Porta API já cadastrada para outra instância.') throw e;
+    }
+
+    try {
+      await CompanyService.create({
+        code: created.code,
+        tradingName: `Instância Código Duplicado ${suffix}`,
+        corporateName: `Instância Código Duplicado ${suffix} LTDA`,
+        cnpj: `00.000.002/${suffix.slice(-4)}-00`,
+        apiPort: apiPort + 1,
+        mqttPort: mqttPort + 2,
+        plan: 'PILOTO',
+        status: 'ATIVO'
+      });
+      throw new Error("Deveria bloquear código interno duplicado");
+    } catch (e: any) {
+      if (e.message !== 'Código interno já cadastrado para outra instância.') throw e;
     }
   });
 

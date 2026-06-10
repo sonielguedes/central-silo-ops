@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
+import { requirePermission } from '@/lib/auth/rbac-server';
 import { buildOperatorSheet } from '@/lib/operator-sheet-builder';
 import type { FichaOperador } from '@/lib/operator-sheet-builder';
 
@@ -63,8 +64,8 @@ function buildCsv(ficha: FichaOperador): string {
         )
       : [[...base, '', '', '', '', esc(ficha.status)].join(';')];
 
-  // UTF-8 BOM (\uFEFF) so Excel opens without encoding prompt
-  return '\uFEFF' + [HEADER, ...rows].join('\n');
+  // UTF-8 BOM (﻿) so Excel opens without encoding prompt
+  return '﻿' + [HEADER, ...rows].join('\n');
 }
 
 export async function GET(req: NextRequest) {
@@ -80,6 +81,8 @@ export async function GET(req: NextRequest) {
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;
     const { tenantId } = tenant;
+    const permCheck = requirePermission(req, 'operadores', 'exportar', tenantId);
+    if (permCheck) return permCheck;
     const result   = buildOperatorSheet({ tenantId, fleetCode, journeyId });
 
     if (!result.ok) {
