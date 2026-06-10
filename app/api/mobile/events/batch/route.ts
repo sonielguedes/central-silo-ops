@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
-import { EquipmentLiveStatus, TrailPoint } from '@/lib/types';
+import { EquipmentLiveState, EquipmentLiveStatus, TrailPoint } from '@/lib/types';
 import { requireMobileAuth } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { auditFromRequest } from '@/lib/audit/audit-log';
@@ -16,11 +16,24 @@ const maskToken = (token?: string) => {
 /** Map FSM state strings to EquipmentLiveStatus */
 function fsmToStatus(state: string): EquipmentLiveStatus {
   const s = state.toUpperCase();
+  // JORNADA_FINALIZADA / FINALIZADO are terminal — handled by the FSM_TRANSITION branch
+  // before fsmToStatus is called, but guard here for safety.
+  if (s === 'JORNADA_FINALIZADA' || s === 'FINALIZADO') return 'FINALIZADO';
   if (s.includes('TRABALHO') || s.includes('OPERAND') || s === 'WORKING') return 'OPERANDO';
   if (s.includes('PARADO') || s.includes('PARADA') || s === 'STOPPED') return 'PARADO';
   if (s === 'JOURNEY_END' || s === 'OFFLINE') return 'OFFLINE';
   return 'ONLINE';
 }
+
+/** Fields cleared from live-state when a journey is finalized via FSM_TRANSITION.
+ *  Preserves: equipmentId, fleetCode, tenantId, hourmeter*, status, endedAt, updatedAt. */
+const JORNADA_FINALIZADA_CLEAR_FIELDS = [
+  'journeyId',
+  'operatorRegistration', 'registration', 'operatorName', 'currentOperator',
+  'operationCode', 'operationName', 'currentOperation', 'costCenter', 'workOrder',
+  'implementCode', 'implementName',
+  'stopCode', 'stopDescription', 'stopReason', 'stopStartedAt', 'stopDurationSeconds',
+] satisfies (keyof EquipmentLiveState)[];
 
 const hasValidValue = (value: unknown) => value !== undefined && value !== null && value !== '';
 
@@ -98,7 +111,7 @@ function enrichOperationalFields(
   tenantId: string,
   updates: Record<string, unknown>
 ): void {
-  // Operator: registration → name
+  // Operator: registration -> name
   const reg = asString(updates.operatorRegistration);
   if (reg && !asString(updates.operatorName)) {
     const ops = CadastroStorage.getAll(tenantId, 'operadores') as Array<Record<string, unknown>>;
@@ -110,9 +123,9 @@ function enrichOperationalFields(
     }
   }
 
-  // Operation: operationCode → operationName (from 'operacoes' catalog)
+  // Operation: operationCode -> operationName (from 'operacoes' catalog)
   // Match by 'code' field first, then 'type' field (legacy seed data uses type).
-  // Only uses found.name — never falls back to type/code as name.
+  // Only uses found.name -- never falls back to type/code as name.
   const opCode = asString(updates.operationCode);
   if (opCode && !asString(updates.operationName)) {
     const ops2 = CadastroStorage.getAll(tenantId, 'operacoes') as Array<Record<string, unknown>>;
@@ -124,13 +137,13 @@ function enrichOperationalFields(
       updates.currentOperation = opName;
       console.info('[operational-fields] enriched operation=' + opName + ' code=' + opCode);
     } else if (found) {
-      console.warn('[operational-fields] operacoes item found for code=' + opCode + ' but name is empty — fields: ' + Object.keys(found).join(','));
+      console.warn('[operational-fields] operacoes item found for code=' + opCode + ' but name is empty -- fields: ' + Object.keys(found).join(','));
     } else {
       console.warn('[operational-fields] operacoes: no item found for code=' + opCode);
     }
   }
 
-  // Implement: code → name
+  // Implement: code -> name
   const impCode = asString(updates.implementCode);
   if (impCode && !asString(updates.implementName)) {
     const imps = CadastroStorage.getAll(tenantId, 'implementos') as Array<Record<string, unknown>>;
@@ -141,7 +154,7 @@ function enrichOperationalFields(
     }
   }
 
-  // Stop reason: stopCode → stopDescription. stopCode always persists regardless of lookup result.
+  // Stop reason: stopCode -> stopDescription. stopCode always persists regardless of lookup result.
   const stopCodeEnrich = asString(updates.stopCode);
   if (stopCodeEnrich && !asString(updates.stopDescription)) {
     const paradas = CadastroStorage.getAll(tenantId, 'paradas') as Array<Record<string, unknown>>;
@@ -152,7 +165,7 @@ function enrichOperationalFields(
       updates.stopReason      = stopDesc;
       console.info('[operational-fields] enriched stop=' + stopDesc + ' code=' + stopCodeEnrich);
     } else {
-      // No catalog match or empty description — stopCode stays intact, stopDescription left absent
+      // No catalog match or empty description -- stopCode stays intact, stopDescription left absent
       console.warn('[operational-fields] paradas: no description found for code=' + stopCodeEnrich + ' (stopCode preserved)');
     }
   }
@@ -213,7 +226,7 @@ export async function POST(req: NextRequest) {
       return { offlineId: event.uuid, status };
     });
 
-    // ── Build live-state update from all events ────────────────────────────
+    // -- Build live-state update from all events ----------------------------------------
     const now = new Date().toISOString();
     const liveUpdates: Record<string, unknown> = { updatedAt: now };
 
@@ -222,10 +235,13 @@ export async function POST(req: NextRequest) {
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
-    // Tracks whether a JOURNEY_END was seen in this batch. FINALIZADO is terminal and
+    // Tracks whether a terminal journey event was seen in this batch. FINALIZADO is terminal and
     // must win over any other status regardless of event ordering or later heartbeats.
     let journeyEnded = false;
     let journeyEndedAt: string | undefined;
+    // Set to true when finalization came via FSM_TRANSITION/JORNADA_FINALIZADA (not JOURNEY_END),
+    // so fieldsToDelete is passed to updateLiveState to clear journeyId/operator/stop fields.
+    let jornadaFinalizadaByFsm = false;
 
     for (const event of sorted) {
       const d = event.data || {};
@@ -236,7 +252,7 @@ export async function POST(req: NextRequest) {
           applyOperationalFields(liveUpdates, d);
           const hStart = asValidHourmeter(d.hourmeterStart ?? d.hourmeter);
           if (hStart != null) { liveUpdates.hourmeterStart = hStart; liveUpdates.hourmeterCurrent = hStart; }
-          // Persist hourmeterSource explicitly — applyOperationalFields handles it via putIfValid,
+          // Persist hourmeterSource explicitly -- applyOperationalFields handles it via putIfValid,
           // but an explicit set here guarantees it even if the field arrives outside the data envelope.
           const srcStart = asString(d.hourmeterSource);
           if (srcStart) liveUpdates.hourmeterSource = srcStart;
@@ -247,6 +263,8 @@ export async function POST(req: NextRequest) {
         case 'LOCATION':
         case 'GPS':
         case 'GPS_POINT': {
+          // Late GPS after journey finalized must not reopen the journey or update status.
+          if (journeyEnded) break;
           applyOperationalFields(liveUpdates, d);
           const latitude = asNumber(d.latitude);
           const longitude = asNumber(d.longitude);
@@ -284,6 +302,8 @@ export async function POST(req: NextRequest) {
           break;
         }
         case 'HEARTBEAT': {
+          // Late heartbeat after journey finalized must not reopen the journey or update status.
+          if (journeyEnded) break;
           applyOperationalFields(liveUpdates, d);
           liveUpdates.lastHeartbeatAt = now;
           const latitude = asNumber(d.latitude);
@@ -303,8 +323,36 @@ export async function POST(req: NextRequest) {
           break;
         }
         case 'FSM_TRANSITION': {
+          const toState       = asString(d.toState) || asString(d.state) || '';
+          const payloadStatus = asString(d.status) || '';
+          const isJornadaFinalizada =
+            toState.toUpperCase() === 'JORNADA_FINALIZADA' ||
+            payloadStatus.toUpperCase() === 'JORNADA_FINALIZADA';
+
+          if (isJornadaFinalizada) {
+            // Terminal state: set hourmeter/endedAt, mark journey ended.
+            // Do NOT call applyOperationalFields -- operator/operation/stop must be cleared.
+            const hStart = asValidHourmeter(d.hourmeterStart);
+            const hFinal = asValidHourmeter(d.hourmeterFinal ?? d.hourmeterEnd ?? d.hourmeter);
+            if (hStart != null) liveUpdates.hourmeterStart = hStart;
+            if (hFinal != null) {
+              liveUpdates.hourmeterCurrent = hFinal;
+              liveUpdates.hourmeterEnd     = hFinal;
+            }
+            liveUpdates.endedAt         = asString(d.endedAt) || ts;
+            liveUpdates.status          = 'FINALIZADO';
+            liveUpdates.statusStartedAt = ts;
+            journeyEnded           = true;
+            journeyEndedAt         = liveUpdates.endedAt as string;
+            jornadaFinalizadaByFsm = true;
+            console.info('[FSM/JORNADA_FINALIZADA] fleetCode=' + validation.equipment.code +
+              ' hStart=' + (hStart ?? 'missing') + ' hFinal=' + (hFinal ?? 'missing') +
+              ' endedAt=' + String(liveUpdates.endedAt));
+            break;
+          }
+
+          // Normal FSM transition
           applyOperationalFields(liveUpdates, d);
-          const toState = asString(d.toState) || asString(d.state) || '';
           liveUpdates.status = fsmToStatus(toState);
           if (d.operationCode) liveUpdates.operationCode = d.operationCode;
           if (d.operationName) { liveUpdates.operationName = d.operationName; liveUpdates.currentOperation = d.operationName; }
@@ -345,7 +393,7 @@ export async function POST(req: NextRequest) {
 
           const jIdEnd = asString(d.journeyId);
           if (!jIdEnd) {
-            console.warn(`[JourneyEnd] journeyId ausente fleetCode=${validation.equipment.code}`);
+            console.warn('[JourneyEnd] journeyId ausente fleetCode=' + validation.equipment.code);
           }
 
           const hStartEnd = asValidHourmeter(d.hourmeterStart ?? d.hourmeterStartValue);
@@ -357,9 +405,9 @@ export async function POST(req: NextRequest) {
             if (hStartEnd != null && hEnd < hStartEnd) {
               liveUpdates.hourmeterInconsistent = true;
               liveUpdates.hourmeterInconsistencyReason = 'hourmeterEnd menor que hourmeterStart';
-              console.warn(`[JourneyEnd] validation failed: hourmeterEnd(${hEnd}) < hourmeterStart(${hStartEnd}) fleetCode=${validation.equipment.code}`);
+              console.warn('[JourneyEnd] validation failed: hourmeterEnd(' + hEnd + ') < hourmeterStart(' + hStartEnd + ') fleetCode=' + validation.equipment.code);
             }
-            // Accept hourmeterEnd regardless — inconsistency flag signals the anomaly
+            // Accept hourmeterEnd regardless -- inconsistency flag signals the anomaly
             liveUpdates.hourmeterEnd     = hEnd;
             liveUpdates.hourmeterCurrent = hEnd;
           }
@@ -385,16 +433,16 @@ export async function POST(req: NextRequest) {
           liveUpdates.status          = 'FINALIZADO';
           liveUpdates.statusStartedAt = ts;
 
-          // FINALIZADO has maximum priority — record it so it cannot be undone by
+          // FINALIZADO has maximum priority -- record it so it cannot be undone by
           // out-of-order events later in this same batch.
           journeyEnded   = true;
           journeyEndedAt = liveUpdates.endedAt as string;
 
-          console.info(`[JourneyEnd] payload: fleetCode=${validation.equipment.code}` +
-            ` journeyId=${jIdEnd || 'missing'}` +
-            ` hourmeterStart=${hStartEnd ?? 'missing'}` +
-            ` hourmeterEnd=${hEnd ?? 'missing'}` +
-            ` total=${String(liveUpdates.totalHourmeter ?? 'n/a')}`);
+          console.info('[JourneyEnd] payload: fleetCode=' + validation.equipment.code +
+            ' journeyId=' + (jIdEnd || 'missing') +
+            ' hourmeterStart=' + String(hStartEnd ?? 'missing') +
+            ' hourmeterEnd=' + String(hEnd ?? 'missing') +
+            ' total=' + String(liveUpdates.totalHourmeter ?? 'n/a'));
           break;
         }
         default:
@@ -408,9 +456,9 @@ export async function POST(req: NextRequest) {
       liveUpdates.lastHeartbeatAt = now;
     }
 
-    // ── JOURNEY_END has maximum priority ───────────────────────────────────────
+    // -- JOURNEY_END has maximum priority --------------------------------------------------
     // Re-assert FINALIZADO after the whole batch so a heartbeat/GPS with a newer
-    // timestamp than the JOURNEY_END (common with offline sync) can't flip it back.
+    // timestamp than the JOURNEY_END (common with offline sync) cannot flip it back.
     if (journeyEnded) {
       liveUpdates.status = 'FINALIZADO';
       if (!liveUpdates.endedAt && journeyEndedAt) liveUpdates.endedAt = journeyEndedAt;
@@ -423,17 +471,20 @@ export async function POST(req: NextRequest) {
     const loggedHourmeter = liveUpdates.hourmeterCurrent ?? liveUpdates.hourmeterEnd ?? liveUpdates.hourmeterStart ?? 'missing';
     console.info('[operational-fields] received fleetCode=' + validation.equipment.code);
     enrichOperationalFields(tenantId, liveUpdates);
-    console.info(`[batch-operational] fleetCode=${validation.equipment.code} operator=${String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing')} operation=${String(liveUpdates.operationName || liveUpdates.operationCode || 'missing')} hourmeter=${String(loggedHourmeter)}`);
-    console.info(`[Hourmeter] source=${String(liveUpdates.hourmeterSource || 'missing')}`);
-    console.info(`[Hourmeter] start=${String(liveUpdates.hourmeterStart ?? 'missing')}`);
-    console.info(`[Hourmeter] current=${String(liveUpdates.hourmeterCurrent ?? 'missing')}`);
-    console.info(`[Hourmeter] end=${String(liveUpdates.hourmeterEnd ?? 'missing')}`);
+    console.info('[batch-operational] fleetCode=' + validation.equipment.code + ' operator=' + String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing') + ' operation=' + String(liveUpdates.operationName || liveUpdates.operationCode || 'missing') + ' hourmeter=' + String(loggedHourmeter));
+    console.info('[Hourmeter] source=' + String(liveUpdates.hourmeterSource || 'missing'));
+    console.info('[Hourmeter] start=' + String(liveUpdates.hourmeterStart ?? 'missing'));
+    console.info('[Hourmeter] current=' + String(liveUpdates.hourmeterCurrent ?? 'missing'));
+    console.info('[Hourmeter] end=' + String(liveUpdates.hourmeterEnd ?? 'missing'));
 
     ServerStorage.updateLiveState(
       tenantId,
       validation.equipment.id,
       validation.equipment.code,
       liveUpdates,
+      // JORNADA_FINALIZADA via FSM_TRANSITION: explicitly clear journey/operator/stop fields
+      // from the existing live-state record so they don't carry over into the finalized state.
+      jornadaFinalizadaByFsm ? JORNADA_FINALIZADA_CLEAR_FIELDS : undefined,
     );
 
     auditFromRequest(req, tenantId, {

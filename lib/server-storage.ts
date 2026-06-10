@@ -73,7 +73,7 @@ export class ServerStorage {
       delete sanitized.totalHourmeter;
     }
 
-    // 3. hourmeterSource: must be a non-empty string — cleans up null/empty residuals
+    // 3. hourmeterSource: must be a non-empty string -- cleans up null/empty residuals
     if (!sanitized.hourmeterSource || typeof sanitized.hourmeterSource !== 'string' || !sanitized.hourmeterSource.trim()) {
       delete sanitized.hourmeterSource;
     }
@@ -113,7 +113,7 @@ export class ServerStorage {
       sanitized.hourmeterInconsistent = true;
       sanitized.hourmeterInconsistencyReason = 'totalHourmeter negativo';
     }
-    // No violation → hourmeterInconsistent remains absent (clean state)
+    // No violation => hourmeterInconsistent remains absent (clean state)
 
     return sanitized;
   }
@@ -132,7 +132,15 @@ export class ServerStorage {
     return [];
   }
 
-  static updateLiveState(tenantId: string, equipmentId: string, fleetCode: string, updates: Partial<EquipmentLiveState>): EquipmentLiveState {
+  static updateLiveState(
+    tenantId: string,
+    equipmentId: string,
+    fleetCode: string,
+    updates: Partial<EquipmentLiveState>,
+    /** Keys to delete from the existing live-state record before merging updates.
+     *  Use for JORNADA_FINALIZADA to clear journeyId / operator / operation / stop fields. */
+    fieldsToDelete?: (keyof EquipmentLiveState)[],
+  ): EquipmentLiveState {
     const all = this.loadLiveState(tenantId);
     const now = new Date().toISOString();
     const index = all.findIndex(s => s.equipmentId === equipmentId);
@@ -173,6 +181,12 @@ export class ServerStorage {
         delete base.hourmeterInconsistent;
         delete base.hourmeterInconsistencyReason;
         delete base.totalHourmeter;
+      }
+      // Explicit field deletion (e.g. JORNADA_FINALIZADA clears journeyId/operator/operation/stop)
+      if (fieldsToDelete?.length) {
+        for (const field of fieldsToDelete) {
+          delete base[field as string];
+        }
       }
       state = this.sanitizeLiveStateItem({ ...base, ...cleanUpdates, updatedAt: now } as EquipmentLiveState);
       all[index] = state;
@@ -235,7 +249,7 @@ export class ServerStorage {
       const gps = s.lastGpsAt ? new Date(s.lastGpsAt).getTime() : 0;
       const lastSignal = Math.max(hb, gps);
 
-      // FINALIZADO is terminal — a finished journey must never be downgraded to OFFLINE
+      // FINALIZADO is terminal -- a finished journey must never be downgraded to OFFLINE
       // by the signal-timeout rule (offline-synced JOURNEY_END carries old timestamps).
       if (s.status !== 'OFFLINE' && s.status !== 'FINALIZADO' && lastSignal > 0 && (now - lastSignal) > OFFLINE_TIMEOUT_MS) {
         return { ...s, status: 'OFFLINE' as const };
@@ -524,7 +538,7 @@ export class ServerStorage {
     }
   }
 
-  // ── Trail ────────────────────────────────────────────────────────────────────
+  // -- Trail -------------------------------------------------------------------
   private static getTrailDir(tenantId: string): string {
     const dir = path.join(this.getTenantDir(tenantId), 'trails');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -540,7 +554,7 @@ export class ServerStorage {
     // Reject invalid coordinates
     if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) return false;
     if (point.latitude === 0 && point.longitude === 0) return false;
-    // Reject absent timestamp or journeyId — they are the deduplication/routing keys
+    // Reject absent timestamp or journeyId -- they are the deduplication/routing keys
     if (!point.timestamp) return false;
     if (!point.journeyId || !point.journeyId.trim()) return false;
 
