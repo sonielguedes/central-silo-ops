@@ -25,6 +25,7 @@ export interface AlertRecord {
   createdAt: string;
   acknowledgedAt: string | null;
   resolvedAt: string | null;
+  readAt?: string | null;
   status: AlertStatus;
 }
 
@@ -67,8 +68,16 @@ function loadAlerts(tenantId: string): AlertRecord[] {
   } catch { return []; }
 }
 
+export function readAlertStore(tenantId: string): AlertRecord[] {
+  return loadAlerts(tenantId);
+}
+
 function saveAlerts(tenantId: string, alerts: AlertRecord[]): void {
   fs.writeFileSync(alertsFile(tenantId), JSON.stringify(alerts, null, 2));
+}
+
+export function writeAlertStore(tenantId: string, alerts: AlertRecord[]): void {
+  saveAlerts(tenantId, alerts);
 }
 
 function loadAuditLog(tenantId: string): AuditLogEntry[] {
@@ -132,6 +141,7 @@ export function generateAlerts(tenantId: string): AlertRecord[] {
       createdAt: nowIso,
       acknowledgedAt: null,
       resolvedAt: null,
+      readAt: null,
       status: 'ABERTO',
     });
   }
@@ -362,4 +372,26 @@ export function resolveAllAlerts(tenantId: string): number {
   saveAlerts(tenantId, alerts);
   saveAuditLog(tenantId, log);
   return count;
+}
+
+export function markAlertsRead(tenantId: string, alertIds?: string[]): { read: number; alerts: AlertRecord[] } {
+  const alerts = loadAlerts(tenantId);
+  const nowIso = new Date().toISOString();
+  const ids = alertIds && alertIds.length > 0 ? new Set(alertIds) : null;
+  let count = 0;
+
+  for (const alert of alerts) {
+    if (alert.status === 'RESOLVIDO') continue;
+    if (ids && !ids.has(alert.id)) continue;
+    if (alert.readAt) continue;
+    alert.readAt = nowIso;
+    count++;
+  }
+
+  if (count > 0) saveAlerts(tenantId, alerts);
+  return { read: count, alerts };
+}
+
+export function getUnreadAlertCount(tenantId: string): number {
+  return loadAlerts(tenantId).filter((alert) => alert.status !== 'RESOLVIDO' && !alert.readAt).length;
 }

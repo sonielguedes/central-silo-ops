@@ -1,33 +1,13 @@
-"use client";
+﻿"use client";
 
 import React from 'react';
-import { Search, Bell, ChevronDown, Users, Menu } from 'lucide-react';
+import { Search, Menu, ChevronDown } from 'lucide-react';
 import { useSidebar } from '@/lib/context/sidebar-context';
-import { useAuth } from '@/lib/context/auth-context';
+import { HeaderActions } from './header-actions';
 import { DEMO_BADGE_LABEL, IS_DEMO_ENV, getAppVersionLabel } from '@/lib/environment';
-
-function roleLabel(role?: string) {
-  switch (role) {
-    case 'SUPER_ADMIN_SILO':
-      return 'Admin Plataforma';
-    case 'ADMIN_EMPRESA':
-      return 'Admin Empresa';
-    case 'GESTOR':
-      return 'Gestor';
-    case 'COA':
-      return 'COA';
-    case 'AUDITOR':
-      return 'Auditoria';
-    case 'CONSULTA':
-      return 'Consulta';
-    default:
-      return 'Acesso';
-  }
-}
 
 export function Header() {
   const { toggle } = useSidebar();
-  const { user } = useAuth();
 
   return (
     <header className="h-16 border-b border-[#2d3647] bg-[#0a0e27]/40 backdrop-blur-md flex items-center justify-between px-6 shrink-0 z-20">
@@ -41,7 +21,7 @@ export function Header() {
 
         <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1f3a] rounded-md border border-[#2d3647] text-sm cursor-pointer hover:bg-[#252d4a] transition-all group hidden sm:flex">
           <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(16,185,129,0.5)] group-hover:scale-110 transition-transform"></div>
-          <span className="text-white font-medium">Produção</span>
+          <span className="text-white font-medium">ProduÃ§Ã£o</span>
           <ChevronDown size={14} className="text-muted-foreground" />
         </div>
         <div className="h-4 w-[1px] bg-[#2d3647] hidden sm:block"></div>
@@ -69,25 +49,9 @@ export function Header() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative cursor-pointer hover:bg-[#1a1f3a] p-2 rounded-full transition-colors group">
-            <Bell size={20} className="text-muted-foreground group-hover:text-white transition-colors" />
-            <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 rounded-full border-2 border-[#0a0e27] text-[9px] flex items-center justify-center font-bold text-white">7</span>
-          </div>
-
-          <div className="flex items-center gap-3 pl-4 border-l border-[#2d3647] ml-2">
-            <div className="text-right hidden md:block">
-              <p className="text-sm font-semibold text-white">{user?.name || 'Carregando...'}</p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{roleLabel(user?.role)}</p>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#1a1f3a] to-[#2d3647] border border-[#2d3647] p-0.5 cursor-pointer hover:border-primary/50 transition-colors">
-               <div className="w-full h-full rounded-full bg-[#0a0e27] flex items-center justify-center overflow-hidden">
-                 <Users size={20} className="text-muted-foreground" />
-               </div>
-            </div>
-          </div>
-        </div>
+        <HeaderActions />
       </div>
     </header>
   );
 }
+

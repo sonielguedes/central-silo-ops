@@ -24,6 +24,7 @@ interface SessionUser {
   accessGroupId: string;
   expiresAt: string;
   mustChangePassword: boolean;
+  lastLoginAt?: string | null;
 }
 
 interface AuthContextType {
@@ -78,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadSession = async (sessionUser: SessionUser) => {
     try {
       setIsLoading(true);
-      BaseService.setContext(sessionUser.name, sessionUser.activeTenantId || sessionUser.tenantId || '');
+      BaseService.setContext(sessionUser.name, sessionUser.activeTenantId || sessionUser.tenantId || sessionUser.defaultTenantId || '');
 
       const group = await AccessGroupService.getById(sessionUser.accessGroupId);
       const companies = await CompanyService.getAllGlobal();

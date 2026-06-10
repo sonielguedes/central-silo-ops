@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthStore } from '@/lib/auth/auth-store';
 import { auditFromRequest } from '@/lib/audit/audit-log';
+import { clearCsrfCookie, requireCsrf } from '@/lib/auth/csrf';
 
 export async function POST(req: NextRequest) {
+  const csrf = requireCsrf(req);
+  if (csrf) return csrf;
+
   const sessionCookie = req.cookies.get(AuthStore.cookieName)?.value;
   AuthStore.revokeSession(sessionCookie);
 
@@ -14,6 +18,7 @@ export async function POST(req: NextRequest) {
     path: '/',
     maxAge: 0,
   });
+  clearCsrfCookie(response);
 
   auditFromRequest(req, 'global', {
     action: 'LOGOUT',

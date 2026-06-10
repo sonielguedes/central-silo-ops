@@ -19,7 +19,13 @@ export type AuthRole =
   | 'SUPER_ADMIN_SILO'
   | 'ADMIN_EMPRESA'
   | 'GESTOR'
+  | 'GESTOR_COA'
   | 'COA'
+  | 'SUPERVISOR_FRENTE'
+  | 'OPERADOR_CENTRAL'
+  | 'MANUTENCAO'
+  | 'CLIENTE_RELATORIOS'
+  | 'OPERADOR_APK'
   | 'CONSULTA'
   | 'AUDITOR';
 
@@ -38,6 +44,7 @@ export interface AuthUserRecord {
   passwordHash: string;
   createdAt: string;
   updatedAt: string;
+  lastLoginAt?: string;
   passwordLastChangedAt?: string;
   resetPasswordTokenHash?: string;
   resetPasswordExpiresAt?: string;
@@ -67,16 +74,24 @@ export interface AuthSessionPayload {
   accessGroupId: string;
   expiresAt: string;
   mustChangePassword: boolean;
+  lastLoginAt?: string | null;
 }
 
 export function roleFromAccessGroupId(accessGroupId: string): AuthRole {
   switch (accessGroupId) {
-    case 'role-super-admin-silo':
-      return 'SUPER_ADMIN_SILO';
-    case 'role-admin-empresa':
-      return 'ADMIN_EMPRESA';
-    default:
-      return 'CONSULTA';
+    case 'role-super-admin-silo':   return 'SUPER_ADMIN_SILO';
+    case 'role-super-admin':        return 'SUPER_ADMIN_SILO';
+    case 'role-admin-empresa':      return 'ADMIN_EMPRESA';
+    case 'role-gestor':             return 'GESTOR';
+    case 'role-gestor-coa':         return 'GESTOR_COA';
+    case 'role-coa':                return 'COA';
+    case 'role-supervisor-frente':  return 'SUPERVISOR_FRENTE';
+    case 'role-operador-central':   return 'OPERADOR_CENTRAL';
+    case 'role-manutencao':         return 'MANUTENCAO';
+    case 'role-cliente-relatorios': return 'CLIENTE_RELATORIOS';
+    case 'role-operador-apk':       return 'OPERADOR_APK';
+    case 'role-auditor':            return 'AUDITOR';
+    default:                        return 'CONSULTA';
   }
 }
 
@@ -164,6 +179,7 @@ function ensureSeedUsers(): AuthUserRecord[] {
       passwordHash: '',
       createdAt: nowIso(),
       updatedAt: nowIso(),
+      lastLoginAt: undefined,
       passwordLastChangedAt: nowIso(),
     },
     {
@@ -181,6 +197,7 @@ function ensureSeedUsers(): AuthUserRecord[] {
       passwordHash: '',
       createdAt: nowIso(),
       updatedAt: nowIso(),
+      lastLoginAt: undefined,
       passwordLastChangedAt: nowIso(),
     },
   ];
@@ -216,6 +233,7 @@ function ensureSeedUsers(): AuthUserRecord[] {
       passwordHash,
       createdAt: existing?.createdAt || seed.createdAt,
       updatedAt: existing?.updatedAt || seed.updatedAt,
+      lastLoginAt: existing?.lastLoginAt || seed.lastLoginAt,
       passwordLastChangedAt: existing?.passwordLastChangedAt || seed.passwordLastChangedAt,
       resetPasswordTokenHash: existing?.resetPasswordTokenHash,
       resetPasswordExpiresAt: existing?.resetPasswordExpiresAt,
@@ -313,6 +331,7 @@ export const AuthStore = {
     const sessionId = randomId('sess');
     const createdAt = nowIso();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    const previousLoginAt = user.lastLoginAt || null;
     const sessions = loadSessions();
     sessions.push({
       sessionIdHash: hashSessionId(sessionId),
@@ -324,6 +343,7 @@ export const AuthStore = {
       expiresAt,
     });
     saveSessions(sessions);
+    this.markLogin(user.id, createdAt);
 
     return {
       cookie: packCookie(sessionId),
@@ -339,6 +359,7 @@ export const AuthStore = {
         accessGroupId: user.accessGroupId,
         expiresAt,
         mustChangePassword: user.mustChangePassword,
+        lastLoginAt: previousLoginAt,
       },
     };
   },
@@ -369,7 +390,18 @@ export const AuthStore = {
       accessGroupId: user.accessGroupId,
       expiresAt: session.expiresAt,
       mustChangePassword: user.mustChangePassword,
+      lastLoginAt: user.lastLoginAt || null,
     };
+  },
+
+  getSessionRecord(cookieValue: string | undefined | null): AuthSessionRecord | null {
+    if (!cookieValue) return null;
+    const sessionId = unpackCookie(cookieValue);
+    if (!sessionId) return null;
+    const sessionIdHash = hashSessionId(sessionId);
+    const sessions = cleanupExpiredSessions(loadSessions());
+    const session = sessions.find((item) => item.sessionIdHash === sessionIdHash && !item.revokedAt);
+    return session || null;
   },
 
   revokeSession(cookieValue: string | undefined | null): void {
@@ -384,6 +416,21 @@ export const AuthStore = {
     session.revokedAt = nowIso();
     session.updatedAt = nowIso();
     saveSessions(sessions);
+  },
+
+  revokeSessionsForUser(userId: string, exceptSessionIdHash?: string | null): void {
+    const sessions = loadSessions();
+    const now = nowIso();
+    let changed = false;
+    for (const session of sessions) {
+      if (session.userId !== userId) continue;
+      if (exceptSessionIdHash && session.sessionIdHash === exceptSessionIdHash) continue;
+      if (session.revokedAt) continue;
+      session.revokedAt = now;
+      session.updatedAt = now;
+      changed = true;
+    }
+    if (changed) saveSessions(sessions);
   },
 
   setActiveTenant(cookieValue: string | undefined | null, activeTenantId: string | null): AuthSessionPayload | null {
@@ -416,6 +463,7 @@ export const AuthStore = {
       mustChangePassword,
       passwordLastChangedAt: timestamp,
       updatedAt: timestamp,
+      lastLoginAt: users[index].lastLoginAt,
       resetPasswordTokenHash: undefined,
       resetPasswordExpiresAt: undefined,
       resetPasswordUsedAt: timestamp,
@@ -474,5 +522,17 @@ export const AuthStore = {
 
   toPublicUser(user: AuthUserRecord) {
     return sanitizeUser(user);
+  },
+
+  markLogin(userId: string, loginAt: string): void {
+    const users = this.listUsers();
+    const index = users.findIndex((user) => user.id === userId);
+    if (index === -1) return;
+    users[index] = {
+      ...users[index],
+      updatedAt: loginAt,
+      lastLoginAt: loginAt,
+    };
+    saveUsers(users);
   },
 };

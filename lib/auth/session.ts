@@ -13,6 +13,7 @@ export interface SessionUser {
   accessGroupId: string;
   expiresAt: string;
   mustChangePassword: boolean;
+  lastLoginAt?: string | null;
 }
 
 export function resolveSessionFromRequest(req: NextRequest): SessionUser | null {
@@ -31,6 +32,7 @@ export function resolveSessionFromRequest(req: NextRequest): SessionUser | null 
       accessGroupId: session.accessGroupId,
       expiresAt: session.expiresAt,
       mustChangePassword: session.mustChangePassword,
+      lastLoginAt: session.lastLoginAt || null,
     };
   }
 
@@ -52,6 +54,7 @@ export function resolveSessionFromRequest(req: NextRequest): SessionUser | null 
       accessGroupId: user.accessGroupId,
       expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       mustChangePassword: user.mustChangePassword,
+      lastLoginAt: null,
     };
   }
   return null;
