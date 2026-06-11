@@ -9,9 +9,9 @@ services:
 
     environment:
       NODE_ENV: production
-      SILO_TENANT_ID: silo-ops-001
+      SILO_TENANT_ID: seeme-ops-001
       SILO_TENANT_STATUS: ATIVO
-      NEXT_PUBLIC_SILO_TENANT_ID: silo-ops-001
+      NEXT_PUBLIC_SILO_TENANT_ID: seeme-ops-001
       SILO_DATA_DIR: /app/data
 
       NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV}

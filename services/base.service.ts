@@ -4,7 +4,7 @@ import { shouldSeedDemoData } from '@/lib/environment';
 const DEFAULT_TENANT_ID =
   process.env.NEXT_PUBLIC_SILO_TENANT_ID ||
   process.env.SILO_TENANT_ID ||
-  'silo-ops-001';
+  '';
 
 export class BaseService<T extends BaseEntity> {
   protected data: T[];
