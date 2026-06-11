@@ -104,11 +104,20 @@ export const CompanyService = new (class extends BaseService<Company> {
    *
    * No token is generated client-side.
    */
-  async create(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<CompanyCreateResult> {
+  /**
+   * Provision a new company via POST /api/admin/companies (PLATFORM scope only).
+   *
+   * Uses a separate method name so the return type CompanyCreateResult does not
+   * conflict with BaseService<Company>.create() → Promise<Company>.
+   *
+   * Returns CompanyCreateResult:
+   *   - company:           public fields from server (no secret tokens)
+   *   - provisioningToken: the FULL token, shown once — UI must capture and display it
+   */
+  async provision(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<CompanyCreateResult> {
     if (typeof window === 'undefined') {
-      // SSR fallback — not expected in normal UI flow
-      const created = await super.create(item);
-      return { company: created, provisioningToken: '' };
+      // SSR — not expected in normal UI flow; surface a clear error
+      throw new Error('provision() requires a browser session.');
     }
 
     const withUrls = this.withGeneratedUrls(item);
@@ -131,9 +140,8 @@ export const CompanyService = new (class extends BaseService<Company> {
 
     const body = await response.json() as { company: Company; provisioningToken: string };
 
-    // Persist to local state so the UI reflects the new record immediately.
-    // Store company WITHOUT overwriting the server-side token assignment —
-    // the full token lives only in provisioningToken (returned separately).
+    // Persist to local state AFTER server confirms 201.
+    // The company stored locally has no raw token — only the public shape returned by GET.
     await super.create(body.company as Omit<Company, keyof import('@/lib/types').BaseEntity>);
 
     return {

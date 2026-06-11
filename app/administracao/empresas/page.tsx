@@ -330,7 +330,7 @@ function EmpresasPage() {
         setFeedback({ type: 'success', message: 'Instancia atualizada com sucesso' });
       } else {
         // CREATE — POST, capture provisioningToken
-        const result: CompanyCreateResult = await CompanyService.create(
+        const result: CompanyCreateResult = await CompanyService.provision(
           payload as Omit<Company, keyof import('@/lib/types').BaseEntity>,
         );
         upsertCompanyInView(result.company);
