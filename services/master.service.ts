@@ -61,6 +61,7 @@ import {
 import type { MobileSyncEventInput } from '@/lib/types';
 import { BaseService } from './base.service';
 import { normalizeCompanyPortPayload } from '@/lib/company-form';
+import { getCsrfTokenFromDocument } from '@/lib/auth/csrf-client';
 
 // --- Services ---
 
@@ -239,9 +240,14 @@ export const CompanyService = new (class extends BaseService<Company> {
   }
 
   private async persistCompanyTokenOnServer(company: Company, regenerate: boolean): Promise<Company> {
+    const csrfToken = getCsrfTokenFromDocument();
     const response = await fetch('/api/admin/companies/token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+      },
       body: JSON.stringify({
         regenerate,
         company: {
