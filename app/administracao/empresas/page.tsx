@@ -58,6 +58,7 @@ function EmpresasPage() {
   const { accessGroup, checkPermission } = useAuth();
   const [data, setData] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Company | null>(null);
@@ -161,10 +162,15 @@ function EmpresasPage() {
 
   const loadData = async () => {
     setLoading(true);
-    // Para Empresas, mostramos todas (Global Admin View)
-    const result = await CompanyService.getAllGlobal();
-    setData(result);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const result = await CompanyService.getAllGlobal();
+      setData(result);
+    } catch (err: any) {
+      setLoadError(err?.message || 'Erro ao carregar empresas.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -335,6 +341,24 @@ function EmpresasPage() {
             <div className="flex flex-col items-center justify-center h-64 gap-4">
               <Loader2 size={40} className="text-primary animate-spin" />
               <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Consultando Nodes Global...</p>
+            </div>
+          ) : loadError ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-4">
+              <Building2 size={40} className="text-red-400" />
+              <p className="text-xs text-red-400 font-black uppercase tracking-[0.2em]">{loadError}</p>
+              <button
+                onClick={loadData}
+                className="px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-4">
+              <Building2 size={40} className="text-muted-foreground/40" />
+              <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">
+                {search ? 'Nenhuma empresa encontrada para esta busca.' : 'Nenhuma empresa cadastrada.'}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

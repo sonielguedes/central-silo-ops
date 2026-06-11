@@ -68,7 +68,17 @@ export { BaseService };
 
 export const CompanyService = new (class extends BaseService<Company> {
   async getAllGlobal(): Promise<Company[]> {
-    return this.data.filter(c => c.entityStatus !== 'ARQUIVADO');
+    try {
+      const res = await fetch('/api/admin/companies', { credentials: 'include' });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      return (json.companies as Company[]) ?? [];
+    } catch (err) {
+      console.error('[CompanyService.getAllGlobal] API fetch failed, returning empty list', err);
+      return [];
+    }
   }
 
   private generateCompanyToken(): string {
