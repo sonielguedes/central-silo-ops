@@ -35,10 +35,6 @@ export interface Company extends BaseEntity {
   apiBaseUrl?: string;
   mqttUrl?: string;
   companyToken?: string;
-  /** Aliases gravados em sincronia com companyToken para compatibilidade com APK */
-  mobileToken?: string;
-  apiToken?: string;
-  token?: string;
   plan: CompanyPlan;
   status: 'ATIVO' | 'INATIVO';
   observations?: string;

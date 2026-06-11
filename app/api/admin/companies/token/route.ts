@@ -10,7 +10,7 @@ import { normalizeCompanyPortPayload } from '@/lib/company-form';
 import { requireCsrf } from '@/lib/auth/csrf';
 import { getSessionUser } from '@/lib/auth/session';
 
-const generateCompanyToken = () => `CTK-${randomBytes(18).toString('hex').toUpperCase()}`;
+const generateCompanyToken = () => `CTK-${randomBytes(24).toString('hex').toUpperCase()}`;
 
 const getUniqueCompanyToken = () => {
   const companies = ServerStorage.getCompanies();
