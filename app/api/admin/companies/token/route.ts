@@ -8,6 +8,7 @@ import { auditFromRequest } from '@/lib/audit/audit-log';
 import { requirePermission } from '@/lib/auth/rbac-server';
 import { normalizeCompanyPortPayload } from '@/lib/company-form';
 import { requireCsrf } from '@/lib/auth/csrf';
+import { getSessionUser } from '@/lib/auth/session';
 
 const generateCompanyToken = () => `CTK-${randomBytes(18).toString('hex').toUpperCase()}`;
 
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
 
     const rbac = requirePermission(req, 'administracao', 'administrar', 'global');
     if (rbac) return rbac;
+    const sessionUser = getSessionUser(req);
     const body = await req.json() as { company?: Company; regenerate?: boolean };
     const company = body.company;
 
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
       companyToken,
       apiBaseUrl: normalized.apiBaseUrl || `https://api.siloops.com.br:${apiPort}`,
       mqttUrl: normalized.mqttUrl || `mqtt.siloops.com.br:${mqttPort}`,
+      updatedBy: sessionUser?.email || sessionUser?.id || 'SISTEMA',
     });
 
     const persisted = ServerStorage.getCompanyByTenantId(saved.tenantId) || ServerStorage.getCompanyByApiPort(apiPort) || saved;

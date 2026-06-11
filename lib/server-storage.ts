@@ -346,7 +346,12 @@ export class ServerStorage {
 
   static getCompanyByToken(token: string): Company | undefined {
     if (!token) return undefined;
-    return this.loadCompanies().find(c => c.companyToken === token);
+    return this.loadCompanies().find(
+      c => c.companyToken === token ||
+           c.mobileToken  === token ||
+           c.apiToken     === token ||
+           c.token        === token,
+    );
   }
 
   static validateMobileCompanyRecord(company: Company | undefined, companyToken: string | undefined): {
@@ -389,17 +394,26 @@ export class ServerStorage {
     const current = index >= 0 ? all[index] : undefined;
     const apiPort = Number(input.apiPort || current?.apiPort || 0);
     const mqttPort = Number(input.mqttPort || current?.mqttPort || 0);
+
+    // Resolve the canonical token (input wins if provided, else keep current).
+    // All four fields are kept in sync so the APK can authenticate with any of them.
+    const resolvedToken = input.companyToken || current?.companyToken;
+
     const company: Company = {
       ...current,
       ...input,
       tenantId: input.tenantId || current?.tenantId || input.id,
-      companyToken: input.companyToken || current?.companyToken,
+      companyToken: resolvedToken,
+      mobileToken:  resolvedToken,
+      apiToken:     resolvedToken,
+      token:        resolvedToken,
       apiPort,
       mqttPort,
       apiBaseUrl: apiPort ? `https://api.siloops.com.br:${apiPort}` : input.apiBaseUrl || current?.apiBaseUrl,
       mqttUrl: mqttPort ? `mqtt.siloops.com.br:${mqttPort}` : input.mqttUrl || current?.mqttUrl,
       status: input.status || current?.status || 'ATIVO',
       updatedAt: timestamp,
+      updatedBy: input.updatedBy || 'SISTEMA',
     };
 
     if (index >= 0) {
