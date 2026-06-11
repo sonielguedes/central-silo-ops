@@ -196,6 +196,35 @@ describe('CompanyService.provision()', () => {
     expect(options.headers['x-csrf-token']).toBe('test-csrf-token');
     expect(options.credentials).toBe('include');
   });
+
+  it('repassa adminUser e tempPassword do servidor na resposta', async () => {
+    const adminUser = { id: 'usr-1', name: 'Joao Admin', email: 'admin@empresa.com' };
+    const tempPassword = 'abc123def456abcd';
+    mockFetch.mockResolvedValueOnce(okJson({
+      company: serverCompany,
+      provisioningToken: rawProvisioningToken,
+      adminUser,
+      tempPassword,
+    }));
+
+    const result: CompanyCreateResult = await CompanyService.provision({ code: 'NC01' } as any);
+
+    expect(result.adminUser).toEqual(adminUser);
+    expect(result.tempPassword).toBe(tempPassword);
+  });
+
+  it('retorna adminUser null e tempPassword null quando servidor nao os envia', async () => {
+    mockFetch.mockResolvedValueOnce(okJson({
+      company: serverCompany,
+      provisioningToken: rawProvisioningToken,
+      // no adminUser / tempPassword
+    }));
+
+    const result: CompanyCreateResult = await CompanyService.provision({ code: 'NC01' } as any);
+
+    expect(result.adminUser).toBeNull();
+    expect(result.tempPassword).toBeNull();
+  });
 });
 
 // ── regenerateCompanyToken() ──────────────────────────────────────────────────
@@ -288,18 +317,15 @@ describe('CompanyService.update()', () => {
   });
 });
 
-// ── create() herdado (BaseService) ──────────────────────────────────────────
+// -- create() herdado (BaseService) -------------------------------------------
 
 describe('CompanyService.create() herdado', () => {
   it('retorna Company (tipo herdado de BaseService<Company>)', async () => {
-    // BaseService.create stores to localStorage and returns the Company object.
-    // In the test environment (mocked BaseService), it simply returns the input.
     const item = { id: 'x', code: 'X', tradingName: 'X' } as any;
     const result = await (CompanyService as any).__proto__.__proto__.create.call(
       CompanyService,
       item,
-    ).catch(() => item); // mock BaseService just returns the item
-    // The point: return type is Company, not CompanyCreateResult
+    ).catch(() => item);
     expect(result).toBeDefined();
   });
 });

@@ -63,22 +63,54 @@ interface TokenModalProps {
   token: string;
   title: string;
   onClose: () => void;
+  /** Temporary password for the auto-created ADMIN_EMPRESA user (provisioning only). */
+  tempPassword?: string | null;
+  /** Email of the auto-created admin user. */
+  adminEmail?: string | null;
 }
 
-function TokenModal({ token, title, onClose }: TokenModalProps) {
-  const [visible, setVisible] = useState(false);
+function CopyField({ label, value, testId }: { label: string; value: string; testId?: string }) {
   const [copied, setCopied] = useState(false);
-
+  const [visible, setVisible] = useState(false);
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(token);
+    await navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  return (
+    <div className="mb-4">
+      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2">{label}</p>
+      <div className="flex gap-2">
+        <div className="flex-1 min-w-0 rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-3">
+          <p className="break-all font-mono text-xs text-white select-all" data-testid={testId}>
+            {visible ? value : `${value.slice(0, 6)}••••••••••••${value.slice(-4)}`}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button onClick={() => setVisible((v) => !v)}
+            className="rounded-xl border border-[#2d3647] px-3 py-3 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+            aria-label={visible ? 'Mascarar' : 'Exibir'}>
+            {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          <button onClick={handleCopy}
+            className={cn("rounded-xl border px-3 py-3 transition-colors",
+              copied ? "border-green-500/40 bg-green-500/10 text-green-400"
+                     : "border-[#2d3647] text-muted-foreground hover:border-primary/40 hover:text-primary")}
+            aria-label="Copiar" data-testid={testId ? `copy-${testId}` : undefined}>
+            {copied ? <CheckCheck size={16} /> : <Copy size={16} />}
+          </button>
+        </div>
+      </div>
+      {copied && <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-green-400">Copiado!</p>}
+    </div>
+  );
+}
 
+function TokenModal({ token, title, onClose, tempPassword, adminEmail }: TokenModalProps) {
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg bg-[#0a0e27] border border-red-500/40 rounded-3xl p-8 shadow-2xl shadow-red-500/10 animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-lg bg-[#0a0e27] border border-red-500/40 rounded-3xl p-8 shadow-2xl shadow-red-500/10 animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center">
@@ -88,11 +120,9 @@ function TokenModal({ token, title, onClose }: TokenModalProps) {
             <h3 className="text-sm font-black uppercase tracking-tighter text-white">{title}</h3>
             <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Acao irreversivel</p>
           </div>
-          <button
-            onClick={onClose}
+          <button onClick={onClose}
             className="ml-auto p-2 hover:bg-[#1a1f3a] rounded-xl transition-all text-muted-foreground hover:text-white"
-            aria-label="Fechar modal"
-          >
+            aria-label="Fechar modal">
             <X size={18} />
           </button>
         </div>
@@ -100,57 +130,42 @@ function TokenModal({ token, title, onClose }: TokenModalProps) {
         {/* Warning */}
         <div className="mb-5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
           <p className="text-[11px] font-bold text-yellow-300 leading-relaxed">
-            Salve este token agora. Depois sera exibido apenas parcialmente.
-            Nenhuma outra tela mostrara o valor completo.
+            Salve estas credenciais agora. Depois serao exibidas apenas parcialmente.
+            Nenhuma outra tela mostrara os valores completos.
           </p>
         </div>
 
-        {/* Token display */}
-        <div className="mb-5">
-          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2">Company Token</p>
-          <div className="flex gap-2">
-            <div className="flex-1 min-w-0 rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-3">
-              <p className="break-all font-mono text-xs text-white select-all" data-testid="token-value">
-                {visible ? token : `${token.slice(0, 6)}••••••••••••${token.slice(-4)}`}
-              </p>
+        {/* Company Token */}
+        <CopyField label="Company Token" value={token} testId="token-value" />
+
+        {/* Admin credentials — shown only on provisioning */}
+        {tempPassword && (
+          <>
+            <div className="mb-4 border-t border-[#2d3647] pt-4">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary mb-3">
+                <KeyRound size={12} /> Administrador da Empresa Criado
+              </div>
+              {adminEmail && (
+                <div className="mb-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Email</p>
+                  <p className="font-mono text-xs text-white bg-[#1a1f3a] rounded-xl px-3 py-2" data-testid="admin-email-display">{adminEmail}</p>
+                </div>
+              )}
+              <CopyField label="Senha Temporaria" value={tempPassword} testId="temp-password-value" />
+              <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2">
+                <p className="text-[10px] font-bold text-blue-300 leading-relaxed">
+                  O administrador devera alterar a senha no primeiro acesso.
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => setVisible((v) => !v)}
-                className="rounded-xl border border-[#2d3647] px-3 py-3 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
-                title={visible ? 'Mascarar token' : 'Exibir token'}
-                aria-label={visible ? 'Mascarar token' : 'Exibir token'}
-              >
-                {visible ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-              <button
-                onClick={handleCopy}
-                className={cn(
-                  "rounded-xl border px-3 py-3 transition-colors",
-                  copied
-                    ? "border-green-500/40 bg-green-500/10 text-green-400"
-                    : "border-[#2d3647] text-muted-foreground hover:border-primary/40 hover:text-primary"
-                )}
-                title="Copiar token"
-                aria-label="Copiar token"
-                data-testid="copy-token-btn"
-              >
-                {copied ? <CheckCheck size={16} /> : <Copy size={16} />}
-              </button>
-            </div>
-          </div>
-          {copied && (
-            <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-green-400">Copiado!</p>
-          )}
-        </div>
+          </>
+        )}
 
         {/* Close button */}
-        <button
-          onClick={onClose}
-          className="w-full py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-lg shadow-primary/20"
-          data-testid="close-token-modal"
-        >
-          Entendi, salvei o token
+        <button onClick={onClose}
+          className="w-full mt-5 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-lg shadow-primary/20"
+          data-testid="close-token-modal">
+          Entendi, salvei as credenciais
         </button>
       </div>
     </div>
@@ -171,8 +186,13 @@ function EmpresasPage() {
   const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'delete' | 'regenerate'; item: Company } | null>(null);
 
-  // Token modal — holds the ONE-TIME full token (provisioning or rotation)
-  const [tokenModal, setTokenModal] = useState<{ token: string; title: string } | null>(null);
+  // Token modal — holds the ONE-TIME full token (provisioning or rotation) + optional admin credentials
+  const [tokenModal, setTokenModal] = useState<{
+    token: string;
+    title: string;
+    tempPassword?: string | null;
+    adminEmail?: string | null;
+  } | null>(null);
 
   // Loading states for async token operations
   const [isRotatingToken, setIsRotatingToken] = useState(false);
@@ -337,10 +357,12 @@ function EmpresasPage() {
         setIsDrawerOpen(false);
         // Reload list to get fresh tokenPreview from server
         await loadData();
-        // Show the one-time token modal
+        // Show the one-time token modal (includes admin temp password on first provisioning)
         setTokenModal({
           token: result.provisioningToken,
           title: 'Token de provisionamento gerado',
+          tempPassword: result.tempPassword,
+          adminEmail: result.adminUser?.email ?? null,
         });
         setFeedback({ type: 'success', message: 'Instancia criada com sucesso' });
       }
@@ -752,6 +774,44 @@ function EmpresasPage() {
                     </select>
                   </FormField>
 
+                  {/* Admin user — only for creation */}
+                  {!selectedItem && (
+                    <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
+                        <KeyRound size={12} /> Administrador da Empresa
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        Um usuario ADMIN sera cria
+                        A senha temporaria sera exibida uma unica vez apos salvar.
+                      </p>
+                      <FormField label="Nome do Administrador" error={errors.adminName?.message} required>
+                        <input
+                          {...register('adminName')}
+                          required
+                          className={cn(
+                            "w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all",
+                            errors.adminName && "border-red-500/50",
+                          )}
+                          placeholder="Ex: Joao da Silva"
+                          data-testid="admin-name-input"
+                        />
+                      </FormField>
+                      <FormField label="Email do Administrador" error={errors.adminEmail?.message} required>
+                        <input
+                          {...register('adminEmail')}
+                          type="email"
+                          required
+                          className={cn(
+                            "w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all",
+                            errors.adminEmail && "border-red-500/50",
+                          )}
+                          placeholder="admin@empresa.com"
+                          data-testid="admin-email-input"
+                        />
+                      </FormField>
+                    </div>
+                  )}
+
                   <div className="pt-6 flex gap-3">
                     <button type="button" onClick={() => setIsDrawerOpen(false)} className="flex-1 py-3 bg-transparent border border-[#2d3647] rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#1a1f3a] transition-all flex items-center justify-center gap-2">
                       <Ban size={14} /> Cancelar
@@ -773,12 +833,14 @@ function EmpresasPage() {
         </div>
       )}
 
-      {/* ── Token modal (one-time display) ── */}
+      {/* -- Token modal (one-time display) -- */}
       {tokenModal && (
         <TokenModal
           token={tokenModal.token}
           title={tokenModal.title}
           onClose={closeTokenModal}
+          tempPassword={tokenModal.tempPassword}
+          adminEmail={tokenModal.adminEmail}
         />
       )}
 

@@ -68,7 +68,15 @@ import { getCsrfTokenFromDocument } from '@/lib/auth/csrf-client';
 export { BaseService };
 
 // ── Explicit result types (consumed by the UI layer) ────────────────────────
-export type CompanyCreateResult = { company: Company; provisioningToken: string };
+export type CompanyAdminUser = { id: string; name: string; email: string };
+export type CompanyCreateResult = {
+  company: Company;
+  provisioningToken: string;
+  /** Public info about the auto-provisioned ADMIN_EMPRESA user. */
+  adminUser: CompanyAdminUser | null;
+  /** Temporary password — shown ONCE; user must change it on first login. */
+  tempPassword: string | null;
+};
 export type CompanyTokenRotateResult = { company: Company; newToken: string };
 
 export const CompanyService = new (class extends BaseService<Company> {
@@ -138,7 +146,12 @@ export const CompanyService = new (class extends BaseService<Company> {
       throw new Error(body.error || `Falha ao provisionar empresa (HTTP ${response.status}).`);
     }
 
-    const body = await response.json() as { company: Company; provisioningToken: string };
+    const body = await response.json() as {
+      company: Company;
+      provisioningToken: string;
+      adminUser?: CompanyAdminUser;
+      tempPassword?: string;
+    };
 
     // Persist to local state AFTER server confirms 201.
     // The company stored locally has no raw token — only the public shape returned by GET.
@@ -147,6 +160,8 @@ export const CompanyService = new (class extends BaseService<Company> {
     return {
       company: body.company,
       provisioningToken: body.provisioningToken,
+      adminUser: body.adminUser ?? null,
+      tempPassword: body.tempPassword ?? null,
     };
   }
 
@@ -512,4 +527,3 @@ export const TimelineService = new BaseService<TimelineEvent>('timeline', INITIA
 
 // Backwards compatibility
 export const FarmFieldService = FarmService;
-

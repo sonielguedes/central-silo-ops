@@ -520,6 +520,30 @@ export const AuthStore = {
     return true;
   },
 
+  /** Hard-delete a user by id and revoke all their sessions — used only for provisioning rollback. */
+  removeUser(userId: string): boolean {
+    // 1. Remove from users list
+    const users = this.listUsers();
+    const next = users.filter((u) => u.id !== userId);
+    if (next.length === users.length) return false;
+    saveUsers(next);
+
+    // 2. Revoke all sessions for this user
+    const sessions = loadSessions();
+    const now = nowIso();
+    let changed = false;
+    for (const session of sessions) {
+      if (session.userId !== userId) continue;
+      if (session.revokedAt) continue;
+      session.revokedAt = now;
+      session.updatedAt = now;
+      changed = true;
+    }
+    if (changed) saveSessions(sessions);
+
+    return true;
+  },
+
   toPublicUser(user: AuthUserRecord) {
     return sanitizeUser(user);
   },

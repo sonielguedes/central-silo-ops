@@ -19,6 +19,18 @@ import { GET, POST } from '../route';
 import { PATCH } from '../[id]/route';
 import { POST as TOKEN_POST } from '../[id]/token/route';
 
+// ── AuthStore mock (module-level, before jest.mock hoisting) ─────────────────
+
+const mockAuthUsers: any[] = [];
+let mockUpsertUser = jest.fn(async (input: any) => {
+  const user = { id: `usr-${Date.now()}`, ...input, passwordHash: '' };
+  mockAuthUsers.push(user);
+  return user;
+});
+let mockUpdatePassword = jest.fn(async (_id: string, _pw: string, _must?: boolean) => ({}));
+let mockRemoveUser = jest.fn((_id: string) => true);
+let mockListUsers = jest.fn(() => [...mockAuthUsers]);
+
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
 const mockCompanies: any[] = [
@@ -68,6 +80,15 @@ jest.mock('@/lib/auth/api-guard', () => ({
 }));
 
 jest.mock('@/lib/audit/audit-log', () => ({ auditFromRequest: jest.fn() }));
+
+jest.mock('@/lib/auth/auth-store', () => ({
+  AuthStore: {
+    listUsers: jest.fn(() => mockListUsers()),
+    upsertUser: jest.fn(async (input: any) => mockUpsertUser(input)),
+    updatePassword: jest.fn(async (id: string, pw: string, must?: boolean) => mockUpdatePassword(id, pw, must)),
+    removeUser: jest.fn((id: string) => mockRemoveUser(id)),
+  },
+}));
 
 let mockSession: Record<string, unknown> | null = null;
 jest.mock('@/lib/auth/session', () => ({
@@ -148,6 +169,8 @@ const validPayload = {
   mqttPort: 18899,
   plan: 'PILOTO',
   status: 'ATIVO',
+  adminName: 'Joao Admin',
+  adminEmail: 'admin@novaempresa.com',
 };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -157,6 +180,7 @@ beforeEach(() => {
   mockHasPermission = true;
   mockCsrfResult = null;
   mockRbacResult = null;
+  mockAuthUsers.length = 0; // clear user store between tests
   jest.clearAllMocks();
 
   const rbac = require('@/lib/auth/rbac-shared');
@@ -181,6 +205,21 @@ beforeEach(() => {
 
   const rbacServer = require('@/lib/auth/rbac-server');
   rbacServer.requirePermission.mockImplementation(() => mockRbacResult);
+
+  // Reset AuthStore mocks
+  mockUpsertUser = jest.fn(async (input: any) => {
+    const user = { id: `usr-${Date.now()}`, ...input, passwordHash: '' };
+    mockAuthUsers.push(user);
+    return user;
+  });
+  mockUpdatePassword = jest.fn(async (_id: string, _pw: string, _must?: boolean) => ({}));
+  mockRemoveUser = jest.fn((_id: string) => true);
+  mockListUsers = jest.fn(() => [...mockAuthUsers]);
+  const auth = require('@/lib/auth/auth-store');
+  auth.AuthStore.listUsers.mockImplementation(() => mockListUsers());
+  auth.AuthStore.upsertUser.mockImplementation(async (input: any) => mockUpsertUser(input));
+  auth.AuthStore.updatePassword.mockImplementation(async (id: string, pw: string, must?: boolean) => mockUpdatePassword(id, pw, must));
+  auth.AuthStore.removeUser.mockImplementation((id: string) => mockRemoveUser(id));
 });
 
 // ── GET tests ─────────────────────────────────────────────────────────────────
@@ -417,6 +456,114 @@ describe('POST /api/admin/companies', () => {
     const ghostCall = calls.find((call: any[]) => call[0]?.entityStatus === 'ARQUIVADO');
     expect(ghostCall).toBeUndefined();
   });
+
+  // ── Admin user provisioning ────────────────────────────────────────────────
+
+  it('retorna 400 se adminName ausente', async () => {
+    mockSession = platformSession;
+    const { adminName: _, ...payloadWithoutAdmin } = validPayload;
+    const res = await POST(makePost(payloadWithoutAdmin));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/adminName/i);
+  });
+
+  it('retorna 400 se adminEmail ausente', async () => {
+    mockSession = platformSession;
+    const { adminEmail: _, ...payloadWithoutEmail } = validPayload;
+    const res = await POST(makePost(payloadWithoutEmail));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/adminEmail/i);
+  });
+
+  it('retorna 400 se adminEmail invalido', async () => {
+    mockSession = platformSession;
+    const res = await POST(makePost({ ...validPayload, adminEmail: 'nao-e-email' }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/adminEmail/i);
+  });
+
+  it('retorna 409 se adminEmail ja esta em uso por outro usuario', async () => {
+    mockSession = platformSession;
+    // Pre-populate user with same email
+    mockAuthUsers.push({ id: 'usr-existing', email: 'admin@novaempresa.com' });
+    const auth = require('@/lib/auth/auth-store');
+    auth.AuthStore.listUsers.mockReturnValue([...mockAuthUsers]);
+
+    const res = await POST(makePost(validPayload));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/email/i);
+  });
+
+  it('201 sucesso: cria usuario ADMIN_EMPRESA com tenantId da empresa', async () => {
+    mockSession = platformSession;
+    const auth = require('@/lib/auth/auth-store');
+    let capturedUser: any;
+    auth.AuthStore.upsertUser.mockImplementationOnce(async (input: any) => {
+      capturedUser = input;
+      return { id: 'usr-new', ...input };
+    });
+
+    const res = await POST(makePost(validPayload));
+    expect(res.status).toBe(201);
+
+    expect(capturedUser).toBeDefined();
+    expect(capturedUser.role).toBe('ADMIN_EMPRESA');
+    expect(capturedUser.scope).toBe('TENANT');
+    expect(capturedUser.email).toBe('admin@novaempresa.com');
+    expect(capturedUser.mustChangePassword).toBe(true);
+    // tenantId deve ser o mesmo da empresa gerada
+    expect(capturedUser.tenantId).toBeTruthy();
+    expect(capturedUser.defaultTenantId).toBe(capturedUser.tenantId);
+  });
+
+  it('201 sucesso: tempPassword retornado na resposta (16 hex chars)', async () => {
+    mockSession = platformSession;
+    const res = await POST(makePost(validPayload));
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.tempPassword).toBeTruthy();
+    expect(body.tempPassword).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it('201 sucesso: adminUser retornado com id, name, email', async () => {
+    mockSession = platformSession;
+    const res = await POST(makePost(validPayload));
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.adminUser).toBeDefined();
+    expect(body.adminUser.name).toBe('Joao Admin');
+    expect(body.adminUser.email).toBe('admin@novaempresa.com');
+    expect(body.adminUser.id).toBeTruthy();
+  });
+
+  it('rollback: removeCompany + deleteTenantDir chamados se upsertUser lancar erro', async () => {
+    mockSession = platformSession;
+    const ss = require('@/lib/server-storage');
+    const auth = require('@/lib/auth/auth-store');
+    auth.AuthStore.upsertUser.mockRejectedValueOnce(new Error('DB write failed'));
+
+    const res = await POST(makePost(validPayload));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toMatch(/administrador/i);
+
+    // Empresa deve ter sido desfeita
+    expect(ss.ServerStorage.removeCompany).toHaveBeenCalled();
+    expect(ss.ServerStorage.deleteTenantDir).toHaveBeenCalled();
+  });
+
+  it('isolamento: TENANT scope nao pode criar empresa (independente de adminEmail)', async () => {
+    mockSession = { ...platformSession, scope: 'TENANT', tenantId: 'tenant-a' };
+    const res = await POST(makePost(validPayload));
+    expect(res.status).toBe(403);
+    const auth = require('@/lib/auth/auth-store');
+    // Nenhum usuario deve ter sido criado
+    expect(auth.AuthStore.upsertUser).not.toHaveBeenCalled();
+  });
 });
 
 // ── PATCH tests ───────────────────────────────────────────────────────────────
@@ -503,7 +650,7 @@ describe('PATCH /api/admin/companies/[id]', () => {
   });
 });
 
-// ── Token rotation tests ──────────────────────────────────────────────────────
+// ── Token rotation tests ────────────────────────────────────────────────────────────────────────────
 
 describe('POST /api/admin/companies/[id]/token', () => {
   it('retorna 401 sem sessao', async () => {

@@ -46,6 +46,9 @@ export const companySchema = z.object({
   plan: z.enum(['PILOTO', 'PRO', 'ENTERPRISE']),
   status: z.enum(['ATIVO', 'INATIVO']),
   observations: z.string().optional(),
+  // Admin user — required only on creation; optional so editing doesn't break validation
+  adminName: z.string().min(2, 'Nome do administrador obrigatorio').optional(),
+  adminEmail: z.string().email('Email invalido').optional(),
 });
 
 export const regionalSchema = z.object({
