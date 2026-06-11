@@ -426,6 +426,33 @@ export class ServerStorage {
     return company;
   }
 
+
+  /**
+   * Remove a company record from companies.json.
+   * Used for true atomic rollback: if post-write steps fail,
+   * call this to undo the upsert before returning a 500.
+   */
+  static removeCompany(id: string): void {
+    const all = this.loadCompanies();
+    const next = all.filter(c => c.id !== id);
+    if (next.length === all.length) return; // nothing to remove
+    fs.writeFileSync(this.getCompaniesFile(), JSON.stringify(next, null, 2));
+  }
+
+  /**
+   * Delete the tenant data directory created during provisioning.
+   * Only call on rollback — never in the happy path.
+   * Guards against path traversal by resolving and checking the prefix.
+   */
+  static deleteTenantDir(tenantId: string): void {
+    // Reject traversal attempts
+    const resolved = path.resolve(DATA_ROOT, tenantId);
+    if (!resolved.startsWith(path.resolve(DATA_ROOT) + path.sep)) return;
+    if (fs.existsSync(resolved)) {
+      fs.rmSync(resolved, { recursive: true, force: true });
+    }
+  }
+
   static validateCompanyToken(tenantId: string, companyToken: string | undefined): {
     ok: true;
     company: Company;

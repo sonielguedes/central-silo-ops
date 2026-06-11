@@ -61,6 +61,7 @@ import {
 import type { MobileSyncEventInput } from '@/lib/types';
 import { BaseService } from './base.service';
 import { normalizeCompanyPortPayload } from '@/lib/company-form';
+import { getCsrfTokenFromDocument } from '@/lib/auth/csrf-client';
 
 // --- Services ---
 
@@ -70,40 +71,13 @@ export const CompanyService = new (class extends BaseService<Company> {
   async getAllGlobal(): Promise<Company[]> {
     try {
       const res = await fetch('/api/admin/companies', { credentials: 'include' });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       return (json.companies as Company[]) ?? [];
     } catch (err) {
       console.error('[CompanyService.getAllGlobal] API fetch failed, returning empty list', err);
       return [];
     }
-  }
-
-  private generateCompanyToken(): string {
-    const bytes = new Uint8Array(18);
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      crypto.getRandomValues(bytes);
-    } else {
-      bytes.forEach((_, index) => {
-        bytes[index] = Math.floor(Math.random() * 256);
-      });
-    }
-    return `CTK-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
-  }
-
-  private async getUniqueCompanyToken(currentId?: string, preferredToken?: string): Promise<string> {
-    const all = await this.getAllGlobal();
-    if (preferredToken && !all.some(c => c.id !== currentId && c.companyToken === preferredToken)) {
-      return preferredToken;
-    }
-
-    let token = this.generateCompanyToken();
-    while (all.some(c => c.id !== currentId && c.companyToken === token)) {
-      token = this.generateCompanyToken();
-    }
-    return token;
   }
 
   private withGeneratedUrls<T extends Partial<Company>>(item: T): T {
@@ -113,166 +87,128 @@ export const CompanyService = new (class extends BaseService<Company> {
     const domain = item.domain
       ? item.domain.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split('/')[0].split(':')[0]
       : item.domain;
-
-    return {
-      ...item,
-      domain,
-      apiPort,
-      mqttPort,
-      apiBaseUrl: normalized.apiBaseUrl || item.apiBaseUrl,
-      mqttUrl: normalized.mqttUrl || item.mqttUrl,
-    };
+    return { ...item, domain, apiPort, mqttPort, apiBaseUrl: normalized.apiBaseUrl || item.apiBaseUrl, mqttUrl: normalized.mqttUrl || item.mqttUrl };
   }
 
-  async assertUniqueInstanceConfig(item: Partial<Company>, currentId?: string) {
-    const all = await this.getAllGlobal();
-    const active = all.filter(c => c.id !== currentId && c.entityStatus !== 'ARQUIVADO');
-
-    if (item.code && active.some(c => c.code.toLowerCase() === item.code!.toLowerCase())) {
-      throw new Error('Código interno já cadastrado para outra instância.');
+  /**
+   * Create a new company via POST /api/admin/companies (PLATFORM scope only).
+   * Server generates id, tenantId, and companyToken.
+   * The full token is returned once in provisioningToken; subsequent GETs only show tokenPreview.
+   * We do NOT generate any token client-side.
+   */
+  async create(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<Company> {
+    if (typeof window === 'undefined') {
+      // SSR fallback — should not happen in normal flow
+      return super.create(item);
     }
 
-    if (item.apiPort && active.some(c => c.apiPort === item.apiPort)) {
-      throw new Error('Porta API já cadastrada para outra instância.');
-    }
+    const withUrls = this.withGeneratedUrls(item);
+    const csrfToken = getCsrfTokenFromDocument();
 
-    if (item.mqttPort && active.some(c => c.mqttPort === item.mqttPort)) {
-      throw new Error('Porta MQTT já cadastrada para outra instância.');
-    }
-  }
-
-  private async assertUniqueCompanyToken(item: Partial<Company>, currentId?: string) {
-    if (!item.companyToken) return;
-
-    const all = await this.getAllGlobal();
-    if (all.some(c => c.id !== currentId && c.entityStatus !== 'ARQUIVADO' && c.companyToken === item.companyToken)) {
-      throw new Error('Token da empresa ja cadastrado para outra instancia.');
-    }
-  }
-
-  private async assertUniquePorts(item: Partial<Company>, currentId?: string) {
-    const all = await this.getAllGlobal();
-    const active = all.filter(c => c.id !== currentId && c.entityStatus !== 'ARQUIVADO');
-    const apiPort = item.apiPort ? Number(item.apiPort) : undefined;
-    const mqttPort = item.mqttPort ? Number(item.mqttPort) : undefined;
-
-    if (!apiPort || apiPort < 1 || apiPort > 65535) throw new Error('Porta API invalida.');
-    if (!mqttPort || mqttPort < 1 || mqttPort > 65535) throw new Error('Porta MQTT invalida.');
-    if (active.some(c => Number(c.apiPort) === apiPort)) throw new Error('Porta API já está em uso por outra empresa.');
-    if (active.some(c => Number(c.mqttPort) === mqttPort)) throw new Error('Porta MQTT já está em uso por outra empresa.');
-  }
-
-  private async syncCompanyStorage(company: Company) {
-    if (typeof window === 'undefined') return;
-
-    const response = await fetch('/api/mobile/company', {
+    const response = await fetch('/api/admin/companies', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(company),
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+      },
+      body: JSON.stringify(withUrls),
     });
 
     if (!response.ok) {
-      const body = await response.json().catch(() => ({ error: 'Falha ao sincronizar Company no storage mobile.' }));
-      throw new Error(body.error || 'Falha ao sincronizar Company no storage mobile.');
+      const body = await response.json().catch(() => ({ error: 'Falha ao provisionar empresa.' }));
+      throw new Error(body.error || `Falha ao provisionar empresa (HTTP ${response.status}).`);
     }
-  }
 
-  async create(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<Company> {
-    const itemWithToken = {
-      ...item,
-      companyToken: await this.getUniqueCompanyToken(undefined, item.companyToken),
+    const body = await response.json() as { company: Company; provisioningToken: string };
+    // Use server-generated data. Expose provisioningToken via companyToken field so the UI can
+    // show/copy it once — it will not be available again from GET endpoints.
+    const serverCompany: Company = {
+      ...body.company,
+      companyToken: body.provisioningToken,
     };
 
-    await this.assertUniquePorts(itemWithToken);
-    await this.assertUniqueCompanyToken(itemWithToken);
-    const created = await super.create(this.withGeneratedUrls(itemWithToken));
-    try {
-      await this.syncCompanyStorage(created);
-    } catch (error) {
-      await super.archive(created.id);
-      throw error;
-    }
+    // Persist to local state so the UI reflects the new record immediately
+    const created = await super.create(serverCompany as Omit<Company, keyof import('@/lib/types').BaseEntity>);
     return created;
   }
 
+  /**
+   * Update a company via PATCH /api/admin/companies/[id].
+   * Token, tenantId, and createdAt are immutable and never sent.
+   */
   async update(id: string, updateData: Partial<Company>): Promise<Company | undefined> {
-    const current = (await this.getAllGlobal()).find(c => c.id === id);
-    if (!current) throw new Error('Registro nao encontrado');
-
-    const nextData = this.withGeneratedUrls({
-      ...updateData,
-      companyToken: await this.getUniqueCompanyToken(id, updateData.companyToken || current.companyToken),
-    });
-
-    await this.assertUniquePorts({ ...current, ...nextData }, id);
-    await this.assertUniqueCompanyToken(nextData, id);
-    await this.syncCompanyStorage({ ...current, ...nextData });
-    return super.update(id, nextData);
-  }
-
-  async regenerateCompanyToken(id: string): Promise<Company | undefined> {
-    const current = (await this.getAllGlobal()).find(c => c.id === id);
-    if (!current) throw new Error('Registro nao encontrado');
-
-    if (typeof window !== 'undefined') {
-      const persisted = await this.persistCompanyTokenOnServer(current, true);
-      await super.update(id, persisted);
-      return persisted;
+    if (typeof window === 'undefined') {
+      return super.update(id, updateData);
     }
 
-    const companyToken = await this.getUniqueCompanyToken(id);
-    return this.update(id, { companyToken });
-  }
+    const withUrls = this.withGeneratedUrls(updateData);
+    const csrfToken = getCsrfTokenFromDocument();
 
-  async generateMissingCompanyToken(companyOrId: string | Company): Promise<Company | undefined> {
-    const incoming = typeof companyOrId === 'string' ? undefined : companyOrId;
-    const id = typeof companyOrId === 'string' ? companyOrId : companyOrId.id;
-    const current = incoming || (await this.getAllGlobal()).find(c => c.id === id);
-    if (!current) throw new Error('Registro nao encontrado');
-    if (current.companyToken) return current;
-    if (!Number(current.apiPort)) throw new Error('apiPort is required');
-    await this.assertUniquePorts(current, id);
-
-    if (typeof window !== 'undefined') {
-      const persisted = await this.persistCompanyTokenOnServer(current, false);
-      await super.update(id, persisted);
-      return persisted;
-    }
-
-    const companyToken = await this.getUniqueCompanyToken(id);
-    return this.update(id, {
-      ...current,
-      apiPort: Number(current.apiPort),
-      mqttPort: current.mqttPort ? Number(current.mqttPort) : current.mqttPort,
-      companyToken,
-    });
-  }
-
-  private async persistCompanyTokenOnServer(company: Company, regenerate: boolean): Promise<Company> {
-    const response = await fetch('/api/admin/companies/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        regenerate,
-        company: {
-          ...company,
-          tenantId: company.tenantId || company.id,
-          apiPort: Number(company.apiPort),
-          mqttPort: Number(company.mqttPort),
-          status: company.status || 'ATIVO',
-          apiBaseUrl: company.apiPort ? `https://api.siloops.com.br:${Number(company.apiPort)}` : company.apiBaseUrl,
-          mqttUrl: company.mqttPort ? `mqtt.siloops.com.br:${Number(company.mqttPort)}` : company.mqttUrl,
-        },
-      }),
+    const response = await fetch(`/api/admin/companies/${id}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+      },
+      body: JSON.stringify(withUrls),
     });
 
     if (!response.ok) {
-      const body = await response.json().catch(() => ({ error: 'Falha ao persistir token no servidor.' }));
-      throw new Error(body.error || 'Falha ao persistir token no servidor.');
+      const body = await response.json().catch(() => ({ error: 'Falha ao atualizar empresa.' }));
+      throw new Error(body.error || `Falha ao atualizar empresa (HTTP ${response.status}).`);
     }
 
     const body = await response.json() as { company: Company };
-    return body.company;
+    // Persist local state
+    return super.update(id, body.company);
+  }
+
+  /**
+   * Rotate token via POST /api/admin/companies/[id]/token.
+   * Server generates the new token; the full value is returned once.
+   */
+  async regenerateCompanyToken(id: string): Promise<Company | undefined> {
+    if (typeof window === 'undefined') {
+      throw new Error('Token rotation requires a browser session.');
+    }
+
+    const csrfToken = getCsrfTokenFromDocument();
+    const response = await fetch(`/api/admin/companies/${id}/token`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ error: 'Falha ao rotacionar token.' }));
+      throw new Error(body.error || `Falha ao rotacionar token (HTTP ${response.status}).`);
+    }
+
+    const body = await response.json() as { companyId: string; newToken: string; tokenPreview: string };
+    // Update local state with the new (full) token so it can be displayed/copied
+    return super.update(id, {
+      companyToken: body.newToken,
+      mobileToken: body.newToken,
+      apiToken: body.newToken,
+      token: body.newToken,
+    });
+  }
+
+  async generateMissingCompanyToken(companyOrId: string | Company): Promise<Company | undefined> {
+    const id = typeof companyOrId === 'string' ? companyOrId : companyOrId.id;
+    const current = typeof companyOrId === 'string'
+      ? (await this.getAllGlobal()).find(c => c.id === id)
+      : companyOrId;
+    if (!current) throw new Error('Registro nao encontrado');
+    if (current.companyToken) return current;
+    // No token yet — rotate to generate one
+    return this.regenerateCompanyToken(id);
   }
 })('companies', INITIAL_COMPANIES);
 
