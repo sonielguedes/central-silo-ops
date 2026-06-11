@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
 import { CompanyService } from '@/services/master.service';
+import type { CompanyCreateResult, CompanyTokenRotateResult } from '@/services/master.service';
 import { Company } from '@/lib/mock/master-data';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -35,7 +36,9 @@ import {
   Copy,
   RefreshCw,
   Eye,
-  EyeOff
+  EyeOff,
+  ShieldAlert,
+  CheckCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
@@ -54,6 +57,108 @@ function findNextFreePort(usedPorts: Array<number | undefined>, startAt: number)
   return candidate;
 }
 
+// ── Token modal ───────────────────────────────────────────────────────────────
+
+interface TokenModalProps {
+  token: string;
+  title: string;
+  onClose: () => void;
+}
+
+function TokenModal({ token, title, onClose }: TokenModalProps) {
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(token);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg bg-[#0a0e27] border border-red-500/40 rounded-3xl p-8 shadow-2xl shadow-red-500/10 animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+            <ShieldAlert size={20} className="text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-tighter text-white">{title}</h3>
+            <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Acao irreversivel</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto p-2 hover:bg-[#1a1f3a] rounded-xl transition-all text-muted-foreground hover:text-white"
+            aria-label="Fechar modal"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Warning */}
+        <div className="mb-5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
+          <p className="text-[11px] font-bold text-yellow-300 leading-relaxed">
+            Salve este token agora. Depois sera exibido apenas parcialmente.
+            Nenhuma outra tela mostrara o valor completo.
+          </p>
+        </div>
+
+        {/* Token display */}
+        <div className="mb-5">
+          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2">Company Token</p>
+          <div className="flex gap-2">
+            <div className="flex-1 min-w-0 rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-3">
+              <p className="break-all font-mono text-xs text-white select-all" data-testid="token-value">
+                {visible ? token : `${token.slice(0, 6)}••••••••••••${token.slice(-4)}`}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setVisible((v) => !v)}
+                className="rounded-xl border border-[#2d3647] px-3 py-3 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+                title={visible ? 'Mascarar token' : 'Exibir token'}
+                aria-label={visible ? 'Mascarar token' : 'Exibir token'}
+              >
+                {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+              <button
+                onClick={handleCopy}
+                className={cn(
+                  "rounded-xl border px-3 py-3 transition-colors",
+                  copied
+                    ? "border-green-500/40 bg-green-500/10 text-green-400"
+                    : "border-[#2d3647] text-muted-foreground hover:border-primary/40 hover:text-primary"
+                )}
+                title="Copiar token"
+                aria-label="Copiar token"
+                data-testid="copy-token-btn"
+              >
+                {copied ? <CheckCheck size={16} /> : <Copy size={16} />}
+              </button>
+            </div>
+          </div>
+          {copied && (
+            <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-green-400">Copiado!</p>
+          )}
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="w-full py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-lg shadow-primary/20"
+          data-testid="close-token-modal"
+        >
+          Entendi, salvei o token
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 function EmpresasPage() {
   const { accessGroup, checkPermission } = useAuth();
   const [data, setData] = useState<Company[]>([]);
@@ -63,9 +168,14 @@ function EmpresasPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Company | null>(null);
   const [viewAudit, setViewAudit] = useState(false);
-  const [visibleCompanyTokens, setVisibleCompanyTokens] = useState<Record<string, boolean>>({});
   const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'delete' | 'regenerate'; item: Company } | null>(null);
+
+  // Token modal — holds the ONE-TIME full token (provisioning or rotation)
+  const [tokenModal, setTokenModal] = useState<{ token: string; title: string } | null>(null);
+
+  // Loading states for async token operations
+  const [isRotatingToken, setIsRotatingToken] = useState(false);
 
   const {
     register,
@@ -73,7 +183,7 @@ function EmpresasPage() {
     reset,
     watch,
     getValues,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
     mode: 'onChange',
@@ -93,33 +203,43 @@ function EmpresasPage() {
   );
   const normalizedApiPort = Number(portaApi || selectedItem?.apiPort || 0);
   const normalizedMqttPort = Number(portaMqtt || selectedItem?.mqttPort || 0);
-  const generatedApiBaseUrl = normalizedApiPort ? `https://api.siloops.com.br:${normalizedApiPort}` : 'https://api.siloops.com.br:{portaApi}';
-  const generatedMqttUrl = normalizedMqttPort ? `mqtt.siloops.com.br:${normalizedMqttPort}` : 'mqtt.siloops.com.br:{portaMqtt}';
-  const apiPortConflict = data.some((item) => item.id !== selectedItem?.id && Number(item.apiPort) === normalizedApiPort);
-  const mqttPortConflict = data.some((item) => item.id !== selectedItem?.id && Number(item.mqttPort) === normalizedMqttPort);
-  const apiPortSuggestion = apiPortConflict ? findNextFreePort(data.map((item) => item.apiPort), normalizedApiPort || API_PORT_START) : suggestedApiPort;
-  const mqttPortSuggestion = mqttPortConflict ? findNextFreePort(data.map((item) => item.mqttPort), normalizedMqttPort || MQTT_PORT_START) : suggestedMqttPort;
+  const generatedApiBaseUrl = normalizedApiPort
+    ? `https://api.siloops.com.br:${normalizedApiPort}`
+    : 'https://api.siloops.com.br:{portaApi}';
+  const generatedMqttUrl = normalizedMqttPort
+    ? `mqtt.siloops.com.br:${normalizedMqttPort}`
+    : 'mqtt.siloops.com.br:{portaMqtt}';
+  const apiPortConflict = data.some(
+    (item) => item.id !== selectedItem?.id && Number(item.apiPort) === normalizedApiPort,
+  );
+  const mqttPortConflict = data.some(
+    (item) => item.id !== selectedItem?.id && Number(item.mqttPort) === normalizedMqttPort,
+  );
+  const apiPortSuggestion = apiPortConflict
+    ? findNextFreePort(data.map((item) => item.apiPort), normalizedApiPort || API_PORT_START)
+    : suggestedApiPort;
+  const mqttPortSuggestion = mqttPortConflict
+    ? findNextFreePort(data.map((item) => item.mqttPort), normalizedMqttPort || MQTT_PORT_START)
+    : suggestedMqttPort;
   const canRegenerateToken = accessGroup?.id === 'ag-admin' || checkPermission('ALL', 'administrar');
 
-  const maskCompanyToken = (token?: string) => {
-    if (!token) return 'Token pendente';
-    if (token.length <= 8) return '••••••••';
-    return `${token.slice(0, 4)}••••••••••••${token.slice(-4)}`;
-  };
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const result = await CompanyService.getAllGlobal();
+      setData(result);
+    } catch (err: any) {
+      setLoadError(err?.message || 'Erro ao carregar empresas.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const toggleCompanyTokenVisibility = (id: string) => {
-    setVisibleCompanyTokens(current => ({ ...current, [id]: !current[id] }));
-  };
-
-  const maskedCompanyTokenLabel = (token?: string) => {
-    void maskCompanyToken;
-    if (!token) return 'Token pendente';
-    return 'CTK-••••••••';
-  };
-
+  // Run once on mount
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     if (isDrawerOpen) {
@@ -134,7 +254,7 @@ function EmpresasPage() {
           portaMqtt: selectedItem.mqttPort || ('' as unknown as number),
           apiBaseUrl: selectedItem.apiBaseUrl || '',
           mqttUrl: selectedItem.mqttUrl || '',
-          companyToken: selectedItem.companyToken || '',
+          companyToken: '',     // never pre-fill with raw token
           plan: selectedItem.plan,
           status: selectedItem.status || 'ATIVO',
         });
@@ -159,31 +279,17 @@ function EmpresasPage() {
     }
   }, [selectedItem, reset, isDrawerOpen, suggestedApiPort, suggestedMqttPort]);
 
-
-  const loadData = async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const result = await CompanyService.getAllGlobal();
-      setData(result);
-    } catch (err: any) {
-      setLoadError(err?.message || 'Erro ao carregar empresas.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     const item = data.find((current) => current.id === id);
     if (!item) return;
     setConfirmAction({ type: 'delete', item });
   };
 
   const upsertCompanyInView = (company: Company) => {
-    setData(current => {
-      const exists = current.some(item => item.id === company.id);
+    setData((current) => {
+      const exists = current.some((item) => item.id === company.id);
       return exists
-        ? current.map(item => item.id === company.id ? company : item)
+        ? current.map((item) => (item.id === company.id ? company : item))
         : [company, ...current];
     });
   };
@@ -193,34 +299,54 @@ function EmpresasPage() {
       const payload = companyFormToCompanyPayload(formData);
       const nextApiPort = Number(payload.apiPort);
       const nextMqttPort = Number(payload.mqttPort);
-      const duplicateApi = data.some((item) => item.id !== selectedItem?.id && Number(item.apiPort) === nextApiPort);
-      const duplicateMqtt = data.some((item) => item.id !== selectedItem?.id && Number(item.mqttPort) === nextMqttPort);
+      const duplicateApi = data.some(
+        (item) => item.id !== selectedItem?.id && Number(item.apiPort) === nextApiPort,
+      );
+      const duplicateMqtt = data.some(
+        (item) => item.id !== selectedItem?.id && Number(item.mqttPort) === nextMqttPort,
+      );
       if (duplicateApi) {
-        throw new Error(`Porta API já está em uso por outra empresa. Sugestão: ${findNextFreePort(data.map((item) => item.apiPort), nextApiPort || API_PORT_START)}`);
+        throw new Error(
+          `Porta API ja esta em uso. Sugestao: ${findNextFreePort(data.map((item) => item.apiPort), nextApiPort || API_PORT_START)}`,
+        );
       }
       if (duplicateMqtt) {
-        throw new Error(`Porta MQTT já está em uso por outra empresa. Sugestão: ${findNextFreePort(data.map((item) => item.mqttPort), nextMqttPort || MQTT_PORT_START)}`);
+        throw new Error(
+          `Porta MQTT ja esta em uso. Sugestao: ${findNextFreePort(data.map((item) => item.mqttPort), nextMqttPort || MQTT_PORT_START)}`,
+        );
       }
-      let saved: Company | undefined;
-      if (selectedItem) {
-        saved = await CompanyService.update(selectedItem.id, { ...payload, version: selectedItem.version });
-      } else {
-        saved = await CompanyService.create(payload as Omit<Company, keyof import('@/lib/types').BaseEntity>);
-      }
-      if (saved) {
-        setSelectedItem(saved);
-        upsertCompanyInView(saved);
-      }
-      setIsDrawerOpen(false);
-      setFeedback({ type: 'success', message: selectedItem ? 'Instância atualizada com sucesso' : 'Instância criada com sucesso' });
-    } catch (error: any) {
-      setFeedback({ type: 'error', message: error.message || 'Falha ao salvar instância' });
-    }
-  };
 
-  const copyCompanyToken = async (token?: string) => {
-    if (!token) return;
-    await navigator.clipboard.writeText(token);
+      if (selectedItem) {
+        // EDIT — PATCH, never touches token
+        const updated = await CompanyService.update(selectedItem.id, {
+          ...payload,
+          version: selectedItem.version,
+        });
+        if (updated) {
+          setSelectedItem(updated);
+          upsertCompanyInView(updated);
+        }
+        setIsDrawerOpen(false);
+        setFeedback({ type: 'success', message: 'Instancia atualizada com sucesso' });
+      } else {
+        // CREATE — POST, capture provisioningToken
+        const result: CompanyCreateResult = await CompanyService.create(
+          payload as Omit<Company, keyof import('@/lib/types').BaseEntity>,
+        );
+        upsertCompanyInView(result.company);
+        setIsDrawerOpen(false);
+        // Reload list to get fresh tokenPreview from server
+        await loadData();
+        // Show the one-time token modal
+        setTokenModal({
+          token: result.provisioningToken,
+          title: 'Token de provisionamento gerado',
+        });
+        setFeedback({ type: 'success', message: 'Instancia criada com sucesso' });
+      }
+    } catch (error: any) {
+      setFeedback({ type: 'error', message: error.message || 'Falha ao salvar instancia' });
+    }
   };
 
   const handleRegenerateCompanyToken = async () => {
@@ -237,63 +363,46 @@ function EmpresasPage() {
         await loadData();
         setFeedback({ type: 'success', message: 'Empresa arquivada com sucesso' });
       } else {
-        const updated = await CompanyService.regenerateCompanyToken(confirmAction.item.id);
-        if (updated) {
-          setSelectedItem(updated);
-          upsertCompanyInView(updated);
-          setVisibleCompanyTokens(current => ({ ...current, [updated.id]: false }));
+        // TOKEN ROTATION — explicit endpoint only
+        setIsRotatingToken(true);
+        const result: CompanyTokenRotateResult = await CompanyService.regenerateCompanyToken(
+          confirmAction.item.id,
+        );
+        // Update view with refreshed company (tokenPreview only)
+        upsertCompanyInView(result.company);
+        if (selectedItem?.id === result.company.id) {
+          setSelectedItem(result.company);
         }
+        await loadData();
+        // Show the one-time new token modal
+        setTokenModal({
+          token: result.newToken,
+          title: 'Token regenerado com sucesso',
+        });
         setFeedback({ type: 'success', message: 'Token da empresa regenerado com sucesso' });
       }
-      setConfirmAction(null);
     } catch (error: any) {
+      setFeedback({ type: 'error', message: error.message || 'Falha na operacao' });
+    } finally {
+      setIsRotatingToken(false);
       setConfirmAction(null);
-      setFeedback({ type: 'error', message: error.message || 'Falha na operação' });
     }
   };
 
-  const handleGenerateCompanyToken = async () => {
+  const handleGenerateFirstToken = async () => {
     if (!selectedItem) return;
-
-    try {
-      const formValues = getValues();
-      const apiPortValue = Number(formValues.portaApi || selectedItem.apiPort);
-      const mqttPortValue = Number(formValues.portaMqtt || selectedItem.mqttPort);
-
-      if (!apiPortValue) {
-        setFeedback({ type: 'error', message: 'Porta API obrigatoria para gerar token.' });
-        return;
-      }
-
-      if (!mqttPortValue) {
-        setFeedback({ type: 'error', message: 'Porta MQTT obrigatoria para gerar token.' });
-        return;
-      }
-
-      const updated = await CompanyService.generateMissingCompanyToken({
-        ...selectedItem,
-        ...formValues,
-        id: selectedItem.id,
-        tenantId: selectedItem.tenantId,
-        apiPort: apiPortValue,
-        mqttPort: mqttPortValue,
-        apiBaseUrl: `https://api.siloops.com.br:${apiPortValue}`,
-        mqttUrl: mqttPortValue ? `mqtt.siloops.com.br:${mqttPortValue}` : selectedItem.mqttUrl,
-        companyToken: selectedItem.companyToken || formValues.companyToken,
-      });
-      if (updated) {
-        setSelectedItem(updated);
-        upsertCompanyInView(updated);
-        setVisibleCompanyTokens(current => ({ ...current, [updated.id]: false }));
-      }
-    } catch (error: any) {
-      setFeedback({ type: 'error', message: error.message || 'Falha ao gerar token' });
-    }
+    setConfirmAction({ type: 'regenerate', item: selectedItem });
   };
 
-  const filteredData = data.filter(item =>
-    item.tradingName.toLowerCase().includes(search.toLowerCase()) ||
-    item.cnpj.includes(search)
+  const closeTokenModal = () => {
+    // Clear full token from state when user explicitly closes the modal
+    setTokenModal(null);
+  };
+
+  const filteredData = data.filter(
+    (item) =>
+      item.tradingName.toLowerCase().includes(search.toLowerCase()) ||
+      item.cnpj.includes(search),
   );
 
   const applySuggestedPorts = () => {
@@ -304,6 +413,9 @@ function EmpresasPage() {
     });
   };
 
+  // tokenPreview field on a company (server returns it instead of raw token)
+  const getTokenPreview = (item: Company) => (item as any).tokenPreview as string | undefined;
+
   return (
     <div className="flex h-screen bg-[#050812] text-white overflow-hidden font-sans">
       <Sidebar className="hidden lg:flex shrink-0" />
@@ -312,13 +424,13 @@ function EmpresasPage() {
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
           <PageHeader
             title="Empresas / Tenants"
-            description="Administração Global de Instâncias de Produção"
+            description="Administracao Global de Instancias de Producao"
           >
             <button
               onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"
             >
-              <Plus size={16} strokeWidth={3} /> Nova Instância
+              <Plus size={16} strokeWidth={3} /> Nova Instancia
             </button>
           </PageHeader>
 
@@ -329,7 +441,7 @@ function EmpresasPage() {
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Buscar por nome fantasia, razão social ou CNPJ..."
+                placeholder="Buscar por nome fantasia, razao social ou CNPJ..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40"
@@ -362,99 +474,107 @@ function EmpresasPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredData.map((item) => (
-                <div key={item.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-6 hover:border-primary/40 transition-all group relative overflow-hidden flex flex-col h-full shadow-xl">
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-[#1a1f3a] flex items-center justify-center text-primary shadow-lg border border-[#2d3647]">
-                        <Building2 size={28} />
+              {filteredData.map((item) => {
+                const preview = getTokenPreview(item);
+                return (
+                  <div key={item.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-6 hover:border-primary/40 transition-all group relative overflow-hidden flex flex-col h-full shadow-xl">
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-[#1a1f3a] flex items-center justify-center text-primary shadow-lg border border-[#2d3647]">
+                          <Building2 size={28} />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors leading-none">{item.tradingName}</h3>
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1.5 flex items-center gap-1.5 leading-none">
+                            <Fingerprint size={10} className="text-primary" /> {item.code} • {item.cnpj}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-xl font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors leading-none">{item.tradingName}</h3>
-                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1.5 flex items-center gap-1.5 leading-none">
-                           <Fingerprint size={10} className="text-primary" /> {item.code} • {item.cnpj}
+                      <div className="flex gap-1">
+                        <button onClick={() => { setSelectedItem(item); setIsDrawerOpen(true); }} className="p-2 text-muted-foreground hover:text-white transition-colors hover:bg-[#1a1f3a] rounded-lg"><Edit size={16} /></button>
+                        <button onClick={() => handleDelete(item.id)} className="p-2 text-muted-foreground hover:text-red-500 transition-colors hover:bg-red-500/10 rounded-lg"><Trash2 size={16} /></button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 space-y-2 mb-6">
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-tight">{item.corporateName}</p>
+                      {item.domain && (
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Globe size={10} /> {item.domain}
+                        </p>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 min-w-0">
+                          <Server size={10} className="text-primary shrink-0" />
+                          <span className="truncate">{item.apiBaseUrl || 'API nao configurada'}</span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 min-w-0">
+                          <Radio size={10} className="text-primary shrink-0" />
+                          <span className="truncate">{item.mqttUrl || 'MQTT nao configurado'}</span>
                         </p>
                       </div>
+                      {/* Token preview in card — always masked, no toggle */}
+                      <div className="mt-2 flex max-w-full items-center gap-1 rounded-lg border border-[#2d3647] bg-[#050812]/70 px-2 py-1 text-[10px] text-muted-foreground">
+                        <KeyRound size={10} className="shrink-0" />
+                        <span className="truncate font-mono" data-testid={`token-preview-${item.id}`}>
+                          {preview || 'sem token'}
+                        </span>
+                      </div>
+                      {item.status === 'ATIVO' && !preview && (
+                        <p className="text-[10px] font-black uppercase tracking-tight text-red-300">Token obrigatorio para APK</p>
+                      )}
                     </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => { setSelectedItem(item); setIsDrawerOpen(true); }} className="p-2 text-muted-foreground hover:text-white transition-colors hover:bg-[#1a1f3a] rounded-lg"><Edit size={16} /></button>
-                      <button onClick={() => handleDelete(item.id)} className="p-2 text-muted-foreground hover:text-red-500 transition-colors hover:bg-red-500/10 rounded-lg"><Trash2 size={16} /></button>
-                    </div>
-                  </div>
 
-                  <div className="flex-1 space-y-2 mb-6">
-                     <p className="text-[10px] font-bold text-white/40 uppercase tracking-tight">{item.corporateName}</p>
-                     {item.domain && (
-                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                         <Globe size={10} /> {item.domain}
-                       </p>
-                     )}
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                       <p className="text-[10px] text-muted-foreground flex items-center gap-1 min-w-0">
-                         <Server size={10} className="text-primary shrink-0" />
-                         <span className="truncate">{item.apiBaseUrl || 'API nao configurada'}</span>
-                       </p>
-                       <p className="text-[10px] text-muted-foreground flex items-center gap-1 min-w-0">
-                         <Radio size={10} className="text-primary shrink-0" />
-                         <span className="truncate">{item.mqttUrl || 'MQTT nao configurado'}</span>
-                       </p>
-                     </div>
-                     <div className="mt-2 flex max-w-full items-center gap-1 rounded-lg border border-[#2d3647] bg-[#050812]/70 px-2 py-1 text-[10px] text-muted-foreground">
-                       <KeyRound size={10} className="shrink-0" />
-                       <span className="truncate font-mono">
-                         {visibleCompanyTokens[item.id] ? item.companyToken : maskedCompanyTokenLabel(item.companyToken)}
-                       </span>
-                       {item.companyToken && (
-                         <>
-                           <button type="button" onClick={() => toggleCompanyTokenVisibility(item.id)} className="shrink-0 hover:text-primary">
-                             {visibleCompanyTokens[item.id] ? <EyeOff size={10} /> : <Eye size={10} />}
-                           </button>
-                           <button type="button" onClick={() => copyCompanyToken(item.companyToken)} className="shrink-0 hover:text-primary">
-                             <Copy size={10} />
-                           </button>
-                         </>
-                       )}
-                     </div>
-                     {item.status === 'ATIVO' && !item.companyToken && (
-                       <p className="text-[10px] font-black uppercase tracking-tight text-red-300">Token obrigatório para APK</p>
-                     )}
-                  </div>
-
-                  <div className="pt-4 border-t border-[#2d3647] flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                       <span className={cn(
-                         "px-2 py-0.5 rounded text-[9px] font-black uppercase border",
-                         item.plan === 'ENTERPRISE' ? "bg-primary/10 text-primary border-primary/30" : "bg-[#1a1f3a] text-white/50 border-white/10"
-                       )}>
-                         Plano {item.plan}
-                       </span>
-                       <StatusBadge status={item.status} />
+                    <div className="pt-4 border-t border-[#2d3647] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[9px] font-black uppercase border",
+                          item.plan === 'ENTERPRISE' ? "bg-primary/10 text-primary border-primary/30" : "bg-[#1a1f3a] text-white/50 border-white/10"
+                        )}>
+                          Plano {item.plan}
+                        </span>
+                        <StatusBadge status={item.status} />
+                      </div>
+                      <button className="text-[10px] font-black text-primary uppercase hover:underline flex items-center gap-1">
+                        Acessar Console <Globe size={12} />
+                      </button>
                     </div>
-                    <button className="text-[10px] font-black text-primary uppercase hover:underline flex items-center gap-1">
-                      Acessar Console <Globe size={12} />
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </main>
       </div>
 
+      {/* ── Drawer ── */}
       {isDrawerOpen && (
         <div className="fixed inset-0 z-[2000] flex justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsDrawerOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsDrawerOpen(false)} />
           <div className="relative w-full max-w-xl bg-[#0a0e27] border-l border-[#2d3647] shadow-2xl p-8 flex flex-col h-full animate-in slide-in-from-right duration-300">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">{selectedItem ? 'Editar Instância' : 'Nova Instância'}</h2>
-                {selectedItem && <p className="text-[10px] text-primary font-bold uppercase">v{selectedItem.version} • {selectedItem.id}</p>}
+                <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">
+                  {selectedItem ? 'Editar Instancia' : 'Nova Instancia'}
+                </h2>
+                {selectedItem && (
+                  <p className="text-[10px] text-primary font-bold uppercase">
+                    v{selectedItem.version} • {selectedItem.id}
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 {selectedItem && (
-                   <button onClick={() => setViewAudit(!viewAudit)} className={cn("p-2 rounded-xl border border-[#2d3647]", viewAudit ? "bg-primary text-[#0a0e27]" : "text-muted-foreground")}><History size={18} /></button>
+                  <button
+                    onClick={() => setViewAudit(!viewAudit)}
+                    className={cn("p-2 rounded-xl border border-[#2d3647]", viewAudit ? "bg-primary text-[#0a0e27]" : "text-muted-foreground")}
+                  >
+                    <History size={18} />
+                  </button>
                 )}
-                <button onClick={() => setIsDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
+                <button onClick={() => setIsDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all">
+                  <X size={20} />
+                </button>
               </div>
             </div>
 
@@ -467,24 +587,24 @@ function EmpresasPage() {
                     <input {...register('tradingName')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all font-bold", errors.tradingName && "border-red-500/50")} placeholder="Ex: Fazenda Santa Clara" />
                   </FormField>
 
-                  <FormField label="Razão Social" error={errors.corporateName?.message} required>
-                    <input {...register('corporateName')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all", errors.corporateName && "border-red-500/50")} placeholder="Ex: Agropecuária Modelo LTDA" />
+                  <FormField label="Razao Social" error={errors.corporateName?.message} required>
+                    <input {...register('corporateName')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all", errors.corporateName && "border-red-500/50")} placeholder="Ex: Agropecuaria Modelo LTDA" />
                   </FormField>
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField label="CNPJ" error={errors.cnpj?.message} required>
                       <input {...register('cnpj')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all", errors.cnpj && "border-red-500/50")} placeholder="00.000.000/0000-00" />
                     </FormField>
-                    <FormField label="Cód. Interno" error={errors.code?.message} required>
+                    <FormField label="Cod. Interno" error={errors.code?.message} required>
                       <input {...register('code')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all uppercase font-black italic", errors.code && "border-red-500/50")} placeholder="SC01" />
                     </FormField>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <FormField label="Domínio" error={errors.domain?.message}>
+                    <FormField label="Dominio" error={errors.domain?.message}>
                       <input {...register('domain')} className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all", errors.domain && "border-red-500/50")} placeholder="empresa.com" />
                     </FormField>
-                    <FormField label="Plano de Serviço" error={errors.plan?.message} required>
+                    <FormField label="Plano de Servico" error={errors.plan?.message} required>
                       <select {...register('plan')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all appearance-none">
                         <option value="PILOTO">PILOTO</option>
                         <option value="PRO">PRO</option>
@@ -505,12 +625,12 @@ function EmpresasPage() {
                       />
                       {!selectedItem && (
                         <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                          Sugestão: {suggestedApiPort}
+                          Sugestao: {suggestedApiPort}
                         </p>
                       )}
                       {apiPortConflict && (
                         <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-red-300">
-                          Porta API já está em uso por outra empresa. Sugestão: {apiPortSuggestion}
+                          Porta API ja esta em uso. Sugestao: {apiPortSuggestion}
                         </p>
                       )}
                     </FormField>
@@ -525,12 +645,12 @@ function EmpresasPage() {
                       />
                       {!selectedItem && (
                         <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                          Sugestão: {suggestedMqttPort}
+                          Sugestao: {suggestedMqttPort}
                         </p>
                       )}
                       {mqttPortConflict && (
                         <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-red-300">
-                          Porta MQTT já está em uso por outra empresa. Sugestão: {mqttPortSuggestion}
+                          Porta MQTT ja esta em uso. Sugestao: {mqttPortSuggestion}
                         </p>
                       )}
                     </FormField>
@@ -542,7 +662,7 @@ function EmpresasPage() {
                       onClick={applySuggestedPorts}
                       className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/15 transition-colors"
                     >
-                      Usar próxima porta livre
+                      Usar proxima porta livre
                     </button>
                   )}
 
@@ -559,59 +679,67 @@ function EmpresasPage() {
                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">MQTT URL</p>
                         <p className="break-all rounded-lg bg-[#1a1f3a] px-3 py-2 text-xs font-mono text-white">{generatedMqttUrl}</p>
                       </div>
+                      {/* Company Token section — behaviour differs for new vs existing */}
                       <div>
                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Company Token</p>
-                        <div className="flex gap-2">
-                          <p className="min-w-0 flex-1 break-all rounded-lg bg-[#1a1f3a] px-3 py-2 text-xs font-mono text-white">
-                            {selectedItem?.companyToken
-                              ? visibleCompanyTokens[selectedItem.id]
-                                ? selectedItem.companyToken
-                                : maskedCompanyTokenLabel(selectedItem.companyToken)
-                              : 'Sera gerado ao salvar'}
-                          </p>
-                          {selectedItem?.companyToken && (
-                            <>
+                        {selectedItem ? (
+                          /* Editing existing company — show tokenPreview only */
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 rounded-lg bg-[#1a1f3a] px-3 py-2">
+                              <KeyRound size={12} className="shrink-0 text-primary" />
+                              <span className="flex-1 font-mono text-xs text-white truncate" data-testid="drawer-token-preview">
+                                {getTokenPreview(selectedItem) || 'sem token'}
+                              </span>
+                            </div>
+                            {getTokenPreview(selectedItem) ? (
+                              <p className="text-[10px] font-black uppercase tracking-widest text-green-400 flex items-center gap-1">
+                                <CheckCheck size={10} /> Token configurado
+                              </p>
+                            ) : (
+                              <p className="text-[10px] font-black uppercase tracking-widest text-red-300">
+                                Token obrigatorio para APK
+                              </p>
+                            )}
+                            {/* Regenerate only when editing, and only by ADMIN */}
+                            {canRegenerateToken && (
                               <button
                                 type="button"
-                                onClick={() => toggleCompanyTokenVisibility(selectedItem.id)}
-                                className="rounded-lg border border-[#2d3647] px-3 text-muted-foreground hover:border-primary/40 hover:text-primary"
-                                title={visibleCompanyTokens[selectedItem.id] ? 'Mascarar token' : 'Exibir token'}
+                                onClick={handleRegenerateCompanyToken}
+                                disabled={isRotatingToken}
+                                className="flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                data-testid="regenerate-token-btn"
                               >
-                                {visibleCompanyTokens[selectedItem.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                {isRotatingToken ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <RefreshCw size={12} />
+                                )}
+                                Regenerar token ADMIN
                               </button>
+                            )}
+                            {/* Generate first token if missing */}
+                            {!getTokenPreview(selectedItem) && (
                               <button
                                 type="button"
-                                onClick={() => copyCompanyToken(selectedItem.companyToken)}
-                                className="rounded-lg border border-[#2d3647] px-3 text-muted-foreground hover:border-primary/40 hover:text-primary"
-                                title="Copiar token"
+                                onClick={handleGenerateFirstToken}
+                                disabled={isRotatingToken}
+                                className="flex items-center gap-2 rounded-lg border border-primary/30 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 disabled:opacity-50"
+                                data-testid="generate-token-btn"
                               >
-                                <Copy size={14} />
+                                {isRotatingToken ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <KeyRound size={12} />
+                                )}
+                                Gerar token
                               </button>
-                            </>
-                          )}
-                        </div>
-                        {selectedItem?.status === 'ATIVO' && !selectedItem.companyToken && (
-                          <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-300">
-                            Token obrigatório para APK
-                          </p>
-                        )}
-                        {selectedItem && !selectedItem.companyToken && (
-                          <button
-                            type="button"
-                            onClick={handleGenerateCompanyToken}
-                            className="mt-2 flex items-center gap-2 rounded-lg border border-primary/30 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10"
-                          >
-                            <KeyRound size={12} /> Gerar token
-                          </button>
-                        )}
-                        {selectedItem?.companyToken && canRegenerateToken && (
-                          <button
-                            type="button"
-                            onClick={handleRegenerateCompanyToken}
-                            className="mt-2 flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/10"
-                          >
-                            <RefreshCw size={12} /> Regenerar token ADMIN
-                          </button>
+                            )}
+                          </div>
+                        ) : (
+                          /* New company — server will generate the token */
+                          <div className="rounded-lg bg-[#1a1f3a] px-3 py-2 text-xs font-mono text-muted-foreground italic">
+                            Sera gerado pelo servidor ao criar
+                          </div>
                         )}
                       </div>
                     </div>
@@ -625,10 +753,17 @@ function EmpresasPage() {
                   </FormField>
 
                   <div className="pt-6 flex gap-3">
-                    <button type="button" onClick={() => setIsDrawerOpen(false)} className="flex-1 py-3 bg-transparent border border-[#2d3647] rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#1a1f3a] transition-all flex items-center justify-center gap-2"><Ban size={14} /> Cancelar</button>
-                    <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+                    <button type="button" onClick={() => setIsDrawerOpen(false)} className="flex-1 py-3 bg-transparent border border-[#2d3647] rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#1a1f3a] transition-all flex items-center justify-center gap-2">
+                      <Ban size={14} /> Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                      data-testid="save-btn"
+                    >
                       {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                      Salvar Instância
+                      Salvar Instancia
                     </button>
                   </div>
                 </form>
@@ -638,12 +773,23 @@ function EmpresasPage() {
         </div>
       )}
 
+      {/* ── Token modal (one-time display) ── */}
+      {tokenModal && (
+        <TokenModal
+          token={tokenModal.token}
+          title={tokenModal.title}
+          onClose={closeTokenModal}
+        />
+      )}
+
       <ConfirmDialog
         open={Boolean(confirmAction)}
         title={confirmAction?.type === 'delete' ? 'Arquivar empresa?' : 'Regenerar token da empresa?'}
-        description={confirmAction?.type === 'delete'
-          ? `Esta ação ocultará todos os dados vinculados ao tenant ${confirmAction?.item.tradingName}.`
-          : 'O APK configurado com o token antigo deixará de autenticar.'}
+        description={
+          confirmAction?.type === 'delete'
+            ? `Esta acao ocultara todos os dados vinculados ao tenant ${confirmAction?.item.tradingName}.`
+            : 'O APK configurado com o token antigo deixara de autenticar. O novo token sera exibido uma unica vez.'
+        }
         confirmLabel={confirmAction?.type === 'delete' ? 'Arquivar' : 'Regenerar'}
         onCancel={() => setConfirmAction(null)}
         onConfirm={executeConfirmAction}

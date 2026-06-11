@@ -67,6 +67,10 @@ import { getCsrfTokenFromDocument } from '@/lib/auth/csrf-client';
 
 export { BaseService };
 
+// ── Explicit result types (consumed by the UI layer) ────────────────────────
+export type CompanyCreateResult = { company: Company; provisioningToken: string };
+export type CompanyTokenRotateResult = { company: Company; newToken: string };
+
 export const CompanyService = new (class extends BaseService<Company> {
   async getAllGlobal(): Promise<Company[]> {
     try {
@@ -92,14 +96,19 @@ export const CompanyService = new (class extends BaseService<Company> {
 
   /**
    * Create a new company via POST /api/admin/companies (PLATFORM scope only).
-   * Server generates id, tenantId, and companyToken.
-   * The full token is returned once in provisioningToken; subsequent GETs only show tokenPreview.
-   * We do NOT generate any token client-side.
+   *
+   * Returns CompanyCreateResult:
+   *   - company:          public fields from server (no secret tokens)
+   *   - provisioningToken: the FULL token, shown once — UI must display it
+   *                        immediately; subsequent GETs only show tokenPreview.
+   *
+   * No token is generated client-side.
    */
-  async create(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<Company> {
+  async create(item: Omit<Company, keyof import('@/lib/types').BaseEntity>): Promise<CompanyCreateResult> {
     if (typeof window === 'undefined') {
-      // SSR fallback — should not happen in normal flow
-      return super.create(item);
+      // SSR fallback — not expected in normal UI flow
+      const created = await super.create(item);
+      return { company: created, provisioningToken: '' };
     }
 
     const withUrls = this.withGeneratedUrls(item);
@@ -121,28 +130,32 @@ export const CompanyService = new (class extends BaseService<Company> {
     }
 
     const body = await response.json() as { company: Company; provisioningToken: string };
-    // Use server-generated data. Expose provisioningToken via companyToken field so the UI can
-    // show/copy it once — it will not be available again from GET endpoints.
-    const serverCompany: Company = {
-      ...body.company,
-      companyToken: body.provisioningToken,
-    };
 
-    // Persist to local state so the UI reflects the new record immediately
-    const created = await super.create(serverCompany as Omit<Company, keyof import('@/lib/types').BaseEntity>);
-    return created;
+    // Persist to local state so the UI reflects the new record immediately.
+    // Store company WITHOUT overwriting the server-side token assignment —
+    // the full token lives only in provisioningToken (returned separately).
+    await super.create(body.company as Omit<Company, keyof import('@/lib/types').BaseEntity>);
+
+    return {
+      company: body.company,
+      provisioningToken: body.provisioningToken,
+    };
   }
 
   /**
    * Update a company via PATCH /api/admin/companies/[id].
-   * Token, tenantId, and createdAt are immutable and never sent.
+   * Token, tenantId, and createdAt are immutable — never sent in the request.
    */
   async update(id: string, updateData: Partial<Company>): Promise<Company | undefined> {
     if (typeof window === 'undefined') {
       return super.update(id, updateData);
     }
 
-    const withUrls = this.withGeneratedUrls(updateData);
+    // Strip any token/identity fields the caller may have accidentally included
+    const { companyToken: _ct, mobileToken: _mt, apiToken: _at, token: _t, tenantId: _tid, createdAt: _ca, ...safeData } = updateData as Record<string, unknown>;
+    void _ct; void _mt; void _at; void _t; void _tid; void _ca;
+
+    const withUrls = this.withGeneratedUrls(safeData as Partial<Company>);
     const csrfToken = getCsrfTokenFromDocument();
 
     const response = await fetch(`/api/admin/companies/${id}`, {
@@ -161,15 +174,19 @@ export const CompanyService = new (class extends BaseService<Company> {
     }
 
     const body = await response.json() as { company: Company };
-    // Persist local state
     return super.update(id, body.company);
   }
 
   /**
    * Rotate token via POST /api/admin/companies/[id]/token.
-   * Server generates the new token; the full value is returned once.
+   *
+   * Returns CompanyTokenRotateResult:
+   *   - company: updated public record (tokenPreview only, no raw token)
+   *   - newToken: the FULL new token, shown once
+   *
+   * No token is generated client-side.
    */
-  async regenerateCompanyToken(id: string): Promise<Company | undefined> {
+  async regenerateCompanyToken(id: string): Promise<CompanyTokenRotateResult> {
     if (typeof window === 'undefined') {
       throw new Error('Token rotation requires a browser session.');
     }
@@ -191,22 +208,20 @@ export const CompanyService = new (class extends BaseService<Company> {
     }
 
     const body = await response.json() as { companyId: string; newToken: string; tokenPreview: string };
-    // Update local state with the new (full) token so it can be displayed/copied
-    return super.update(id, {
-      companyToken: body.newToken,
-      mobileToken: body.newToken,
-      apiToken: body.newToken,
-      token: body.newToken,
-    });
+
+    // Refresh local state with updated company from the listing
+    const all = await this.getAllGlobal();
+    const company = all.find(c => c.id === id) ?? ({ id } as Company);
+
+    return { company, newToken: body.newToken };
   }
 
-  async generateMissingCompanyToken(companyOrId: string | Company): Promise<Company | undefined> {
+  async generateMissingCompanyToken(companyOrId: string | Company): Promise<CompanyTokenRotateResult> {
     const id = typeof companyOrId === 'string' ? companyOrId : companyOrId.id;
     const current = typeof companyOrId === 'string'
       ? (await this.getAllGlobal()).find(c => c.id === id)
       : companyOrId;
     if (!current) throw new Error('Registro nao encontrado');
-    if (current.companyToken) return current;
     // No token yet — rotate to generate one
     return this.regenerateCompanyToken(id);
   }
