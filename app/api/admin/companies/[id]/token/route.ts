@@ -20,6 +20,24 @@ function uniqueToken(): string {
 }
 
 /**
+ * GET /api/admin/companies/[id]/token — BLOCKED (405)
+ *
+ * The full token CANNOT be retrieved via GET. It is returned exactly once:
+ * on POST (rotation) or POST /api/admin/companies (provisioning).
+ * All subsequent reads return only tokenPreview via GET /api/admin/companies.
+ */
+export async function GET() {
+  return NextResponse.json(
+    {
+      error:
+        'Metodo nao permitido. O token completo nao pode ser recuperado via GET. ' +
+        'Use POST para rotacionar e capture o token na resposta unica.',
+    },
+    { status: 405, headers: { Allow: 'POST' } },
+  );
+}
+
+/**
  * POST /api/admin/companies/[id]/token
  *
  * Explicit token rotation endpoint.

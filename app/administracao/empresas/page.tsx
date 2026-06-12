@@ -67,6 +67,8 @@ interface TokenModalProps {
   tempPassword?: string | null;
   /** Email of the auto-created admin user. */
   adminEmail?: string | null;
+  /** True when this is a rotation — shows "token anterior invalidado" notice. */
+  isRegeneration?: boolean;
 }
 
 function CopyField({ label, value, testId, defaultVisible = false }: { label: string; value: string; testId?: string; defaultVisible?: boolean }) {
@@ -106,7 +108,7 @@ function CopyField({ label, value, testId, defaultVisible = false }: { label: st
   );
 }
 
-function TokenModal({ token, title, onClose, tempPassword, adminEmail }: TokenModalProps) {
+function TokenModal({ token, title, onClose, tempPassword, adminEmail, isRegeneration }: TokenModalProps) {
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
@@ -134,6 +136,15 @@ function TokenModal({ token, title, onClose, tempPassword, adminEmail }: TokenMo
             Nenhuma outra tela mostrara os valores completos.
           </p>
         </div>
+
+        {/* Token anterior invalidado — mostrar somente em rotacao */}
+        {isRegeneration && (
+          <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3" data-testid="token-invalidation-notice">
+            <p className="text-[11px] font-bold text-red-300 leading-relaxed">
+              O token anterior foi invalidado. Qualquer dispositivo configurado com o token antigo precisara ser reconfigurado com este novo token.
+            </p>
+          </div>
+        )}
 
         {/* Company Token */}
         <CopyField label="Company Token" value={token} testId="token-value" />
@@ -192,6 +203,7 @@ function EmpresasPage() {
     title: string;
     tempPassword?: string | null;
     adminEmail?: string | null;
+    isRegeneration?: boolean;
   } | null>(null);
 
   // Loading states for async token operations
@@ -400,6 +412,7 @@ function EmpresasPage() {
         setTokenModal({
           token: result.newToken,
           title: 'Token regenerado com sucesso',
+          isRegeneration: true,
         });
         setFeedback({ type: 'success', message: 'Token da empresa regenerado com sucesso' });
       }
@@ -722,6 +735,9 @@ function EmpresasPage() {
                                 Token obrigatorio para APK
                               </p>
                             )}
+                            <p className="text-[10px] text-muted-foreground leading-relaxed" data-testid="token-readonly-notice">
+                              O token completo só é exibido na criação ou regeneração.
+                            </p>
                             {/* Regenerate only when editing, and only by ADMIN */}
                             {canRegenerateToken && (
                               <button
@@ -841,6 +857,7 @@ function EmpresasPage() {
           onClose={closeTokenModal}
           tempPassword={tokenModal.tempPassword}
           adminEmail={tokenModal.adminEmail}
+          isRegeneration={tokenModal.isRegeneration}
         />
       )}
 

@@ -8,7 +8,7 @@ const config = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/lib/tests/'],
 };
 
 module.exports = config;

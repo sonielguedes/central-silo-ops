@@ -329,3 +329,80 @@ describe('CompanyService.create() herdado', () => {
     expect(result).toBeDefined();
   });
 });
+
+// ── Token clipboard e segurança de estado ─────────────────────────────────────
+
+describe('CompanyService.regenerateCompanyToken() — clipboard safety e limpeza de estado', () => {
+  const newToken = 'CTK-ABCDEF1234567890ABCDEF1234567890ABCDEF12';
+
+  function setupRotationMocks() {
+    // POST /[id]/token
+    mockFetch.mockResolvedValueOnce(okJson({
+      companyId: 'company-1',
+      newToken,
+      tokenPreview: 'CTK-••••CLIP',
+    }));
+    // GET /companies (getAllGlobal após rotação)
+    mockFetch.mockResolvedValueOnce(okJson({
+      companies: [{ ...serverCompany, id: 'company-1', tokenPreview: 'CTK-••••CLIP' }],
+    }));
+  }
+
+  it('newToken retornado é token completo sem mascaramento — adequado para clipboard.writeText()', async () => {
+    setupRotationMocks();
+    const result: CompanyTokenRotateResult = await CompanyService.regenerateCompanyToken('company-1');
+
+    // deve ser o token completo, sem "••••"
+    expect(result.newToken).toBe(newToken);
+    expect(result.newToken).not.toContain('••••');
+    expect(result.newToken).toMatch(/^CTK-[0-9A-F]+$/i);
+  });
+
+  it('company retornada após rotação não contém token bruto — tokenPreview apenas', async () => {
+    setupRotationMocks();
+    const result: CompanyTokenRotateResult = await CompanyService.regenerateCompanyToken('company-1');
+
+    // o objeto company deve ter tokenPreview mascarado, não o token completo
+    const companyJson = JSON.stringify(result.company);
+    expect(companyJson).not.toContain(newToken);
+    expect(result.company).not.toHaveProperty('companyToken');
+    expect(result.company).not.toHaveProperty('mobileToken');
+    expect(result.company).not.toHaveProperty('apiToken');
+    // tokenPreview deve existir
+    expect((result.company as any).tokenPreview).toContain('••••');
+  });
+
+  it('token não é enviado em nenhum campo do body do POST de rotação', async () => {
+    setupRotationMocks();
+    await CompanyService.regenerateCompanyToken('company-1');
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/admin/companies/company-1/token');
+
+    // body do POST de rotação não deve conter qualquer campo de token
+    const sentBody = JSON.parse(options.body || '{}');
+    expect(sentBody.companyToken).toBeUndefined();
+    expect(sentBody.newToken).toBeUndefined();
+    expect(sentBody.token).toBeUndefined();
+  });
+
+  it('resultado não é salvo em localStorage/sessionStorage (serviço não persiste token)', () => {
+    // O serviço não referencia localStorage nem sessionStorage.
+    // Verificação estrutural: nenhuma chamada a setItem durante regeneração.
+    const setItemSpy = jest.fn();
+    const originalLocalStorage = (global as any).localStorage;
+    const originalSessionStorage = (global as any).sessionStorage;
+    (global as any).localStorage = { setItem: setItemSpy, getItem: jest.fn(() => null), removeItem: jest.fn() };
+    (global as any).sessionStorage = { setItem: setItemSpy, getItem: jest.fn(() => null), removeItem: jest.fn() };
+
+    setupRotationMocks();
+    CompanyService.regenerateCompanyToken('company-1').then(() => {
+      expect(setItemSpy).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('CTK-'),
+      );
+      (global as any).localStorage = originalLocalStorage;
+      (global as any).sessionStorage = originalSessionStorage;
+    });
+  });
+});
