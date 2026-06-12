@@ -34,8 +34,11 @@ interface AuthContextType {
   tenant: Company | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password?: string) => Promise<void>;
+  /** Logs in and returns the session user (incl. mustChangePassword flag). */
+  login: (email: string, password?: string) => Promise<SessionUser>;
   logout: () => Promise<void>;
+  /** Re-fetches /api/auth/me and refreshes in-memory session state. Call after password change. */
+  refreshSession: () => Promise<void>;
   checkPermission: (module: string, action: string) => boolean;
   canAccess: (module: Module) => boolean;
   canRoute: (href: string) => boolean;
@@ -79,7 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadSession = async (sessionUser: SessionUser) => {
     try {
       setIsLoading(true);
-      BaseService.setContext(sessionUser.name, sessionUser.activeTenantId || sessionUser.tenantId || sessionUser.defaultTenantId || '');
+      BaseService.setContext(
+        sessionUser.name,
+        sessionUser.activeTenantId || sessionUser.tenantId || sessionUser.defaultTenantId || '',
+      );
 
       const group = await AccessGroupService.getById(sessionUser.accessGroupId);
       const companies = await CompanyService.getAllGlobal();
@@ -101,10 +107,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  /**
+   * Restore session from /api/auth/me on initial mount.
+   * A 401 here is the normal unauthenticated state — not an error.
+   * Called only once (empty deps array), so there is no /api/auth/me polling loop.
+   */
   const restoreSession = async () => {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
       if (!res.ok) {
+        // 401 = no valid session — clear stale client state and stop loading.
         localStorage.removeItem('silo_auth_user');
         setIsLoading(false);
         return;
@@ -118,7 +130,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password?: string) => {
+  /**
+   * Re-fetches /api/auth/me and refreshes in-memory session state.
+   * Call after a successful password change so mustChangePassword becomes false.
+   * Does NOT re-fetch access group / tenant data — only updates the session user.
+   */
+  const refreshSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+      if (!res.ok) return;
+      const body = await res.json() as { session: SessionUser };
+      localStorage.setItem('silo_auth_user', JSON.stringify(body.session));
+      setUser(body.session);
+      setUserRole(body.session.role || resolveRole(body.session.accessGroupId));
+    } catch {
+      // Non-critical: next navigation will re-check auth state.
+    }
+  }, []);
+
+  const login = async (email: string, password?: string): Promise<SessionUser> => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/auth/login', {
@@ -135,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const sessionUser = (body as { session: SessionUser }).session;
       localStorage.setItem('silo_auth_user', JSON.stringify(sessionUser));
       await loadSession(sessionUser);
+      // Return the session so the caller can check mustChangePassword before routing.
+      return sessionUser;
     } finally {
       setIsLoading(false);
     }
@@ -173,6 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       login,
       logout,
+      refreshSession,
       checkPermission,
       canAccess,
       canRoute,

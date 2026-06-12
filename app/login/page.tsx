@@ -19,9 +19,14 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      // email is trimmed; password is sent as-is — never transform or truncate
-      await login(email.trim(), password);
-      router.push('/dashboard');
+      // email is trimmed; password is sent as-is — never transform or truncate.
+      // login() returns the session so we can inspect mustChangePassword before routing.
+      const session = await login(email.trim(), password);
+      if (session.mustChangePassword) {
+        router.push('/trocar-senha');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err: unknown) {
       setError((err as { message?: string }).message || 'Falha na autenticacao');
     } finally {
@@ -106,10 +111,10 @@ export default function LoginPage() {
 
         <div className="mt-20 text-center">
            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest leading-none">
-             Ambiente Seguro & Monitorado
+             Ambiente Seguro &amp; Monitorado
            </p>
            <p className="text-[8px] text-white/20 font-mono mt-2 uppercase">
-             {getAppVersionLabel()} • silo-ops-core
+             {getAppVersionLabel()} &bull; silo-ops-core
            </p>
         </div>
       </div>

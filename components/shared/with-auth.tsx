@@ -24,15 +24,24 @@ export function withAuth<P extends object>(
   options?: WithAuthOptions
 ) {
   return function ProtectedRoute(props: P) {
-    const { isAuthenticated, isLoading, checkPermission, userRole } = useAuth();
+    const { isAuthenticated, isLoading, checkPermission, userRole, user } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
 
     useEffect(() => {
-      if (!isLoading && !isAuthenticated && pathname !== '/login') {
+      if (isLoading) return;
+
+      // Not authenticated → go to login
+      if (!isAuthenticated && pathname !== '/login') {
         router.push('/login');
+        return;
       }
-    }, [isLoading, isAuthenticated, router, pathname]);
+
+      // Authenticated but must change password → block all pages except /trocar-senha
+      if (isAuthenticated && user?.mustChangePassword && pathname !== '/trocar-senha') {
+        router.push('/trocar-senha');
+      }
+    }, [isLoading, isAuthenticated, user?.mustChangePassword, router, pathname]);
 
     if (isLoading) {
       return (
@@ -43,6 +52,17 @@ export function withAuth<P extends object>(
     }
 
     if (!isAuthenticated) return null;
+
+    // Block render of protected pages while a password change is pending.
+    // This prevents the dashboard from mounting (and firing API calls) before
+    // the redirect to /trocar-senha completes.
+    if (user?.mustChangePassword && pathname !== '/trocar-senha') {
+      return (
+        <div className="flex h-screen items-center justify-center bg-[#050812]">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        </div>
+      );
+    }
 
     if (options?.module) {
       const normalizedModule = normalizeModule(options.module);
@@ -55,7 +75,7 @@ export function withAuth<P extends object>(
             </div>
             <h1 className="text-2xl font-black italic uppercase tracking-tighter mb-2">Acesso Negado</h1>
             <p className="text-muted-foreground text-sm uppercase font-bold tracking-widest max-w-md">
-              Seu papel ({userRole.replace('_', ' ')}) nao possui permissao para acessar este modulo.
+              Seu papel ({userRole.replace(/_/g, ' ')}) nao possui permissao para acessar este modulo.
             </p>
             <button
               onClick={() => router.push('/dashboard')}

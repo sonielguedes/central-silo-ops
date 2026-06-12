@@ -13,10 +13,6 @@ import { withAuth } from '@/components/shared/with-auth';
 import type { DashboardSummary, ActiveFleetItem, RecentAlert } from '@/app/api/dashboard/summary/route';
 
 const REFRESH_INTERVAL_MS = 30_000;
-const TENANT_ID =
-  process.env.NEXT_PUBLIC_SILO_TENANT_ID ||
-  process.env.NEXT_PUBLIC_TENANT_ID ||
-  'silo-ops-001';
 
 function fmtH(h: number): string {
   const hrs = Math.floor(h);
@@ -224,9 +220,11 @@ function DashboardPage() {
 
   const fetchSummary = useCallback(async () => {
     try {
+      // Tenant is resolved from the session cookie server-side — never send it from the client.
       const res = await fetch('/api/dashboard/summary', {
         cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-Silo-Tenant': TENANT_ID },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: DashboardSummary = await res.json();
