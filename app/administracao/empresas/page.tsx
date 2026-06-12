@@ -69,9 +69,9 @@ interface TokenModalProps {
   adminEmail?: string | null;
 }
 
-function CopyField({ label, value, testId }: { label: string; value: string; testId?: string }) {
+function CopyField({ label, value, testId, defaultVisible = false }: { label: string; value: string; testId?: string; defaultVisible?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(defaultVisible);
   const handleCopy = async () => {
     await navigator.clipboard.writeText(value);
     setCopied(true);
@@ -82,8 +82,8 @@ function CopyField({ label, value, testId }: { label: string; value: string; tes
       <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2">{label}</p>
       <div className="flex gap-2">
         <div className="flex-1 min-w-0 rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-3">
-          <p className="break-all font-mono text-xs text-white select-all" data-testid={testId}>
-            {visible ? value : `${value.slice(0, 6)}••••••••••••${value.slice(-4)}`}
+          <p className={`break-all font-mono text-xs text-white ${visible ? 'select-all' : 'select-none'}`} data-testid={testId}>
+            {visible ? value : `${value.slice(0, 4)}${"•".repeat(value.length > 8 ? value.length - 8 : 4)}${value.slice(-4)}`}
           </p>
         </div>
         <div className="flex flex-col gap-2">
@@ -151,7 +151,7 @@ function TokenModal({ token, title, onClose, tempPassword, adminEmail }: TokenMo
                   <p className="font-mono text-xs text-white bg-[#1a1f3a] rounded-xl px-3 py-2" data-testid="admin-email-display">{adminEmail}</p>
                 </div>
               )}
-              <CopyField label="Senha Temporaria" value={tempPassword} testId="temp-password-value" />
+              <CopyField label="Senha Temporaria" value={tempPassword} testId="temp-password-value" defaultVisible={true} />
               <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2">
                 <p className="text-[10px] font-bold text-blue-300 leading-relaxed">
                   O administrador devera alterar a senha no primeiro acesso.

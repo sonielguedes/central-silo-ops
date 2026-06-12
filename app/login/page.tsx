@@ -19,10 +19,11 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await login(email, password);
+      // email is trimmed; password is sent as-is — never transform or truncate
+      await login(email.trim(), password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Falha na autenticação');
+    } catch (err: unknown) {
+      setError((err as { message?: string }).message || 'Falha na autenticacao');
     } finally {
       setLoading(false);
     }
@@ -73,6 +74,10 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Senha de Acesso"
                 className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-all text-white placeholder:text-muted-foreground/40"
+                autoComplete="current-password"
+                maxLength={128}
+                spellCheck={false}
+                data-testid="password-input"
                 required
               />
             </div>
