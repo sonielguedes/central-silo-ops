@@ -143,8 +143,39 @@ export async function POST(
   const rbac = requirePermission(req, 'cadastros', 'criar', tenantId);
   if (rbac) return rbac;
 
+  let body: Record<string, unknown>;
   try {
-    const body = await req.json();
+    body = await req.json() as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: 'Payload invalido. Envie um JSON valido.' }, { status: 422 });
+  }
+
+  // 422 — required field validation
+  const nameValue = body.name ?? body.model ?? body.nome;
+  if (!nameValue || String(nameValue).trim() === '') {
+    return NextResponse.json(
+      { error: 'Campo obrigatorio ausente: name.' },
+      { status: 422 }
+    );
+  }
+
+  // 409 — duplicate name within the same tenant
+  // tenantId from body/header is intentionally ignored — the session value is canonical.
+  const existing = CadastroStorage.getAll(tenantId, entity) as Array<Record<string, unknown>>;
+  const normalizedNew = String(nameValue).trim().toLowerCase();
+  const isDuplicate = existing.some(
+    item => String(item.name ?? item.model ?? item.nome ?? '').trim().toLowerCase() === normalizedNew
+  );
+  if (isDuplicate) {
+    return NextResponse.json(
+      { error: 'Registro com esse nome ja existe neste tenant.' },
+      { status: 409 }
+    );
+  }
+
+  try {
+    // body.tenantId (if sent) is overwritten by CadastroStorage.create with the
+    // session-resolved tenantId — clients can never inject a foreign tenant.
     const item = CadastroStorage.create(tenantId, entity, body);
     auditFromRequest(req, tenantId, {
       action: 'CREATE',
@@ -154,6 +185,6 @@ export async function POST(
     return NextResponse.json(item, { status: 201 });
   } catch (err) {
     console.error('[storage-api] create error entity=' + entity, err);
-    return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    return NextResponse.json({ error: 'Erro interno ao criar registro.' }, { status: 500 });
   }
 }

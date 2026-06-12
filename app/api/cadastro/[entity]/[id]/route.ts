@@ -132,19 +132,25 @@ export async function PUT(
   const rbac = requirePermission(req, 'cadastros', 'editar', tenantId);
   if (rbac) return rbac;
 
+  let rawBody: Record<string, unknown>;
+  try {
+    rawBody = await req.json() as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: 'Payload invalido. Envie um JSON valido.' }, { status: 422 });
+  }
+
   try {
     const before = CadastroStorage.getById(tenantId, entity, id);
-    const body = await req.json();
     let payload = entity === 'tipos'
-      ? normalizeFleetTypePayload(before, body)
-      : body;
+      ? normalizeFleetTypePayload(before, rawBody)
+      : rawBody;
 
     if (entity === 'tipos') {
       const parsed = equipmentTypeSchema.safeParse(payload);
       if (!parsed.success) {
         return NextResponse.json(
-          { error: parsed.error.issues[0]?.message || 'Bad request' },
-          { status: 400 }
+          { error: parsed.error.issues[0]?.message || 'Payload invalido.' },
+          { status: 422 }
         );
       }
       payload = {
@@ -156,6 +162,22 @@ export async function PUT(
       if (all.some((item) => item.id !== id && String(item.code ?? '').toUpperCase() === parsed.data.code)) {
         return NextResponse.json({ error: 'Codigo ja cadastrado' }, { status: 409 });
       }
+    } else {
+      // For all other entities: check for duplicate name (422 if blank, 409 if taken by another record)
+      const nameValue = (rawBody.name ?? rawBody.model ?? rawBody.nome) as string | undefined;
+      if (nameValue !== undefined) {
+        if (!String(nameValue).trim()) {
+          return NextResponse.json({ error: 'Campo obrigatorio ausente: name.' }, { status: 422 });
+        }
+        const all = CadastroStorage.getAll(tenantId, entity) as Array<Record<string, unknown>>;
+        const normalizedNew = String(nameValue).trim().toLowerCase();
+        if (all.some(
+          item => item.id !== id &&
+            String(item.name ?? item.model ?? item.nome ?? '').trim().toLowerCase() === normalizedNew
+        )) {
+          return NextResponse.json({ error: 'Registro com esse nome ja existe neste tenant.' }, { status: 409 });
+        }
+      }
     }
 
     const updated = CadastroStorage.update(tenantId, entity, id, payload);
@@ -164,7 +186,7 @@ export async function PUT(
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[storage-api] update error entity=' + entity + ' id=' + id, err);
-    return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    return NextResponse.json({ error: 'Erro interno ao atualizar registro.' }, { status: 500 });
   }
 }
 

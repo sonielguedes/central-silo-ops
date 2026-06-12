@@ -20,49 +20,51 @@ import type {
   Unit,
   User,
 } from '@/lib/types';
+import { getCsrfTokenFromDocument } from '@/lib/auth/csrf-client';
 
-/** Map accessGroupId → SystemRole (same mapping as auth-context) */
-function resolveRoleFromAccessGroup(accessGroupId: string | undefined): string {
-  if (!accessGroupId) return 'CONSULTA';
-  const map: Record<string, string> = {
-    'role-super-admin-silo': 'SUPER_ADMIN_SILO',
-    'role-super-admin': 'SUPER_ADMIN',
-    'ag-admin': 'SUPER_ADMIN',
-    'role-admin-empresa': 'ADMIN_EMPRESA',
-    'ag-admin-empresa': 'ADMIN_EMPRESA',
-    'role-gestor': 'GESTOR',
-    'ag-gestor': 'GESTOR',
-    'role-coa': 'COA',
-    'ag-coa': 'COA',
-    'role-consulta': 'CONSULTA',
-    'ag-consulta': 'CONSULTA',
-    'role-auditor': 'AUDITOR',
-    'ag-auditor': 'AUDITOR',
-  };
-  return map[accessGroupId] || 'CONSULTA';
-}
-
-/** Build headers with session info from localStorage */
+/**
+ * Build request headers for API calls.
+ *
+ * Security rules:
+ *  - NEVER send X-Silo-Tenant: the server resolves tenantId exclusively from
+ *    the signed session cookie. A stale localStorage value would diverge from
+ *    the session and trigger a 403 from requireTenant() for TENANT-scope users.
+ *  - Always include x-csrf-token (read from silo_csrf cookie) so mutations
+ *    pass the requireCsrf() double-submit check.
+ *  - x-silo-user-id is forwarded only in dev (SILO_ALLOW_HEADER_SESSION=true)
+ *    environments; production ignores it.
+ */
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
   if (typeof window !== 'undefined') {
+    // CSRF double-submit: read silo_csrf cookie and mirror it as a header.
+    // requireCsrf() on the server validates that both match.
+    const csrf = getCsrfTokenFromDocument();
+    if (csrf) headers['x-csrf-token'] = csrf;
+
     try {
       const raw = localStorage.getItem('silo_auth_user');
       if (raw) {
-        const u = JSON.parse(raw);
-        if (u.id) headers['x-silo-user-id'] = u.id;
-        if (u.name) headers['x-silo-user-name'] = u.name;
+        const u = JSON.parse(raw) as {
+          id?: string;
+          name?: string;
+          email?: string;
+          role?: string;
+          accessGroupId?: string;
+        };
+        // Forward user-id hint for dev header-session mode only.
+        // Production ignores these; session cookie is authoritative.
+        if (u.id)    headers['x-silo-user-id']    = u.id;
+        if (u.name)  headers['x-silo-user-name']  = u.name;
         if (u.email) headers['x-silo-user-email'] = u.email;
-        headers['x-silo-user-role'] =
-          u.role || resolveRoleFromAccessGroup(u.accessGroupId);
-        const activeTenantId = u.activeTenantId || u.tenantId;
-        if (activeTenantId) headers['X-Silo-Tenant'] = activeTenantId;
+        // NOTE: X-Silo-Tenant is intentionally NOT sent.
+        // tenantId is resolved server-side from session.activeTenantId ?? session.tenantId.
       }
     } catch {
-      // localStorage parse failed — send without session headers
+      // localStorage parse failed — proceed without optional headers
     }
   }
 
