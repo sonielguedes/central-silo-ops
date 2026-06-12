@@ -150,27 +150,47 @@ export async function POST(
     return NextResponse.json({ error: 'Payload invalido. Envie um JSON valido.' }, { status: 422 });
   }
 
-  // 422 — required field validation
-  const nameValue = body.name ?? body.model ?? body.nome;
-  if (!nameValue || String(nameValue).trim() === '') {
-    return NextResponse.json(
-      { error: 'Campo obrigatorio ausente: name.' },
-      { status: 422 }
-    );
-  }
-
-  // 409 — duplicate name within the same tenant
+  // ── Entity-specific payload validation ──────────────────────────────────
+  // equipamentos identify by `code`; all other generic entities use `name`.
   // tenantId from body/header is intentionally ignored — the session value is canonical.
   const existing = CadastroStorage.getAll(tenantId, entity) as Array<Record<string, unknown>>;
-  const normalizedNew = String(nameValue).trim().toLowerCase();
-  const isDuplicate = existing.some(
-    item => String(item.name ?? item.model ?? item.nome ?? '').trim().toLowerCase() === normalizedNew
-  );
-  if (isDuplicate) {
-    return NextResponse.json(
-      { error: 'Registro com esse nome ja existe neste tenant.' },
-      { status: 409 }
+
+  if (entity === 'equipamentos') {
+    const codeValue = body.code;
+    if (!codeValue || String(codeValue).trim() === '') {
+      return NextResponse.json(
+        { error: 'Campo obrigatorio ausente: code.' },
+        { status: 422 }
+      );
+    }
+    // 409 — duplicate code within same tenant (same code in different tenants is allowed)
+    const normalizedCode = String(codeValue).trim().toLowerCase();
+    if (existing.some(item => String(item.code ?? '').trim().toLowerCase() === normalizedCode)) {
+      return NextResponse.json(
+        { error: 'Equipamento com esse codigo ja existe neste tenant.' },
+        { status: 409 }
+      );
+    }
+  } else {
+    // 422 — required field validation for name-based entities
+    const nameValue = body.name ?? body.model ?? body.nome;
+    if (!nameValue || String(nameValue).trim() === '') {
+      return NextResponse.json(
+        { error: 'Campo obrigatorio ausente: name.' },
+        { status: 422 }
+      );
+    }
+    // 409 — duplicate name within same tenant
+    const normalizedNew = String(nameValue).trim().toLowerCase();
+    const isDuplicate = existing.some(
+      item => String(item.name ?? item.model ?? item.nome ?? '').trim().toLowerCase() === normalizedNew
     );
+    if (isDuplicate) {
+      return NextResponse.json(
+        { error: 'Registro com esse nome ja existe neste tenant.' },
+        { status: 409 }
+      );
+    }
   }
 
   try {

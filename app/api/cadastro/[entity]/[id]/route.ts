@@ -162,6 +162,22 @@ export async function PUT(
       if (all.some((item) => item.id !== id && String(item.code ?? '').toUpperCase() === parsed.data.code)) {
         return NextResponse.json({ error: 'Codigo ja cadastrado' }, { status: 409 });
       }
+    } else if (entity === 'equipamentos') {
+      // equipamentos identify by `code`; validate if code is being updated
+      const codeValue = (rawBody.code) as string | undefined;
+      if (codeValue !== undefined) {
+        if (!String(codeValue).trim()) {
+          return NextResponse.json({ error: 'Campo obrigatorio ausente: code.' }, { status: 422 });
+        }
+        const all = CadastroStorage.getAll(tenantId, entity) as Array<Record<string, unknown>>;
+        const normalizedCode = String(codeValue).trim().toLowerCase();
+        if (all.some(
+          item => item.id !== id &&
+            String(item.code ?? '').trim().toLowerCase() === normalizedCode
+        )) {
+          return NextResponse.json({ error: 'Equipamento com esse codigo ja existe neste tenant.' }, { status: 409 });
+        }
+      }
     } else {
       // For all other entities: check for duplicate name (422 if blank, 409 if taken by another record)
       const nameValue = (rawBody.name ?? rawBody.model ?? rawBody.nome) as string | undefined;

@@ -374,3 +374,102 @@ describe('GET /api/cadastro/modelos — isolamento de tenant', () => {
     expect(body.some(i => i.tenantId === 'outro-tenant')).toBe(false);
   });
 });
+
+// ── POST /api/cadastro/equipamentos ──────────────────────────────────────────
+// Verifies entity-specific validation: equipamentos require `code`, not `name`.
+
+describe('POST /api/cadastro/equipamentos — validacao por entidade', () => {
+  beforeEach(() => {
+    getRequireTenant().mockReturnValue({ ok: true, tenantId: 'silo-demo' });
+  });
+
+  it('1. Payload valido com code → 201', async () => {
+    const req = makePostReq('equipamentos', {
+      code: '1002',
+      typeId: 'tipo-1',
+      modelId: 'modelo-1',
+      manufacturer: 'John Deere',
+      hourmeter: 0,
+      status: 'ATIVO',
+      mobileEnabled: false,
+    });
+    const res = await POST(req, makeParams('equipamentos'));
+
+    expect(res.status).toBe(201);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.code).toBe('1002');
+    expect(body.tenantId).toBe('silo-demo');
+    expect(body.id).toBeTruthy();
+  });
+
+  it('2. code ausente → 422 (name nao exigido para equipamentos)', async () => {
+    const req = makePostReq('equipamentos', {
+      typeId: 'tipo-1',
+      modelId: 'modelo-1',
+      hourmeter: 0,
+      status: 'ATIVO',
+    });
+    const res = await POST(req, makeParams('equipamentos'));
+
+    expect(res.status).toBe(422);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/code/i);
+  });
+
+  it('3. Enviar apenas name sem code → 422 (equipamentos exigem code)', async () => {
+    const req = makePostReq('equipamentos', {
+      name: 'Trator JD 5075E',
+      typeId: 'tipo-1',
+    });
+    const res = await POST(req, makeParams('equipamentos'));
+
+    expect(res.status).toBe(422);
+    const body = await res.json() as { error: string };
+    // Must complain about code, NOT name
+    expect(body.error).toMatch(/code/i);
+    expect(body.error).not.toMatch(/^campo obrigatorio ausente: name/i);
+  });
+
+  it('4. code duplicado no mesmo tenant → 409', async () => {
+    inMemoryStore.push({
+      id: 'equip-existing',
+      tenantId: 'silo-demo',
+      code: '1002',
+      entityStatus: 'ATIVO',
+    });
+
+    const req = makePostReq('equipamentos', {
+      code: '1002',
+      typeId: 'tipo-1',
+      modelId: 'modelo-1',
+    });
+    const res = await POST(req, makeParams('equipamentos'));
+
+    expect(res.status).toBe(409);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/codigo|code/i);
+  });
+
+  it('5. Mesmo code em tenant diferente e permitido (isolamento)', async () => {
+    // A record with code=1002 exists, but in a different tenant
+    inMemoryStore.push({
+      id: 'equip-other',
+      tenantId: 'outro-tenant',
+      code: '1002',
+      entityStatus: 'ATIVO',
+    });
+
+    // silo-demo has no code=1002 yet — creation must succeed
+    const req = makePostReq('equipamentos', {
+      code: '1002',
+      typeId: 'tipo-1',
+      modelId: 'modelo-1',
+    });
+    const res = await POST(req, makeParams('equipamentos'));
+
+    expect(res.status).toBe(201);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.tenantId).toBe('silo-demo');
+    expect(body.code).toBe('1002');
+  });
+});
