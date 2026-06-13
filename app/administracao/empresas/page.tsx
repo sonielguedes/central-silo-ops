@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
@@ -210,6 +210,10 @@ function EmpresasPage() {
   // Loading states for async token operations
   const [isRotatingToken, setIsRotatingToken] = useState(false);
   const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(false);
+  // ── Token reveal state ────────────────────────────────────────────────────
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [isRevealingToken, setIsRevealingToken] = useState(false);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     register,
@@ -455,6 +459,59 @@ function EmpresasPage() {
     }
   };
 
+  const clearRevealedToken = () => {
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    revealTimerRef.current = null;
+    setRevealedToken(null);
+  };
+
+  const fetchFullToken = async (purpose: 'reveal' | 'copy'): Promise<string | null> => {
+    if (!selectedItem) return null;
+    setIsRevealingToken(true);
+    try {
+      const res = await fetch(`/api/admin/companies/${selectedItem.id}/token?purpose=${purpose}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Falha ao obter token');
+      }
+      const data = await res.json() as { companyToken: string };
+      return data.companyToken;
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Erro ao buscar token' });
+      return null;
+    } finally {
+      setIsRevealingToken(false);
+    }
+  };
+
+  const handleRevealToken = async () => {
+    const token = await fetchFullToken('reveal');
+    if (!token) return;
+    clearRevealedToken();
+    setRevealedToken(token);
+    // Auto-hide after 30 s
+    revealTimerRef.current = setTimeout(() => {
+      setRevealedToken(null);
+      revealTimerRef.current = null;
+    }, 30_000);
+  };
+
+  const handleHideToken = () => clearRevealedToken();
+
+  const handleCopyToken = async () => {
+    const token = await fetchFullToken('copy');
+    if (!token) return;
+    try {
+      await navigator.clipboard.writeText(token);
+      setFeedback({ type: 'success', message: 'Token copiado com sucesso' });
+      // Clear from memory after brief delay — never stored in state
+    } catch {
+      setFeedback({ type: 'error', message: 'Falha ao copiar token. Copie manualmente.' });
+    }
+  };
+
   const handleGenerateFirstToken = async () => {
     if (!selectedItem) return;
     setConfirmAction({ type: 'regenerate', item: selectedItem });
@@ -464,6 +521,12 @@ function EmpresasPage() {
     // Clear full token from state when user explicitly closes the modal
     setTokenModal(null);
   };
+
+  // Clear revealed token whenever the selected company changes or drawer closes
+  useEffect(() => {
+    clearRevealedToken();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItem?.id]);
 
   const filteredData = data.filter(
     (item) =>
@@ -755,18 +818,29 @@ function EmpresasPage() {
                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">MQTT URL</p>
                         <p className="break-all rounded-lg bg-[#1a1f3a] px-3 py-2 text-xs font-mono text-white">{generatedMqttUrl}</p>
                       </div>
-                      {/* Company Token section — behaviour differs for new vs existing */}
+                      {/* Company Token section */}
                       <div>
                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Company Token</p>
                         {selectedItem ? (
-                          /* Editing existing company — show tokenPreview only */
+                          /* Editing existing company */
                           <div className="space-y-2">
+                            {/* Token display row */}
                             <div className="flex items-center gap-2 rounded-lg bg-[#1a1f3a] px-3 py-2">
                               <KeyRound size={12} className="shrink-0 text-primary" />
-                              <span className="flex-1 font-mono text-xs text-white truncate" data-testid="drawer-token-preview">
-                                {getTokenPreview(selectedItem) || 'sem token'}
+                              <span
+                                className="flex-1 font-mono text-xs text-white truncate"
+                                data-testid="drawer-token-preview"
+                              >
+                                {revealedToken ?? (getTokenPreview(selectedItem) || 'sem token')}
                               </span>
+                              {revealedToken && (
+                                <span className="text-[9px] text-yellow-400/70 shrink-0 font-mono">
+                                  30s
+                                </span>
+                              )}
                             </div>
+
+                            {/* Status chip */}
                             {getTokenPreview(selectedItem) ? (
                               <p className="text-[10px] font-black uppercase tracking-widest text-green-400 flex items-center gap-1">
                                 <CheckCheck size={10} /> Token configurado
@@ -776,10 +850,50 @@ function EmpresasPage() {
                                 Token obrigatorio para APK
                               </p>
                             )}
-                            <p className="text-[10px] text-muted-foreground leading-relaxed" data-testid="token-readonly-notice">
-                              O token completo só é exibido na criação ou regeneração.
-                            </p>
-                            {/* Regenerate only when editing, and only by ADMIN */}
+
+                            {/* Copy + Reveal/Hide buttons */}
+                            {getTokenPreview(selectedItem) && (
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCopyToken}
+                                  disabled={isRevealingToken}
+                                  className="flex items-center gap-1.5 rounded-lg border border-primary/30 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  data-testid="copy-token-btn"
+                                >
+                                  <Copy size={10} />
+                                  Copiar token
+                                </button>
+                                {revealedToken ? (
+                                  <button
+                                    type="button"
+                                    onClick={handleHideToken}
+                                    className="flex items-center gap-1.5 rounded-lg border border-[#2d3647] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-[#1a1f3a]"
+                                    data-testid="hide-token-btn"
+                                  >
+                                    <EyeOff size={10} />
+                                    Ocultar
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={handleRevealToken}
+                                    disabled={isRevealingToken}
+                                    className="flex items-center gap-1.5 rounded-lg border border-[#2d3647] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-[#1a1f3a] disabled:opacity-50 disabled:cursor-not-allowed"
+                                    data-testid="reveal-token-btn"
+                                  >
+                                    {isRevealingToken ? (
+                                      <Loader2 size={10} className="animate-spin" />
+                                    ) : (
+                                      <Eye size={10} />
+                                    )}
+                                    Revelar
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Regenerate — admin only, shows confirmation dialog */}
                             {canRegenerateToken && (
                               <button
                                 type="button"
@@ -793,9 +907,10 @@ function EmpresasPage() {
                                 ) : (
                                   <RefreshCw size={12} />
                                 )}
-                                Regenerar token ADMIN
+                                Regenerar token
                               </button>
                             )}
+
                             {/* Generate first token if missing */}
                             {!getTokenPreview(selectedItem) && (
                               <button
