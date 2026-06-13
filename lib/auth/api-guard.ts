@@ -8,6 +8,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { Company } from '@/lib/types';
 import { resolveSessionFromRequest } from '@/lib/auth/session';
+import {
+  validateCompanyAccess,
+  expiredApiResponse,
+  suspendedApiResponse,
+  cancelledApiResponse,
+  inactiveApiResponse,
+} from '@/lib/subscription/subscription-validator';
+import { migrateCompanySubscription } from '@/lib/subscription/subscription-migrator';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -66,10 +74,10 @@ export function requireMobileAuth(req: NextRequest): MobileAuthResult | GuardErr
     };
   }
 
-  const company = ServerStorage.getCompanyByToken(companyToken);
+  const rawCompany = ServerStorage.getCompanyByToken(companyToken);
 
-  if (!company || company.status === 'INATIVO') {
-    console.warn('[api-guard] mobile: invalid or inactive token', {
+  if (!rawCompany) {
+    console.warn('[api-guard] mobile: invalid token', {
       path: req.nextUrl.pathname,
       token: maskToken(companyToken),
       ip: getClientIp(req),
@@ -80,6 +88,33 @@ export function requireMobileAuth(req: NextRequest): MobileAuthResult | GuardErr
         { error: 'Token invalido ou instancia inativa' },
         { status: 403 },
       ),
+    };
+  }
+
+  // Migração lazy de campos de assinatura (sem gravar — read-only aqui)
+  const { company } = migrateCompanySubscription(rawCompany);
+
+  // ── Validação de assinatura ──────────────────────────────────────────────
+  // APK não tem role — bloqueia se empresa não tiver acesso ativo
+  const access = validateCompanyAccess(company);
+  if (!access.allowed) {
+    console.warn('[api-guard] mobile: subscription blocked', {
+      path: req.nextUrl.pathname,
+      token: maskToken(companyToken),
+      tenantId: company.tenantId,
+      subscriptionStatus: access.status,
+      ip: getClientIp(req),
+    });
+
+    let body: object;
+    if (access.code === 'COMPANY_EXPIRED') body = expiredApiResponse();
+    else if (access.code === 'COMPANY_SUSPENDED') body = suspendedApiResponse();
+    else if (access.code === 'COMPANY_CANCELLED') body = cancelledApiResponse();
+    else body = inactiveApiResponse();
+
+    return {
+      ok: false,
+      response: NextResponse.json(body, { status: 403 }),
     };
   }
 

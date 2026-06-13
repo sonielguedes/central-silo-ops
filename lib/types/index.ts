@@ -24,6 +24,24 @@ export interface BaseEntity {
 // --- Multi-tenancy & Admin ---
 export type CompanyPlan = 'PILOTO' | 'PRO' | 'ENTERPRISE';
 
+/**
+ * Status de assinatura / acesso da empresa.
+ * - ATIVO:     acesso permitido normalmente.
+ * - EXPIRANDO: acesso permitido com aviso (≤ 7 dias para vencer).
+ * - EXPIRADO:  acesso bloqueado — clientes comuns não entram.
+ * - SUSPENSO:  acesso bloqueado manualmente pelo admin da plataforma.
+ * - CANCELADO: acesso encerrado definitivamente.
+ */
+export type SubscriptionStatus =
+  | 'ATIVO'
+  | 'EXPIRANDO'
+  | 'EXPIRADO'
+  | 'SUSPENSO'
+  | 'CANCELADO';
+
+/** Ciclo de cobrança para plano PRO. */
+export type BillingCycle = 'MENSAL' | 'TRIMESTRAL' | 'ANUAL';
+
 export interface Company extends BaseEntity {
   code: string;
   tradingName: string;
@@ -42,6 +60,39 @@ export interface Company extends BaseEntity {
   plan: CompanyPlan;
   status: 'ATIVO' | 'INATIVO';
   observations?: string;
+
+  // ── Campos de assinatura / plano de serviço ──────────────────────────────
+
+  /** Status calculado da assinatura (ATIVO, EXPIRANDO, EXPIRADO, SUSPENSO, CANCELADO). */
+  subscriptionStatus?: SubscriptionStatus;
+
+  // PILOTO
+  /** Dias de teste: 15 ou 30. Padrão: 30. */
+  trialDays?: 15 | 30;
+  /** ISO — data em que o período de teste começou. */
+  trialStartedAt?: string;
+  /** ISO — data em que o período de teste termina. */
+  trialEndsAt?: string;
+
+  // PRO
+  /** Ciclo de cobrança (MENSAL = 30d, TRIMESTRAL = 90d, ANUAL = 365d). */
+  billingCycle?: BillingCycle;
+  /** ISO — início da assinatura PRO. */
+  subscriptionStartedAt?: string;
+  /** ISO — vencimento da assinatura PRO. */
+  subscriptionEndsAt?: string;
+
+  // ENTERPRISE
+  /** ISO — início do contrato ENTERPRISE. */
+  contractStartedAt?: string;
+  /** ISO — fim do contrato ENTERPRISE (opcional). */
+  contractEndsAt?: string;
+
+  // Campos comuns pós-ativação
+  /** ISO — data da última renovação (qualquer plano). */
+  lastRenewedAt?: string;
+  /** Dias restantes calculados em tempo real (não persistido, derivado). */
+  daysRemaining?: number | null;
 }
 
 export interface Regional extends BaseEntity {

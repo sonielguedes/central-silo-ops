@@ -10,6 +10,7 @@ import { normalizeCompanyPortPayload } from '@/lib/company-form';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 import { AuthStore } from '@/lib/auth/auth-store';
 import { Company } from '@/lib/types';
+import { buildInitialSubscriptionFields } from '@/lib/subscription/subscription-validator';
 
 // -- helpers ------------------------------------------------------------------
 
@@ -194,8 +195,16 @@ export async function POST(req: NextRequest) {
   const tenantId = isValidTenantId(rawTenantId) ? rawTenantId : generatedId;
   const timestamp = new Date().toISOString();
 
+  const planStr = String(plan ?? 'PILOTO') as Company['plan'];
+  const trialDaysRaw = Number(body.trialDays);
+  const trialDays: 15 | 30 =
+    trialDaysRaw === 15 ? 15 : trialDaysRaw === 30 ? 30 : 30;
+  const billingCycleRaw = body.billingCycle as Company['billingCycle'] | undefined;
+  const subscriptionInit = buildInitialSubscriptionFields(planStr, trialDays, billingCycleRaw);
+
   const companyPayload: Company = {
     ...(body as Partial<Company>),
+    ...subscriptionInit,
     id: generatedId,
     code: codeStr,
     tradingName: String(tradingName),
@@ -211,7 +220,7 @@ export async function POST(req: NextRequest) {
     mobileToken: companyToken,
     apiToken: companyToken,
     token: companyToken,
-    plan: String(plan ?? 'PILOTO') as Company['plan'],
+    plan: planStr,
     status: String(status ?? 'ATIVO') as Company['status'],
     entityStatus: 'ATIVO',
     version: 1,
@@ -291,7 +300,7 @@ export async function POST(req: NextRequest) {
 
   console.info('[api/admin/companies] POST company created', {
     id: saved.id,
-    tenantId: saved.tenantId,
+        tenantId: saved.tenantId,
     code: saved.code,
     apiPort: saved.apiPort,
     companyToken: maskToken(saved.companyToken),

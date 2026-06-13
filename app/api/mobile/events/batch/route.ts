@@ -5,6 +5,7 @@ import { EquipmentLiveState, EquipmentLiveStatus, TrailPoint } from '@/lib/types
 import { requireMobileAuth } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { auditFromRequest } from '@/lib/audit/audit-log';
+import { FuelingStorage } from '@/lib/fueling-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,6 +172,72 @@ function enrichOperationalFields(
   }
 }
 
+
+// ── Cadastro equipment helpers ─────────────────────────────────────────────
+// Mirror of the pattern used in /api/mobile/equipment/lookup/route.ts.
+// Lifecycle statuses that block mobile access (ARQUIVADO is already filtered
+// out by CadastroStorage.getAll; INATIVO must be caught explicitly here).
+const INACTIVE_BATCH_ENTITY_STATUSES = new Set([
+  'INATIVO', 'inativo', 'ARQUIVADO', 'arquivado',
+]);
+
+function isBatchCadastroBlocked(item: Record<string, unknown>): boolean {
+  return INACTIVE_BATCH_ENTITY_STATUSES.has(String(item.entityStatus ?? 'ATIVO'));
+}
+
+function normalizeBatchMobileEnabled(item: Record<string, unknown>): boolean {
+  if (typeof item.mobileEnabled === 'boolean') return item.mobileEnabled;
+  if (typeof item.mobile    === 'boolean') return item.mobile;
+  if (item.mobileEnabled === 'true'  || item.mobile === 'true')  return true;
+  if (item.mobileEnabled === 'false' || item.mobile === 'false') return false;
+  return false; // fail-safe default
+}
+
+/**
+ * Validate a cadastro-equipamentos item for mobile batch access.
+ * Returns {ok:true, equipment} on success where equipment is a minimal
+ * object containing all fields consumed by the batch route (id, code,
+ * mobileToken, tenantId).  On failure returns {ok:false, status, error}
+ * matching the same shape as ServerStorage.validateMobileEquipment.
+ */
+function validateCadastroEquipment(
+  item: Record<string, unknown>,
+  mobileToken: string | undefined,
+  tenantId: string,
+): { ok: true; equipment: { id: string; code: string; mobileToken?: string; tenantId: string } }
+ | { ok: false; status: 403 | 404; error: string } {
+  // tenantId is always sourced from the Company Token (requireMobileAuth), so
+  // CadastroStorage already scopes to the right tenant — but we double-check
+  // the stored field when present.
+  const storedTenant = item.tenantId ? String(item.tenantId) : tenantId;
+  if (storedTenant !== tenantId) {
+    return { ok: false, status: 404, error: 'Equipamento nao encontrado' };
+  }
+
+  if (isBatchCadastroBlocked(item)) {
+    return { ok: false, status: 403, error: 'Frota inativa' };
+  }
+
+  if (!normalizeBatchMobileEnabled(item)) {
+    return { ok: false, status: 403, error: 'Mobile desabilitado para esta frota' };
+  }
+
+  const storedToken = typeof item.mobileToken === 'string' ? item.mobileToken : undefined;
+  if (!storedToken || storedToken !== mobileToken) {
+    return { ok: false, status: 403, error: 'mobileToken invalido' };
+  }
+
+  return {
+    ok: true,
+    equipment: {
+      id:          String(item.id   ?? ''),
+      code:        String(item.code ?? ''),
+      mobileToken: storedToken,
+      tenantId,
+    },
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rl = checkRateLimit(req, RATE_LIMITS.mobileBatch);
@@ -195,8 +262,50 @@ export async function POST(req: NextRequest) {
 
     const firstEventData = events[0]?.data;
     const mobileToken = header.mobileToken || (typeof firstEventData?.mobileToken === 'string' ? firstEventData.mobileToken : undefined);
-    const equipment = ServerStorage.getEquipmentById(header.machineId, tenantId);
-    const validation = ServerStorage.validateMobileEquipment(equipment, mobileToken, tenantId, companyToken);
+    // ── Equipment resolution: cadastro (primary) → legacy (fallback) ─────────
+    // Lookup order (mirrors /api/mobile/equipment/lookup):
+    //   1. CadastroStorage by item.id === machineId
+    //   2. CadastroStorage by item.code === machineId (fleet-code format)
+    //   3. CadastroStorage by item.code === events[0].data.equipmentCode
+    //   4. ServerStorage  (legacy equipments.json, read-only)
+    const cadastroItems = CadastroStorage.getAll(
+      tenantId,
+      'equipamentos',
+    ) as Array<Record<string, unknown>>;
+
+    const machineIdLower = header.machineId.toLowerCase();
+    const firstEquipCode =
+      typeof firstEventData?.equipmentCode === 'string'
+        ? firstEventData.equipmentCode.toLowerCase()
+        : '';
+
+    const cadastroMatch = cadastroItems.find((item) => {
+      const itemId   = String(item.id   ?? '').toLowerCase();
+      const itemCode = String(item.code ?? '').toLowerCase();
+      return (
+        itemId   === machineIdLower ||
+        itemCode === machineIdLower ||
+        (firstEquipCode !== '' && itemCode === firstEquipCode)
+      );
+    });
+
+    type ValidationResult =
+      | { ok: true;  equipment: { id: string; code: string; mobileToken?: string; tenantId: string } }
+      | { ok: false; status: 403 | 404; error: string };
+
+    let validation: ValidationResult;
+    if (cadastroMatch) {
+      validation = validateCadastroEquipment(cadastroMatch, mobileToken, tenantId);
+    } else {
+      // Fallback: legacy equipments.json (read-only, no migration)
+      const legacyEquip = ServerStorage.getEquipmentById(header.machineId, tenantId);
+      validation = ServerStorage.validateMobileEquipment(
+        legacyEquip,
+        mobileToken,
+        tenantId,
+        companyToken,
+      );
+    }
 
     if (!validation.ok) {
       console.warn('[mobile/events/batch] validation failed', {
@@ -213,6 +322,17 @@ export async function POST(req: NextRequest) {
     }
 
     const results = events.map((event) => {
+      // ── FUELING pre-validation (reject invalid before saveEvent) ──
+      if (event.type === 'FUELING') {
+        const fLiters = typeof event.data?.dieselLiters === 'number' ? event.data.dieselLiters : NaN;
+        const fHm    = typeof event.data?.hourmeter === 'number' ? event.data.hourmeter : NaN;
+        if (!Number.isFinite(fLiters) || fLiters <= 0) {
+          return { offlineId: event.uuid, status: 'REJECTED' as const, reason: 'dieselLiters deve ser > 0' };
+        }
+        if (!Number.isFinite(fHm) || fHm <= 0) {
+          return { offlineId: event.uuid, status: 'REJECTED' as const, reason: 'hourmeter deve ser > 0' };
+        }
+      }
       if (event.data?.mobileToken && event.data.mobileToken !== validation.equipment.mobileToken) {
         return { offlineId: event.uuid, status: 'REJECTED', reason: 'Token invalido' };
       }
@@ -225,6 +345,7 @@ export async function POST(req: NextRequest) {
       }, tenantId);
       return { offlineId: event.uuid, status };
     });
+    const resultByUuid = new Map(results.map(r => [r.offlineId, r.status]));
 
     // -- Build live-state update from all events ----------------------------------------
     const now = new Date().toISOString();
@@ -443,6 +564,45 @@ export async function POST(req: NextRequest) {
             ' hourmeterStart=' + String(hStartEnd ?? 'missing') +
             ' hourmeterEnd=' + String(hEnd ?? 'missing') +
             ' total=' + String(liveUpdates.totalHourmeter ?? 'n/a'));
+          break;
+        }
+        case 'FUELING': {
+          // Guard: skip live-state update for pre-rejected events.
+          const fuelingResult = resultByUuid.get(event.uuid);
+          if (fuelingResult === 'REJECTED') break;
+
+          applyOperationalFields(liveUpdates, d);
+          const diesel   = asNumber(d.dieselLiters);
+          const hourmeter = asValidHourmeter(d.hourmeter);
+
+          if (diesel != null && diesel > 0) liveUpdates.lastDieselLiters = diesel;
+          if (hourmeter != null) liveUpdates.hourmeterCurrent = hourmeter;
+          liveUpdates.lastFuelingAt = ts;
+
+          // ── Persist fueling record (idempotent on retry) ──
+          if (fuelingResult === 'SYNCED') {
+            FuelingStorage.save({
+              eventId:              event.uuid,
+              tenantId,
+              equipmentId:          validation.equipment.id,
+              fleetCode:            validation.equipment.code,
+              dieselLiters:         diesel ?? 0,
+              hourmeter:            hourmeter ?? 0,
+              operatorRegistration: asString(d.operatorRegistration ?? d.registration),
+              operatorName:         asString(d.operatorName ?? d.currentOperator),
+              operationCode:        asString(d.operationCode),
+              fueledAt:             ts,
+            });
+            auditFromRequest(req, tenantId, {
+              action:   'FUELING_RECEIVED',
+              entity:   'fueling',
+              entityId: event.uuid,
+              metadata: { fleetCode: validation.equipment.code, liters: diesel, hourmeter, source: 'APK' },
+            });
+            console.info('[Fueling] persisted eventId=' + event.uuid + ' fleetCode=' + validation.equipment.code + ' liters=' + String(diesel) + ' h=' + String(hourmeter));
+          } else {
+            console.info('[Fueling] idempotent eventId=' + event.uuid + ' fleetCode=' + validation.equipment.code);
+          }
           break;
         }
         default:

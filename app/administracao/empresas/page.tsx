@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
+import { SubscriptionPanel } from '@/components/shared/subscription-banner';
 
 const API_PORT_START = 3001;
 const MQTT_PORT_START = 18831;
@@ -208,6 +209,7 @@ function EmpresasPage() {
 
   // Loading states for async token operations
   const [isRotatingToken, setIsRotatingToken] = useState(false);
+  const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(false);
 
   const {
     register,
@@ -386,6 +388,35 @@ function EmpresasPage() {
   const handleRegenerateCompanyToken = async () => {
     if (!selectedItem || !canRegenerateToken) return;
     setConfirmAction({ type: 'regenerate', item: selectedItem });
+  };
+
+  const handleSubscriptionAction = async (
+    action: 'RENOVAR' | 'SUSPENDER' | 'REATIVAR' | 'CANCELAR' | 'ATUALIZAR_CONTRATO',
+    opts?: { trialDays?: 15 | 30; billingCycle?: 'MENSAL' | 'TRIMESTRAL' | 'ANUAL'; contractEndsAt?: string },
+  ) => {
+    if (!selectedItem) return;
+    setIsSubscriptionLoading(true);
+    try {
+      const csrf = document.cookie.split('; ').find((c) => c.startsWith('silo_csrf='))?.split('=')[1] ?? '';
+      const res = await fetch(`/api/admin/companies/${selectedItem.id}/subscription`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+        body: JSON.stringify({ action, ...opts }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Falha ao atualizar assinatura');
+      }
+      const { company: updated } = await res.json() as { company: Company };
+      setSelectedItem(updated as unknown as Company);
+      upsertCompanyInView(updated as unknown as Company);
+      setFeedback({ type: 'success', message: 'Assinatura atualizada com sucesso' });
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Erro ao atualizar assinatura' });
+    } finally {
+      setIsSubscriptionLoading(false);
+    }
   };
 
   const executeConfirmAction = async () => {
@@ -647,6 +678,16 @@ function EmpresasPage() {
                       </select>
                     </FormField>
                   </div>
+
+                  {/* Painel de assinatura — somente na edição */}
+                  {selectedItem && (
+                    <SubscriptionPanel
+                      company={selectedItem as any}
+                      onAction={handleSubscriptionAction}
+                      loading={isSubscriptionLoading}
+                      isSuperAdmin={checkPermission('ALL', 'administrar')}
+                    />
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField label="Porta API" error={errors.portaApi?.message} required>
