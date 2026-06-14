@@ -242,6 +242,10 @@ export async function POST(req: NextRequest) {
     status: company.status,
     plan: company.plan,
     subscriptionStatus: access.status,
+    // O guard acima rejeita mobileEnabled === false; aqui o tipo é (true | undefined),
+    // ou seja, mobile SEMPRE habilitado neste ponto (undefined = habilitado para
+    // registros legados). Expomos true explicitamente para o APK.
+    mobileEnabled: true,
     apiBaseUrl: getMobileApiBaseUrl(company),
     apiHost,
     apiPort: getMobileApiPort(company),
