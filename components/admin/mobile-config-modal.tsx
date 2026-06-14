@@ -252,8 +252,20 @@ export function MobileConfigModal({ companyId, isAdmin, onClose, onFeedback, onC
       const data = (await res.json()) as { newToken: string };
       if (mountedRef.current) {
         setNewTokenNotice(data.newToken);
-        setQrDataUrl(null); // QR antigo ficou inválido
         onFeedback('success', 'Token regenerado. O token anterior foi invalidado.');
+        // Atualiza o QR Code com o novo token (usa o token ja retornado pela rotacao;
+        // nao dispara nova rotacao nem novo COMPANY_TOKEN_VIEWED).
+        try {
+          const payload = buildPayload(config, data.newToken);
+          const QRCode = (await import('qrcode')).default;
+          const url = await QRCode.toDataURL(JSON.stringify(payload), {
+            errorCorrectionLevel: 'M', margin: 2, width: 320,
+            color: { dark: '#0a0e27', light: '#ffffff' },
+          });
+          if (mountedRef.current) setQrDataUrl(url);
+        } catch {
+          if (mountedRef.current) setQrDataUrl(null);
+        }
       }
       await loadConfig();
       onChanged?.();
@@ -262,7 +274,7 @@ export function MobileConfigModal({ companyId, isAdmin, onClose, onFeedback, onC
     } finally {
       if (mountedRef.current) setIsRotating(false);
     }
-  }, [config, isAdmin, companyId, loadConfig, onChanged, onFeedback]);
+  }, [config, isAdmin, companyId, loadConfig, onChanged, onFeedback, buildPayload]);
 
   const handleToggleMobile = useCallback(async () => {
     if (!config || !isAdmin) return;
@@ -402,7 +414,7 @@ export function MobileConfigModal({ companyId, isAdmin, onClose, onFeedback, onC
                 className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-[#0a0e27] transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isGeneratingQr ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
-                Gerar QR Code
+                {qrDataUrl ? 'Atualizar QR Code' : 'Exibir QR Code'}
               </button>
 
               <button
@@ -456,7 +468,7 @@ export function MobileConfigModal({ companyId, isAdmin, onClose, onFeedback, onC
             {confirmRotate && (
               <div className="mt-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
                 <p className="text-[11px] font-bold text-yellow-300 mb-3">
-                  Regenerar o token invalidará o token atual. Todos os dispositivos precisarão ler um novo QR Code. Confirmar?
+                  Atenção: isso vai invalidar todos os aplicativos já configurados desta empresa. Deseja continuar?
                 </p>
                 <div className="flex gap-2">
                   <button
