@@ -26,7 +26,7 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
 import { writeAudit } from '@/lib/audit/audit-log';
 import { validateCompanyAccess } from '@/lib/subscription/subscription-validator';
 import { migrateCompanySubscription } from '@/lib/subscription/subscription-migrator';
-import { getMobileApiBaseUrl } from '@/lib/mobile-config';
+import { getMobileApiBaseUrl, getMobileApiHost, getMobileApiPort } from '@/lib/mobile-config';
 
 // ── Rate limit dedicado — mesmo padrão restritivo do resolve ─────────────────
 
@@ -48,15 +48,6 @@ function getClientIp(req: NextRequest): string {
 
 function getUserAgent(req: NextRequest): string {
   return req.headers.get('user-agent')?.slice(0, 200) || 'unknown';
-}
-
-function extractApiHost(apiBaseUrl?: string): string {
-  if (!apiBaseUrl) return 'api.siloops.com.br';
-  try {
-    return new URL(apiBaseUrl).hostname;
-  } catch {
-    return 'api.siloops.com.br';
-  }
 }
 
 function extractMqttHost(mqttUrl?: string): string {
@@ -210,7 +201,8 @@ export async function POST(req: NextRequest) {
   }
 
   // 7. Token válido — montar configuração (sem nenhum campo de token completo)
-  const apiHost = extractApiHost(company.apiBaseUrl);
+  // apiBaseUrl é a fonte oficial; host/porta derivados dela (porta = 443, nunca a interna).
+  const apiHost = getMobileApiHost(company);
   const mqttHost = extractMqttHost(company.mqttUrl);
   const protocol = extractProtocol(company.apiBaseUrl);
 
@@ -252,7 +244,7 @@ export async function POST(req: NextRequest) {
     subscriptionStatus: access.status,
     apiBaseUrl: getMobileApiBaseUrl(company),
     apiHost,
-    apiPort: company.apiPort ?? null,
+    apiPort: getMobileApiPort(company),
     mqttHost,
     mqttPort: company.mqttPort ?? null,
     protocol,

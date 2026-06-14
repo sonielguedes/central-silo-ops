@@ -6,7 +6,7 @@ import { auditFromRequest } from '@/lib/audit/audit-log';
 import { maskToken } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { Company } from '@/lib/types';
-import { getMobileApiBaseUrl } from '@/lib/mobile-config';
+import { getMobileApiBaseUrl, getMobileApiPort } from '@/lib/mobile-config';
 
 /**
  * Endpoint administrativo de "Configuração Mobile" da empresa.
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     companyCode: company.code,
     tenantId: company.tenantId,
     apiBaseUrl: getMobileApiBaseUrl(company),
-    apiPort: company.apiPort ?? null,
+    apiPort: getMobileApiPort(company),
     mqttUrl: company.mqttUrl || '',
     mqttHost: extractMqttHost(company.mqttUrl),
     mqttPort: company.mqttPort ?? null,
