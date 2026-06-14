@@ -6,6 +6,7 @@ import { auditFromRequest } from '@/lib/audit/audit-log';
 import { maskToken } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { Company } from '@/lib/types';
+import { getMobileApiBaseUrl } from '@/lib/mobile-config';
 
 /**
  * Endpoint administrativo de "Configuração Mobile" da empresa.
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     companyName: company.tradingName || company.corporateName || company.code,
     companyCode: company.code,
     tenantId: company.tenantId,
-    apiBaseUrl: company.apiBaseUrl || (company.apiPort ? `https://api.siloops.com.br:${company.apiPort}` : ''),
+    apiBaseUrl: getMobileApiBaseUrl(company),
     apiPort: company.apiPort ?? null,
     mqttUrl: company.mqttUrl || '',
     mqttHost: extractMqttHost(company.mqttUrl),

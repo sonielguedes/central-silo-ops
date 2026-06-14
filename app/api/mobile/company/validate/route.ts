@@ -26,6 +26,7 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
 import { writeAudit } from '@/lib/audit/audit-log';
 import { validateCompanyAccess } from '@/lib/subscription/subscription-validator';
 import { migrateCompanySubscription } from '@/lib/subscription/subscription-migrator';
+import { getMobileApiBaseUrl } from '@/lib/mobile-config';
 
 // ── Rate limit dedicado — mesmo padrão restritivo do resolve ─────────────────
 
@@ -249,7 +250,7 @@ export async function POST(req: NextRequest) {
     status: company.status,
     plan: company.plan,
     subscriptionStatus: access.status,
-    apiBaseUrl: company.apiBaseUrl || `https://${apiHost}:${company.apiPort ?? ''}`,
+    apiBaseUrl: getMobileApiBaseUrl(company),
     apiHost,
     apiPort: company.apiPort ?? null,
     mqttHost,

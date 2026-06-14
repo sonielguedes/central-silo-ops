@@ -1,0 +1,65 @@
+# ============================================================================
+# SILO OPS — Endpoint Mobile no domínio HTTPS PADRÃO (443), sem porta por empresa
+# ----------------------------------------------------------------------------
+# Decisão de arquitetura: o APK fala com UM único domínio (api.siloops.com.br),
+# na porta 443. O isolamento é por tenantId/companyCode/companyToken — NUNCA por
+# porta de API por empresa. (As portas 3001/3002/3003 do nginx.conf são apenas
+# roteamento interno/web por instância e NÃO devem aparecer no QR Code.)
+#
+# Como funciona o isolamento aqui:
+#  - /api/mobile/* resolve o tenant pelo COMPANY TOKEN (requireMobileAuth →
+#    getCompanyByToken). Independe de qual instância atende.
+#  - Todas as instâncias compartilham o volume ./data:/app/data, logo companies.json
+#    e data/{tenantId} são comuns: qualquer upstream consegue validar e gravar no
+#    tenant correto. Por isso o bloco abaixo pode apontar para uma instância
+#    qualquer (ou para um serviço dedicado de API mobile).
+#
+# Pré-requisitos: certificado TLS válido para api.siloops.com.br (e central, se usar).
+# ============================================================================
+
+upstream silo_mobile_api {
+    # Aponta para uma instância com o volume ./data compartilhado.
+    # Recomendado em produção: um serviço dedicado só para a API mobile.
+    server silo-piloto:3000;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name api.siloops.com.br central.siloops.com.br;
+
+    ssl_certificate     /etc/nginx/certs/siloops.crt;
+    ssl_certificate_key /etc/nginx/certs/siloops.key;
+
+    client_max_body_size 10m;
+
+    # API mobile (configuração, validação, eventos, jornada, heartbeat, GPS)
+    location /api/mobile/ {
+        proxy_pass http://silo_mobile_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # NÃO injetar X-Silo-Tenant aqui: o tenant vem do Company Token.
+        proxy_read_timeout 60s;
+    }
+
+    # (Opcional) Healthcheck público da API mobile
+    location = /api/health/full {
+        proxy_pass http://silo_mobile_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Demais caminhos podem ser bloqueados ou redirecionados conforme a política.
+    location / {
+        return 404;
+    }
+}
+
+# Redireciona 80 → 443 (opcional)
+server {
+    listen 80;
+    server_name api.siloops.com.br central.siloops.com.br;
+    return 301 https://$host$request_uri;
+}
