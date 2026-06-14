@@ -23,6 +23,7 @@ import {
   History as HistoryIcon,
   Clock,
   Gauge,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -69,6 +70,7 @@ const menuItems: MenuGroup[] = [
     { icon: Users, label: 'Operadores', href: '/operadores' },
     { icon: Factory, label: 'Fazendas / Talhoes', href: '/fazendas-talhoes' },
     { icon: PauseCircle, label: 'Motivos de Parada', href: '/paradas' },
+    { icon: BookOpen, label: 'Catalogos Oper.', href: '/administracao/catalogs' },
   ]},
   { group: 'Operacional', items: [
     { icon: BarChart2, label: 'Painel Operacional', href: '/operacional/painel' },

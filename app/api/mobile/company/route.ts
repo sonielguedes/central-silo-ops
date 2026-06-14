@@ -75,9 +75,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       companyId: saved.id,
       tenantId: saved.tenantId,
+      code: saved.code,
       apiPort: saved.apiPort,
-      companyToken: saved.companyToken,
+      mqttPort: saved.mqttPort,
       status: saved.status,
+      // companyToken deliberately omitted — APK already holds it for auth
     });
   } catch (error) {
     console.error('[mobile/company] failed to persist company', error);

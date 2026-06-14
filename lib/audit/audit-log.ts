@@ -98,7 +98,7 @@ export function auditFromRequest(
   },
 ): void {
   writeAudit(tenantId, {
-    userId: params.userId || req.headers.get('x-user-id') || 'system',
+    userId: params.userId || 'system',
     action: params.action,
     entity: params.entity,
     entityId: params.entityId,

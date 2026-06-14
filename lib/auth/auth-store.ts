@@ -104,9 +104,27 @@ function readJson<T>(file: string, fallback: T): T {
   return JSON.parse(fs.readFileSync(file, 'utf-8')) as T;
 }
 
-function writeJson(file: string, value: unknown) {
+/**
+ * Writes JSON to `file` atomically using a write-then-rename pattern.
+ *
+ * 1. Serialize to JSON.
+ * 2. Write to `<file>.tmp.<pid>.<ts>` — a new file, isolated from the target.
+ * 3. Rename tmp → target (atomic on POSIX; best-effort on Windows).
+ *
+ * On any failure the tmp file is cleaned up and the original file is untouched,
+ * so the old data survives partial writes, crashes, or disk-full errors.
+ * NEVER logs the contents — callers must not pass sensitive values to error messages.
+ */
+function writeJsonAtomic(file: string, value: unknown): void {
   ensureDir();
-  fs.writeFileSync(file, JSON.stringify(value, null, 2));
+  const tmp = `${file}.tmp.${process.pid}.${Date.now()}`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf-8');
+    fs.renameSync(tmp, file); // POSIX: atomic swap; Windows: best-effort
+  } catch (err) {
+    try { fs.unlinkSync(tmp); } catch { /* ignore — cleanup only */ }
+    throw err;
+  }
 }
 
 function nowIso() {
@@ -249,7 +267,7 @@ function ensureSeedUsers(): AuthUserRecord[] {
   upsertSeedUser(merged, seedBase[1], demoPassword || ownerPassword);
 
   const changed = JSON.stringify(merged) !== JSON.stringify(current);
-  if (changed) writeJson(USERS_FILE, merged);
+  if (changed) writeJsonAtomic(USERS_FILE, merged);
   return merged;
 }
 
@@ -283,11 +301,11 @@ function loadSessions(): AuthSessionRecord[] {
 }
 
 function saveSessions(sessions: AuthSessionRecord[]) {
-  writeJson(SESSIONS_FILE, sessions);
+  writeJsonAtomic(SESSIONS_FILE, sessions);
 }
 
 function saveUsers(users: AuthUserRecord[]) {
-  writeJson(USERS_FILE, users);
+  writeJsonAtomic(USERS_FILE, users);
 }
 
 function cleanupExpiredSessions(sessions: AuthSessionRecord[]): AuthSessionRecord[] {
@@ -456,11 +474,18 @@ export const AuthStore = {
     const index = users.findIndex((user) => user.id === userId);
     if (index === -1) throw new Error('Usuario nao encontrado');
 
+    // Step 1 — hash the new password in memory BEFORE touching the file.
+    // If hashPassword throws (empty/invalid input), the file is untouched and
+    // the old passwordHash is preserved on disk.
+    const newHash = hashPassword(password);
+
+    // Step 2 — build the updated record in memory.
+    // mustChangePassword is NOT cleared until the atomic write succeeds below.
     const timestamp = nowIso();
-    users[index] = {
+    const updated: AuthUserRecord = {
       ...users[index],
-      passwordHash: hashPassword(password),
-      mustChangePassword,
+      passwordHash: newHash,
+      mustChangePassword,          // becomes false only after saveUsers() succeeds
       passwordLastChangedAt: timestamp,
       updatedAt: timestamp,
       lastLoginAt: users[index].lastLoginAt,
@@ -468,8 +493,11 @@ export const AuthStore = {
       resetPasswordExpiresAt: undefined,
       resetPasswordUsedAt: timestamp,
     };
-    saveUsers(users);
-    return users[index];
+
+    // Step 3 — write atomically: old file is preserved if writeJsonAtomic throws.
+    users[index] = updated;
+    saveUsers(users);   // writeJsonAtomic(USERS_FILE, users) under the hood
+    return updated;
   },
 
   async upsertUser(input: Partial<AuthUserRecord> & Pick<AuthUserRecord, 'name' | 'email' | 'username' | 'accessGroupId' | 'status'>): Promise<AuthUserRecord> {

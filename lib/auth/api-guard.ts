@@ -42,7 +42,7 @@ const IS_DEMO = process.env.NEXT_PUBLIC_APP_ENV === 'demo';
 
 export function maskToken(token: string | undefined | null): string {
   if (!token || token.length < 8) return '***';
-  return token.slice(0, 4) + '...' + token.slice(-4);
+  return token.slice(0, 6) + '••••' + token.slice(-4);
 }
 
 function getClientIp(req: NextRequest): string {

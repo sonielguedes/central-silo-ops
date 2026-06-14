@@ -89,7 +89,14 @@ export async function POST(req: NextRequest) {
       after: { code: persisted.code, status: persisted.status },
     });
 
-    return NextResponse.json({ company: persisted });
+    // Sanitize: never return raw token fields -- return tokenPreview only
+    const raw = persisted as unknown as Record<string, unknown>;
+    const { companyToken: _ct, mobileToken: _mt, apiToken: _at, token: _t, ...safePersisted } = raw;
+    void _ct; void _mt; void _at; void _t;
+    const tokenPreview = typeof _ct === 'string' && _ct
+      ? maskToken(_ct)
+      : 'sem token';
+    return NextResponse.json({ company: { ...safePersisted, tokenPreview } });
   } catch (error) {
     console.error('[admin/companies/token] failed to persist company token', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

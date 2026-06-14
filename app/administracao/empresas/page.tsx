@@ -39,10 +39,12 @@ import {
   EyeOff,
   ShieldAlert,
   CheckCheck,
+  Smartphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
 import { SubscriptionPanel } from '@/components/shared/subscription-banner';
+import { MobileConfigModal } from '@/components/admin/mobile-config-modal';
 
 const API_PORT_START = 3001;
 const MQTT_PORT_START = 18831;
@@ -214,6 +216,8 @@ function EmpresasPage() {
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
   const [isRevealingToken, setIsRevealingToken] = useState(false);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // -- Configuracao Mobile (QR Code) --
+  const [mobileConfigCompany, setMobileConfigCompany] = useState<Company | null>(null);
 
   const {
     register,
@@ -654,6 +658,16 @@ function EmpresasPage() {
                       )}
                     </div>
 
+                    {canRegenerateToken && (
+                      <button
+                        onClick={() => setMobileConfigCompany(item)}
+                        data-testid={`btn-configurar-apk-${item.id}`}
+                        className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-primary transition-all hover:bg-primary/20"
+                      >
+                        <Smartphone size={14} /> Configurar APK
+                      </button>
+                    )}
+
                     <div className="pt-4 border-t border-[#2d3647] flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={cn(
@@ -1014,6 +1028,17 @@ function EmpresasPage() {
           tempPassword={tokenModal.tempPassword}
           adminEmail={tokenModal.adminEmail}
           isRegeneration={tokenModal.isRegeneration}
+        />
+      )}
+
+      {/* -- Configuracao Mobile (QR Code) -- */}
+      {mobileConfigCompany && (
+        <MobileConfigModal
+          companyId={mobileConfigCompany.id}
+          isAdmin={canRegenerateToken}
+          onClose={() => setMobileConfigCompany(null)}
+          onFeedback={(type, message) => setFeedback({ type, message })}
+          onChanged={loadData}
         />
       )}
 

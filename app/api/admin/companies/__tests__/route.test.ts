@@ -150,6 +150,12 @@ function makeTokenPost(id: string): NextRequest {
   });
 }
 
+function makeTokenGet(id: string): NextRequest {
+  return new NextRequest(`http://localhost/api/admin/companies/${id}/token`, {
+    method: 'GET',
+  });
+}
+
 const platformSession = {
   id: 'user-platform',
   email: 'admin@silo.com',
@@ -726,18 +732,24 @@ describe('POST /api/admin/companies/[id]/token', () => {
 // que o estado temporario e limpado apos uso, e que a copia via clipboard
 // utiliza exclusivamente o token retornado na resposta unica do POST.
 
-describe('GET /api/admin/companies/[id]/token — acesso bloqueado', () => {
-  it('retorna 405 Method Not Allowed', async () => {
-    const res = await TOKEN_GET();
-    expect(res.status).toBe(405);
+describe('GET /api/admin/companies/[id]/token — controle de acesso', () => {
+  it('retorna 401 quando nao ha sessao', async () => {
+    mockSession = null;
+    const res = await TOKEN_GET(makeTokenGet('company-1'), { params: { id: 'company-1' } });
+    expect(res.status).toBe(401);
 
     const body = await res.json();
-    expect(body.error).toMatch(/metodo nao permitido|nao pode ser recuperado via GET/i);
+    expect(body.error).toMatch(/sessao/i);
   });
 
-  it('resposta 405 inclui header Allow: POST', async () => {
-    const res = await TOKEN_GET();
-    expect(res.headers.get('allow') ?? res.headers.get('Allow')).toBe('POST');
+  it('retorna 200 com token para SUPER_ADMIN_SILO', async () => {
+    mockSession = platformSession;
+    const res = await TOKEN_GET(makeTokenGet('company-1'), { params: { id: 'company-1' } });
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.companyToken).toBeTruthy();
+    expect(body.success).toBe(true);
   });
 });
 

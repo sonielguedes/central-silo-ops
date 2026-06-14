@@ -46,3 +46,12 @@ body {
     transform-style: preserve-3d;
   }
 }
+
+@layer utilities {
+  /* print-color-adjust: garante que cores e backgrounds sejam preservados na impressão.
+     O prefixo -webkit- é necessário para Safari/Chrome (Lighthouse best-practice). */
+  .print-exact {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

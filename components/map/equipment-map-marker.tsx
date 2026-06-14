@@ -61,7 +61,7 @@ export function createEquipmentMarkerIcon(opts: MarkerOptions) {
           ${iconSvg}
         </div>
       </div>
-      ${label ? `<div style="margin-top:-6px;background:rgba(10,14,39,0.92);backdrop-filter:blur(4px);padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);box-shadow:0 2px 8px rgba(0,0,0,0.4);z-index:20;position:relative">
+      ${label ? `<div style="margin-top:-6px;background:rgba(10,14,39,0.92);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);box-shadow:0 2px 8px rgba(0,0,0,0.4);z-index:20;position:relative">
         <span style="font-size:9px;font-weight:900;color:white;font-style:italic;letter-spacing:-0.5px;text-transform:uppercase;white-space:nowrap">${label}</span>
       </div>` : ''}
     </div>

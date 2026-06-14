@@ -230,3 +230,59 @@ describe('POST /api/auth/change-password', () => {
     infoSpy.mockRestore();
   });
 });
+
+// ── Atomicity tests ───────────────────────────────────────────────────────────
+
+describe('POST /api/auth/change-password — atomicidade', () => {
+  it('falha de persistencia retorna 500 e nao revoga sessoes', async () => {
+    // Simulate a disk/atomic-write failure inside updatePassword
+    const { AuthStore } = require('@/lib/auth/auth-store');
+    AuthStore.updatePassword.mockRejectedValueOnce(new Error('ENOSPC: no space left on device'));
+
+    const res = await POST(makePost({
+      currentPassword: 'tempPass123',
+      newPassword: 'NovaSenh@456',
+      confirmPassword: 'NovaSenh@456',
+    }));
+
+    expect(res.status).toBe(500);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/persistir/i);
+
+    // Sessions must NOT be revoked — password change did not complete
+    expect(AuthStore.revokeSessionsForUser).not.toHaveBeenCalled();
+  });
+
+  it('falha de persistencia: mustChangePassword permanece true no payload de erro', async () => {
+    const { AuthStore } = require('@/lib/auth/auth-store');
+    AuthStore.updatePassword.mockRejectedValueOnce(new Error('disk full'));
+
+    const res = await POST(makePost({
+      currentPassword: 'tempPass123',
+      newPassword: 'NovaSenh@456',
+      confirmPassword: 'NovaSenh@456',
+    }));
+
+    // 500 means the write never completed — old hash (and mustChangePassword=true) intact
+    expect(res.status).toBe(500);
+    // updatePassword was called once but threw — no successful update recorded
+    expect(updatedUser).toBeNull();
+  });
+
+  it('senha atual invalida nao chama updatePassword (hash antigo preservado)', async () => {
+    mockBcryptResult = false; // bcrypt.compare returns false → wrong password
+    const { AuthStore } = require('@/lib/auth/auth-store');
+
+    const res = await POST(makePost({
+      currentPassword: 'senhaErrada',
+      newPassword: 'NovaSenh@456',
+      confirmPassword: 'NovaSenh@456',
+    }));
+
+    expect(res.status).toBe(403);
+    // updatePassword must never be called when current password is wrong
+    expect(AuthStore.updatePassword).not.toHaveBeenCalled();
+    // No session revocation either
+    expect(AuthStore.revokeSessionsForUser).not.toHaveBeenCalled();
+  });
+});

@@ -57,6 +57,13 @@ export interface Company extends BaseEntity {
   mobileToken?: string;
   apiToken?: string;
   token?: string;
+  /**
+   * Habilita/desabilita o acesso do APK mobile sem destruir o token.
+   * Quando false, a rota /api/mobile/company/validate recusa o dispositivo,
+   * mas o companyToken e preservado para reativacao futura.
+   * undefined e tratado como habilitado (compatibilidade com registros antigos).
+   */
+  mobileEnabled?: boolean;
   plan: CompanyPlan;
   status: 'ATIVO' | 'INATIVO';
   observations?: string;
