@@ -498,7 +498,11 @@ export class ServerStorage {
       return { ok: false, status: 403, error: 'Frota inativa' };
     }
     if (!equipment.mobileEnabled) return { ok: false, status: 403, error: 'Mobile desabilitado para esta frota' };
-    if (!equipment.mobileToken || equipment.mobileToken !== mobileToken) {
+    // Legacy equipment-level mobileToken is only enforced when there is NO
+    // validated companyToken. Once requireMobileAuth has validated the
+    // X-Company-Token (companyToken present), the equipment token is not
+    // required -- the new multi-tenant contract authenticates via company token.
+    if (!companyToken && (!equipment.mobileToken || equipment.mobileToken !== mobileToken)) {
       return { ok: false, status: 403, error: 'mobileToken invalido' };
     }
 
