@@ -79,6 +79,10 @@ const menuItems: MenuGroup[] = [
     { icon: Fuel, label: 'Abastecimentos', href: '/abastecimentos' },
     { icon: RefreshCw, label: 'Sincronizacao', href: '/sincronizacao' },
     { icon: Bell, label: 'Alertas', href: '/alertas' },
+    { icon: Activity, label: 'Intelligence', href: '/relatorios/intelligence' },
+    { icon: FileText, label: 'Relatorios', href: '/relatorios' },
+    { icon: Clock, label: 'Tempo Operacional', href: '/relatorios/tempo-operacional' },
+    { icon: Gauge, label: 'Eficiencia Operacional', href: '/relatorios/eficiencia-operacional' },
   ]},
   { group: 'Ferramentas', items: [
     { icon: FileText, label: 'Conf. Operacional', href: '/ferramentas/conferencia-operacional' },
@@ -90,10 +94,6 @@ const menuItems: MenuGroup[] = [
     { icon: Building2, label: 'Empresas / Tenants', href: '/administracao/empresas' },
     { icon: UserCog, label: 'Usuarios', href: '/administracao/usuarios' },
     { icon: ShieldCheck, label: 'Perfis / RBAC', href: '/administracao/grupos-acesso' },
-    { icon: Activity, label: 'Intelligence', href: '/relatorios/intelligence' },
-    { icon: FileText, label: 'Relatorios', href: '/relatorios' },
-    { icon: Clock, label: 'Tempo Operacional', href: '/relatorios/tempo-operacional' },
-    { icon: Gauge, label: 'Eficiencia Operacional', href: '/relatorios/eficiencia-operacional' },
     { icon: Settings, label: 'Configuracoes', href: '/configuracoes' },
   ]}
 ];

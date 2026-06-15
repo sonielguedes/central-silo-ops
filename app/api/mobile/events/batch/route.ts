@@ -46,6 +46,18 @@ const asNumber = (value: unknown): number | undefined => {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 };
 
+/**
+ * Returns true only for GPS coordinates that are geographically usable.
+ * Rejects: null/undefined, 0,0 (null island), out-of-range values.
+ */
+const isValidGps = (lat: number | undefined, lng: number | undefined): boolean => {
+  if (lat === undefined || lng === undefined) return false;
+  if (lat === 0 && lng === 0) return false;
+  if (lat <= -90 || lat >= 90)   return false;
+  if (lng <= -180 || lng >= 180) return false;
+  return true;
+};
+
 const asValidHourmeter = (value: unknown): number | undefined => {
   const parsed = asNumber(value);
   return parsed !== undefined && parsed > 0 ? parsed : undefined;
@@ -387,29 +399,41 @@ export async function POST(req: NextRequest) {
           // Late GPS after journey finalized must not reopen the journey or update status.
           if (journeyEnded) break;
           applyOperationalFields(liveUpdates, d);
-          const latitude = asNumber(d.latitude);
+          const latitude  = asNumber(d.latitude);
           const longitude = asNumber(d.longitude);
-          const speed = asNumber(d.speed);
-          const accuracy = asNumber(d.accuracy);
-          if (latitude  != null) liveUpdates.latitude  = latitude;
-          if (longitude != null) liveUpdates.longitude = longitude;
-          if (speed     != null) liveUpdates.speed     = speed;
-          if (accuracy  != null) liveUpdates.accuracy  = accuracy;
-          liveUpdates.lastGpsAt = ts;
+          const speed     = asNumber(d.speed);
+          const accuracy  = asNumber(d.accuracy);
+          const rpm       = asNumber(d.rpm);
+          const speedKmh  = asNumber(d.speedKmh) ?? (speed != null ? speed * 3.6 : undefined);
+          if (isValidGps(latitude, longitude)) {
+            liveUpdates.latitude  = latitude;
+            liveUpdates.longitude = longitude;
+            liveUpdates.lastGpsAt = ts;
+            if (speed    != null) liveUpdates.speed    = speed;
+            if (speedKmh != null) liveUpdates.speedKmh = speedKmh;
+            if (accuracy != null) liveUpdates.accuracy = accuracy;
+            if (rpm      != null) liveUpdates.rpm      = rpm;
+          } else {
+            console.warn(
+              '[batch/LOCATION] GPS rejected fleetCode=' + validation.equipment.code +
+              ' lat=' + String(latitude) + ' lng=' + String(longitude) +
+              ' -- keeping last valid position'
+            );
+          }
           const srcGps = asString(d.hourmeterSource);
           if (srcGps) liveUpdates.hourmeterSource = srcGps;
           if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
-          // Save trail point (rejected if lat/lng invalid, 0/0, ts or journeyId absent)
+          // Save trail point only when coordinates are valid
           const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
           const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
-          if (jId && latitude != null && longitude != null) {
+          if (jId && isValidGps(latitude, longitude)) {
             const trailPoint: TrailPoint = {
               tenantId,
               fleetCode:            validation.equipment.code,
               equipmentId:          validation.equipment.id,
               journeyId:            jId,
-              latitude,
-              longitude,
+              latitude:             latitude!,
+              longitude:            longitude!,
               speed,
               accuracy,
               timestamp:            ts,
@@ -427,15 +451,27 @@ export async function POST(req: NextRequest) {
           if (journeyEnded) break;
           applyOperationalFields(liveUpdates, d);
           liveUpdates.lastHeartbeatAt = now;
-          const latitude = asNumber(d.latitude);
+          const latitude  = asNumber(d.latitude);
           const longitude = asNumber(d.longitude);
-          const speed = asNumber(d.speed);
-          const accuracy = asNumber(d.accuracy);
-          if (latitude  != null) liveUpdates.latitude  = latitude;
-          if (longitude != null) liveUpdates.longitude = longitude;
-          if (speed     != null) liveUpdates.speed     = speed;
-          if (accuracy  != null) liveUpdates.accuracy  = accuracy;
-          if (latitude  != null) liveUpdates.lastGpsAt = ts;
+          const speed     = asNumber(d.speed);
+          const accuracy  = asNumber(d.accuracy);
+          const rpm       = asNumber(d.rpm);
+          const speedKmh  = asNumber(d.speedKmh) ?? (speed != null ? speed * 3.6 : undefined);
+          if (isValidGps(latitude, longitude)) {
+            liveUpdates.latitude  = latitude;
+            liveUpdates.longitude = longitude;
+            liveUpdates.lastGpsAt = ts;
+            if (speed    != null) liveUpdates.speed    = speed;
+            if (speedKmh != null) liveUpdates.speedKmh = speedKmh;
+            if (accuracy != null) liveUpdates.accuracy = accuracy;
+            if (rpm      != null) liveUpdates.rpm      = rpm;
+          } else if (latitude !== undefined || longitude !== undefined) {
+            console.warn(
+              '[batch/HEARTBEAT] GPS rejected fleetCode=' + validation.equipment.code +
+              ' lat=' + String(latitude) + ' lng=' + String(longitude) +
+              ' -- keeping last valid position'
+            );
+          }
           const hCurr = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
           if (hCurr != null) liveUpdates.hourmeterCurrent = hCurr;
           const srcHb = asString(d.hourmeterSource);

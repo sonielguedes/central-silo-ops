@@ -88,10 +88,21 @@ const trailEndIcon = L.divIcon({
 
 /* ── Util helpers ──────────────────────────────────────────────────────── */
 
+/**
+ * Returns true only when the item contains geographically valid GPS coordinates.
+ * Rejects: undefined/NaN, 0,0 (null island), out-of-range values.
+ */
 const hasValidPosition = (
   item: EquipmentLiveState
-): item is EquipmentLiveState & { latitude: number; longitude: number } =>
-  Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
+): item is EquipmentLiveState & { latitude: number; longitude: number } => {
+  const lat = item.latitude;
+  const lng = item.longitude;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (lat === 0 && lng === 0) return false;
+  if ((lat as number) <= -90  || (lat as number) >= 90)  return false;
+  if ((lng as number) <= -180 || (lng as number) >= 180) return false;
+  return true;
+};
 
 const isRecent = (value: string | undefined, thresholdMs: number) => {
   if (!value) return false;
@@ -700,10 +711,12 @@ function OperationalPopup({
       <div className="px-4 py-3 flex flex-col gap-3">
         <PSection label="Telemetria">
           <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-            <PField icon={<Gauge size={11} />} label="Velocidade" value={formatSpeed(machine.speed)} />
-            <PField icon={<MapPin size={11} />} label="Precisao GPS" value={formatAccuracy(machine.accuracy)} />
-            <PField icon={<Clock size={11} />} label="Ultimo GPS" value={formatDateTime(machine.lastGpsAt)} alert={gpsStale} />
-            <PField icon={<Activity size={11} />} label="Ult.heartbeat" value={formatDateTime(machine.lastHeartbeatAt)} alert={hbStale} />
+            <PField icon={<Gauge size={11} />}    label="Velocidade"   value={formatSpeed(machine.speedKmh ?? (machine.speed != null ? machine.speed * 3.6 : undefined))} />
+            <PField icon={<Activity size={11} />} label="RPM"          value={(machine as unknown as Record<string, number>).rpm != null ? String((machine as unknown as Record<string, number>).rpm) + ' rpm' : NOT_INFORMED} />
+            <PField icon={<Clock size={11} />}    label="Horimetro"    value={formatHourmeter(machine.hourmeterCurrent ?? machine.hourmeter)} />
+            <PField icon={<MapPin size={11} />}   label="Precisao GPS" value={formatAccuracy(machine.accuracy)} />
+            <PField icon={<Clock size={11} />}    label="Ultimo GPS"   value={formatDateTime(machine.lastGpsAt)} alert={gpsStale} />
+            <PField icon={<Activity size={11} />} label="Heartbeat"    value={formatDateTime(machine.lastHeartbeatAt)} alert={hbStale} />
           </div>
         </PSection>
 

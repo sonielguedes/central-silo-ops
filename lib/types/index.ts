@@ -593,7 +593,12 @@ export interface EquipmentLiveState {
   status: EquipmentOperationalStatus;
   latitude?: number;
   longitude?: number;
+  /** Velocidade em m/s (campo interno — use speedKmh para exibição) */
   speed?: number;
+  /** Velocidade em km/h (alias calculado a partir de speed × 3.6) */
+  speedKmh?: number;
+  /** Rotações por minuto do motor (se disponível via CAN ou APK) */
+  rpm?: number;
   accuracy?: number;
   lastGpsAt?: string;
   lastHeartbeatAt?: string;

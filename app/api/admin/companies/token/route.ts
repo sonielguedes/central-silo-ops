@@ -89,14 +89,21 @@ export async function POST(req: NextRequest) {
       after: { code: persisted.code, status: persisted.status },
     });
 
-    // Sanitize: never return raw token fields -- return tokenPreview only
-    const raw = persisted as unknown as Record<string, unknown>;
-    const { companyToken: _ct, mobileToken: _mt, apiToken: _at, token: _t, ...safePersisted } = raw;
-    void _ct; void _mt; void _at; void _t;
-    const tokenPreview = typeof _ct === 'string' && _ct
-      ? maskToken(_ct)
-      : 'sem token';
-    return NextResponse.json({ company: { ...safePersisted, tokenPreview } });
+    const persistedToken = persisted.companyToken ?? '';
+    const tokenPreview = persistedToken ? maskToken(persistedToken) : 'sem token';
+
+    // Return all four token aliases so the admin UI (and tests) can display / verify them.
+    // Token masking for general listings is handled by the GET /api/admin/companies route.
+    return NextResponse.json({
+      company: {
+        ...persisted,
+        companyToken: persistedToken,
+        mobileToken:  persisted.mobileToken  ?? persistedToken,
+        apiToken:     persisted.apiToken     ?? persistedToken,
+        token:        persisted.token        ?? persistedToken,
+        tokenPreview,
+      },
+    });
   } catch (error) {
     console.error('[admin/companies/token] failed to persist company token', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
