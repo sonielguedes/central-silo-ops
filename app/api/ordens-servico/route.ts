@@ -91,10 +91,9 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as Item;
 
-  // Validações obrigatórias
+  // Validações obrigatórias (equipmentId é opcional — vínculo pode ser feito depois)
   if (!body.code)        return NextResponse.json({ error: 'Código é obrigatório' }, { status: 400 });
   if (!body.description) return NextResponse.json({ error: 'Descrição é obrigatória' }, { status: 400 });
-  if (!body.equipmentId) return NextResponse.json({ error: 'Equipamento é obrigatório' }, { status: 400 });
 
   // Verificar código único no tenant
   const existing = CadastroStorage.getAll(tenantId, ENTITY) as Item[];

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { getCsrfTokenFromDocument } from '@/lib/auth/csrf-client';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
@@ -68,24 +69,51 @@ const fmtDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
+/** Lê o token CSRF do cookie silo_csrf (httpOnly: false, by design) e retorna como header. */
+function csrfHeaders(): Record<string, string> {
+  const token = getCsrfTokenFromDocument();
+  return token ? { 'x-csrf-token': token } : {};
+}
+
+/** Extrai mensagem legível de uma resposta de erro (tenta JSON.error, cai no texto raw). */
+async function extractApiError(r: Response): Promise<string> {
+  const text = await r.text();
+  try { return (JSON.parse(text) as { error?: string }).error ?? text; } catch { return text; }
+}
+
 async function apiGet(url: string) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(await r.text());
+  const r = await fetch(url, { credentials: 'same-origin' });
+  if (!r.ok) throw new Error(await extractApiError(r));
   return r.json();
 }
 async function apiPost(url: string, body: unknown) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(await r.text());
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(await extractApiError(r));
   return r.json();
 }
 async function apiPut(url: string, body: unknown) {
-  const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(await r.text());
+  const r = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(await extractApiError(r));
   return r.json();
 }
 async function apiPatch(url: string, body: unknown) {
-  const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(await r.text());
+  const r = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(await extractApiError(r));
   return r.json();
 }
 
