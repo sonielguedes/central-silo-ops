@@ -69,6 +69,7 @@ const menuItems: MenuGroup[] = [
   { group: 'Mestres / Frota', items: [
     { icon: Users, label: 'Operadores', href: '/operadores' },
     { icon: Factory, label: 'Fazendas / Talhoes', href: '/fazendas-talhoes' },
+    { icon: Building2, label: 'Centros de Custo', href: '/centros-custo' },
     { icon: PauseCircle, label: 'Motivos de Parada', href: '/paradas' },
     { icon: BookOpen, label: 'Catalogos Oper.', href: '/administracao/catalogs' },
   ]},

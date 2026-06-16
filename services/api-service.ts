@@ -2,6 +2,7 @@ import type {
   Alert,
   AccessGroup,
   ChecklistModel,
+  CostCenter,
   Equipment,
   EquipmentGroup,
   EquipmentModel,
@@ -149,6 +150,42 @@ export const AccessGroupService      = makeService<AccessGroup>('access-groups')
 export const UnitService             = makeService<Unit>('units');
 export const TimelineService         = makeService<TimelineEvent>('timeline');
 export const FleetActivityService    = makeService<FleetActivity>('fleet-activities');
+
+// CostCenterService usa rotas dedicadas /api/centros-custo (valida unicidade de código)
+export const CostCenterService = {
+  async getAll(): Promise<CostCenter[]> {
+    try {
+      const res = await fetch('/api/centros-custo', { cache: 'no-store', credentials: 'include', headers: getHeaders() });
+      return res.ok ? res.json() : [];
+    } catch { return []; }
+  },
+  async create(data: Partial<CostCenter>): Promise<CostCenter> {
+    const res = await fetch('/api/centros-custo', {
+      method: 'POST', credentials: 'include', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Falha ao criar' })) as { error?: string };
+      throw new Error(err.error ?? 'Falha ao criar');
+    }
+    return res.json();
+  },
+  async update(id: string, data: Partial<CostCenter>): Promise<CostCenter | undefined> {
+    const res = await fetch(`/api/centros-custo/${id}`, {
+      method: 'PUT', credentials: 'include', headers: getHeaders(), body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Falha ao atualizar' })) as { error?: string };
+      throw new Error(err.error ?? 'Falha ao atualizar');
+    }
+    return res.json();
+  },
+  async archive(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/centros-custo/${id}`, { method: 'DELETE', credentials: 'include', headers: getHeaders() });
+      return res.ok;
+    } catch { return false; }
+  },
+};
 export const TelemetryService        = {
   ...makeService<TelemetryData>('telemetry'),
   async getLatestByEquipment(equipmentId: string): Promise<TelemetryData | undefined> {

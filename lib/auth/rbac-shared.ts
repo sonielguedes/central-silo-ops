@@ -234,6 +234,7 @@ export const MODULE_ALIAS: Record<string, Module> = {
   OPERADORES:           'operadores',
   ORDENS_SERVICO:       'operacoes',
   PAINEL:               'operacoes',
+  CENTROS_CUSTO:        'cadastros',
   PARADAS:              'cadastros',
   PERFIS:               'administracao',
   RELATORIOS:           'relatorios',
@@ -250,6 +251,7 @@ export const ROUTE_MODULE_MAP: Array<{ pattern: RegExp; module: Module }> = [
   { pattern: /^\/frota/, module: 'equipamentos' },
   { pattern: /^\/operadores/, module: 'operadores' },
   { pattern: /^\/fazendas-talhoes/, module: 'cadastros' },
+  { pattern: /^\/centros-custo/, module: 'cadastros' },
   { pattern: /^\/paradas/, module: 'cadastros' },
   { pattern: /^\/operacional/, module: 'operacoes' },
   { pattern: /^\/operacoes/, module: 'operacoes' },
@@ -299,5 +301,5 @@ export const SYSTEM_ROLES: Array<{
   { id: 'role-cliente-relatorios',  role: 'CLIENTE_RELATORIOS',   name: 'Cliente (Relatorios)',    description: 'Somente acesso a relatorios e exportacao. Sem dados operacionais.' },
   { id: 'role-operador-apk',        role: 'OPERADOR_APK',         name: 'Operador APK',            description: 'Somente mobile. Sem acesso ao portal web.' },
   { id: 'role-consulta',            role: 'CONSULTA',             name: 'Consulta',                description: 'Somente leitura em dashboard e relatorios.' },
-  { id: 'role-auditor',             role: 'AUDITOR',              name: 'Auditor',                 description: 'Acesso ao audit-log e relatorios de auditoria. Sem escrita.' },
+  { id: 'role-auditor',             role: 'AUDITOR',              name: 'Auditor',                  description: 'Acesso ao audit-log e relatorios de auditoria. Sem escrita.' },
 ];
