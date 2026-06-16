@@ -21,6 +21,8 @@ import {
   INITIAL_UNITS,
   INITIAL_TIMELINE_EVENTS,
   INITIAL_FLEET_ACTIVITIES,
+  INITIAL_SERVICE_ORDERS,
+  INITIAL_COST_CENTERS,
 } from '@/lib/mock/master-data';
 import { shouldSeedDemoData } from '@/lib/environment';
 
@@ -56,8 +58,10 @@ const SEED_MAP: Record<string, unknown[]> = {
   users:        INITIAL_USERS,
   'access-groups': INITIAL_ACCESS_GROUPS,
   units:        INITIAL_UNITS,
-  timeline:     INITIAL_TIMELINE_EVENTS,
+  timeline:        INITIAL_TIMELINE_EVENTS,
   'fleet-activities': INITIAL_FLEET_ACTIVITIES,
+  'ordens-servico':   INITIAL_SERVICE_ORDERS,
+  'centros-custo':    INITIAL_COST_CENTERS,
 };
 
 export const ALLOWED_ENTITIES = Object.keys(SEED_MAP);

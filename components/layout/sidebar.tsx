@@ -79,7 +79,7 @@ const menuItems: MenuGroup[] = [
     { icon: Fuel, label: 'Abastecimentos', href: '/abastecimentos' },
     { icon: RefreshCw, label: 'Sincronizacao', href: '/sincronizacao' },
     { icon: Bell, label: 'Alertas', href: '/alertas' },
-    { icon: Activity, label: 'Intelligence', href: '/relatorios/intelligence' },
+    { icon: Activity, label: 'Inteligência', href: '/relatorios/intelligence' },
     { icon: FileText, label: 'Relatorios', href: '/relatorios' },
     { icon: Clock, label: 'Tempo Operacional', href: '/relatorios/tempo-operacional' },
     { icon: Gauge, label: 'Eficiencia Operacional', href: '/relatorios/eficiencia-operacional' },

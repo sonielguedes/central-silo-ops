@@ -9,9 +9,9 @@ import { requireCsrf } from '@/lib/auth/csrf';
 
 export const dynamic = 'force-dynamic';
 
-function badEntity(entity: string) {
+function badEntity(_entity: string) {
   return NextResponse.json(
-    { error: 'Entity not found: ' + entity + '. Allowed: ' + ALLOWED_ENTITIES.join(', ') },
+    { error: 'Recurso não encontrado.' },
     { status: 404 }
   );
 }

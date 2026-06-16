@@ -532,15 +532,46 @@ export interface IntegrationConfig extends BaseEntity {
   lastSync?: string;
 }
 
+export type ServiceOrderStatus =
+  | 'ABERTA'
+  | 'EM_ANDAMENTO'
+  | 'PAUSADA'
+  | 'FINALIZADA'
+  | 'CANCELADA';
+
+export type ServiceOrderType = 'PREVENTIVA' | 'CORRETIVA' | 'PREDITIVA' | 'INSPECAO';
+export type ServiceOrderPriority = 'BAIXA' | 'MEDIA' | 'ALTA' | 'CRITICA';
+
 export interface ServiceOrder extends BaseEntity {
+  // Identidade
   code: string;
-  equipmentId: string;
-  type: 'PREVENTIVA' | 'CORRETIVA' | 'PREDITIVA';
-  priority: 'BAIXA' | 'MEDIA' | 'ALTA' | 'CRITICA';
   description: string;
-  status: 'ABERTA' | 'EM_EXECUCAO' | 'AGUARDANDO_PECA' | 'CONCLUIDA' | 'CANCELADA';
-  openedAt: string;
-  closedAt?: string;
+  type: ServiceOrderType;
+  priority: ServiceOrderPriority;
+  status: ServiceOrderStatus;
+
+  // Vínculos obrigatórios
+  equipmentId: string;           // Frota / Equipamento
+  operatorId?: string;           // Operador permitido
+  farmId?: string;               // Fazenda
+  fieldId?: string;              // Talhão
+  costCenterId?: string;         // Centro de Custo
+  operationId?: string;          // Operação cadastrada
+
+  // Vínculos opcionais
+  implementId?: string;          // Implemento (opcional)
+  activityId?: string;           // Atividade
+  shift?: 'DIURNO' | 'NOTURNO' | 'INTEGRAL';
+
+  // Datas
+  openedAt: string;              // Data/hora de abertura
+  plannedAt?: string;            // Data/hora planejada de início
+  startedAt?: string;            // Data/hora efetiva de início
+  pausedAt?: string;             // Data/hora da pausa
+  closedAt?: string;             // Data/hora de encerramento
+
+  // Extras
+  observations?: string;
 }
 
 // --- Comunicação Operacional ---
@@ -660,4 +691,33 @@ export interface EquipmentLiveState {
   type?: string;
   name?: string;
   updatedAt: string;
+}
+
+// --- Mobile Bootstrap ---
+
+/**
+ * Centro de Custo — entidade cadastral usada pelo APK para categorizar jornadas.
+ * Sincronizado via GET /api/mobile/bootstrap.
+ */
+export interface CostCenter extends BaseEntity {
+  code: string;
+  name: string;
+  description?: string;
+  status: 'ATIVO' | 'INATIVO';
+}
+
+/**
+ * Pacote de dados retornado pelo endpoint GET /api/mobile/bootstrap.
+ * O APK armazena este pacote em Room e usa offline-first.
+ */
+export interface BootstrapPackage {
+  tenantId: string;
+  operatorId?: string;
+  equipments: Equipment[];
+  workOrders: ServiceOrder[];
+  costCenters: CostCenter[];
+  implements: Implement[];
+  operations: Operation[];
+  updatedAt: string;
+  version: string;
 }

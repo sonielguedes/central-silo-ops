@@ -298,10 +298,10 @@ export const integrationConfigSchema = z.object({
 export const serviceOrderSchema = z.object({
   code: z.string().min(1, 'Código é obrigatório'),
   equipmentId: z.string().min(1, 'Equipamento é obrigatório'),
-  type: z.enum(['PREVENTIVA', 'CORRETIVA', 'PREDITIVA']),
+  type: z.enum(['PREVENTIVA', 'CORRETIVA', 'PREDITIVA', 'INSPECAO']),
   priority: z.enum(['BAIXA', 'MEDIA', 'ALTA', 'CRITICA']),
   description: z.string().min(5, 'Descrição é obrigatória'),
-  status: z.enum(['ABERTA', 'EM_EXECUCAO', 'AGUARDANDO_PECA', 'CONCLUIDA', 'CANCELADA']),
+  status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'PAUSADA', 'FINALIZADA', 'CANCELADA']),
 });
 
 // --- COMUNICAÇÃO ---

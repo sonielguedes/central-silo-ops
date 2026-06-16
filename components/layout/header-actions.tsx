@@ -56,7 +56,7 @@ function severityMeta(severity: NotificationItem['severity']) {
     case 'CRITICO':
       return { label: 'Crítico', icon: AlertTriangle, tone: 'text-red-400 border-red-500/30 bg-red-500/10' };
     case 'ATENCAO':
-      return { label: 'AtenÃ§Ã£o', icon: AlertTriangle, tone: 'text-amber-400 border-amber-500/30 bg-amber-500/10' };
+      return { label: 'Atenção', icon: AlertTriangle, tone: 'text-amber-400 border-amber-500/30 bg-amber-500/10' };
     default:
       return { label: 'Informativo', icon: Info, tone: 'text-sky-400 border-sky-500/30 bg-sky-500/10' };
   }
@@ -151,12 +151,12 @@ export function HeaderActions() {
     setActionError(null);
     try {
       const res = await fetch('/api/notifications', { credentials: 'include', cache: 'no-store' });
-      if (!res.ok) throw new Error('Falha ao carregar notificaÃ§Ãµes.');
+      if (!res.ok) throw new Error('Falha ao carregar notificações.');
       const data = await res.json().catch(() => null) as { unreadCount?: number; alerts?: NotificationItem[] } | null;
       setNotifications(Array.isArray(data?.alerts) ? data!.alerts : []);
       setUnreadCount(Number(data?.unreadCount || 0));
     } catch (error: any) {
-      setActionError(error?.message || 'Falha ao carregar notificaÃ§Ãµes.');
+      setActionError(error?.message || 'Falha ao carregar notificações.');
     } finally {
       setLoadingNotifications(false);
     }
@@ -261,7 +261,7 @@ export function HeaderActions() {
       body: JSON.stringify(ids && ids.length ? { ids } : { all: true }),
     });
     if (!res.ok) {
-      throw new Error('Falha ao atualizar notificaÃ§Ãµes.');
+      throw new Error('Falha ao atualizar notificações.');
     }
     await loadNotifications();
     setActionError(null);
@@ -271,7 +271,7 @@ export function HeaderActions() {
     try {
       await markRead(ids);
     } catch (error: any) {
-      setActionError(error?.message || 'Falha ao atualizar notificaÃ§Ãµes.');
+      setActionError(error?.message || 'Falha ao atualizar notificações.');
     }
   };
 
@@ -326,7 +326,7 @@ export function HeaderActions() {
     items.push({ label: 'Trocar senha', icon: KeyRound, action: openPassword });
 
     if (canRoute('/configuracoes')) {
-      items.push({ label: 'ConfiguraÃ§Ãµes', icon: Settings, action: () => router.push('/configuracoes') });
+      items.push({ label: 'Configurações', icon: Settings, action: () => router.push('/configuracoes') });
     }
 
     items.push({ label: 'Sair', icon: LogOut, action: handleLogout, tone: 'text-red-400' });
@@ -342,7 +342,7 @@ export function HeaderActions() {
           type="button"
           onClick={openNotifications}
           className="relative rounded-full p-2 hover:bg-[#1a1f3a] transition-colors"
-          aria-label="Abrir notificaÃ§Ãµes"
+          aria-label="Abrir notificações"
         >
           <Bell size={20} className="text-muted-foreground hover:text-white transition-colors" />
           {unreadCount > 0 && (
@@ -357,8 +357,8 @@ export function HeaderActions() {
             <Surface className="overflow-hidden">
               <div className="flex items-center justify-between border-b border-[#2d3647] px-4 py-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-white">NotificaÃ§Ãµes</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{unreadCount} nÃ£o lidas</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-white">Notificações</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{unreadCount} não lidas</p>
                 </div>
                 <button type="button" onClick={() => void loadNotifications()} className="rounded-xl border border-[#2d3647] bg-[#1a1f3a] p-2 text-muted-foreground hover:text-white">
                   <RefreshCw size={14} className={loadingNotifications ? 'animate-spin' : ''} />
@@ -367,7 +367,7 @@ export function HeaderActions() {
               <div className="max-h-[28rem] overflow-y-auto">
                 {notificationItems.length === 0 ? (
                   <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    Nenhuma notificaÃ§Ã£o no momento.
+                    Nenhuma notificação no momento.
                   </div>
                 ) : (
                   <div className="space-y-2 p-3">
@@ -445,7 +445,7 @@ export function HeaderActions() {
         <div className="absolute right-0 top-14 z-50 w-72">
           <Surface className="overflow-hidden">
             <div className="border-b border-[#2d3647] px-4 py-3">
-              <p className="text-sm font-black text-white">{user?.name || 'UsuÃ¡rio'}</p>
+              <p className="text-sm font-black text-white">{user?.name || 'Usuário'}</p>
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{user?.email}</p>
             </div>
             <div className="p-2">
@@ -479,14 +479,14 @@ export function HeaderActions() {
       )}
 
       {profileOpen && (
-        <Modal title="Meu perfil" subtitle="Somente visualizaÃ§Ã£o" onClose={() => setProfileOpen(false)}>
+        <Modal title="Meu perfil" subtitle="Somente visualização" onClose={() => setProfileOpen(false)}>
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Nome" value={user?.name || '-'} />
             <Field label="E-mail" value={user?.email || '-'} />
             <Field label="Perfil de acesso" value={roleLabel(user?.role)} />
             <Field label="Empresa / Tenant" value={currentCompany?.tradingName || user?.defaultTenantId || '-'} />
             <Field label="Status" value={user ? 'ATIVO' : '-'} />
-            <Field label="Ãšltimo login" value={formatTime(user?.lastLoginAt || null)} />
+            <Field label="Último login" value={formatTime(user?.lastLoginAt || null)} />
           </div>
           <div className="mt-6 flex justify-end">
             <button type="button" onClick={() => setProfileOpen(false)} className="rounded-2xl bg-primary px-4 py-2 text-xs font-black uppercase tracking-widest text-[#0a0e27]">
@@ -497,7 +497,7 @@ export function HeaderActions() {
       )}
 
       {companyOpen && (
-        <Modal title="Dados da empresa" subtitle="Tenant ativo da sessÃ£o" onClose={() => setCompanyOpen(false)}>
+        <Modal title="Dados da empresa" subtitle="Tenant ativo da sessão" onClose={() => setCompanyOpen(false)}>
           {loadingCompany ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground">
               <RefreshCw className="animate-spin" size={18} />
@@ -505,16 +505,16 @@ export function HeaderActions() {
           ) : currentCompany ? (
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Nome da empresa" value={currentCompany.tradingName} />
-              <Field label="CÃ³digo da empresa" value={currentCompany.code} />
+              <Field label="Código da empresa" value={currentCompany.code} />
               <Field label="Tenant ID" value={currentCompany.tenantId} />
               <Field label="Status" value={currentCompany.status} />
-              <Field label="Ambiente" value="ProduÃ§Ã£o" />
+              <Field label="Ambiente" value="Produção" />
               <Field label="URL da Central" value={process.env.NEXT_PUBLIC_CENTRAL_URL || 'https://central.siloops.com.br'} />
-              <Field label="Data de ativaÃ§Ã£o" value={formatTime(currentCompany.createdAt || null)} />
-              <Field label="DomÃ­nio" value={currentCompany.domain || '-'} />
+              <Field label="Data de ativação" value={formatTime(currentCompany.createdAt || null)} />
+              <Field label="Domínio" value={currentCompany.domain || '-'} />
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Empresa nÃ£o encontrada para a sessÃ£o atual.</p>
+            <p className="text-sm text-muted-foreground">Empresa não encontrada para a sessão atual.</p>
           )}
           <div className="mt-6 flex justify-end">
             <button type="button" onClick={() => setCompanyOpen(false)} className="rounded-2xl bg-primary px-4 py-2 text-xs font-black uppercase tracking-widest text-[#0a0e27]">

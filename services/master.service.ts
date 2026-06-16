@@ -377,7 +377,7 @@ export const EquipmentService = new (class extends BaseService<Equipment> {
     }
 
     const current = await this.getById(id);
-    if (!current) throw new Error('Registro nÃ£o encontrado');
+    if (!current) throw new Error('Registro não encontrado');
 
     await this.syncMobileStorage({ ...current, ...updateData });
     const updated = await super.update(id, updateData);

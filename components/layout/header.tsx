@@ -21,7 +21,7 @@ export function Header() {
 
         <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1f3a] rounded-md border border-[#2d3647] text-sm cursor-pointer hover:bg-[#252d4a] transition-all group hidden sm:flex">
           <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(16,185,129,0.5)] group-hover:scale-110 transition-transform"></div>
-          <span className="text-white font-medium">ProduÃ§Ã£o</span>
+          <span className="text-white font-medium">Produção</span>
           <ChevronDown size={14} className="text-muted-foreground" />
         </div>
         <div className="h-4 w-[1px] bg-[#2d3647] hidden sm:block"></div>

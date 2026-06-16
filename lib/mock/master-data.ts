@@ -29,7 +29,8 @@ import {
   TelemetryData,
   ChecklistModel,
   ChecklistExecution,
-  TimelineEvent
+  TimelineEvent,
+  CostCenter,
 } from '../types';
 import {
   FLEET_OPERATIONAL_GROUPS,
@@ -703,7 +704,65 @@ export const INITIAL_INTEGRATIONS: IntegrationConfig[] = [
 ];
 
 export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
-  { ...DEFAULT_AUDIT, id: 'os-101', code: 'OS-2024-001', equipmentId: 'e-1', type: 'PREVENTIVA', priority: 'MEDIA', description: 'Troca de óleo e filtros de 500h', status: 'ABERTA', openedAt: new Date().toISOString() }
+  {
+    ...DEFAULT_AUDIT,
+    id: 'os-101',
+    code: 'OS-2026-001',
+    description: 'Colheita Soja — Safra 2026/27',
+    type: 'PREVENTIVA',
+    priority: 'ALTA',
+    status: 'ABERTA',
+    equipmentId: 'e-1',
+    operatorId: 'op-1',
+    farmId: 'f-1',
+    fieldId: 'tl-1',
+    costCenterId: 'cc-1',
+    operationId: 'op-colheita-1',
+    shift: 'DIURNO',
+    openedAt: new Date().toISOString(),
+    plannedAt: new Date(Date.now() + 86_400_000).toISOString(),
+    observations: 'Checar horímetro antes de iniciar.',
+  },
+  {
+    ...DEFAULT_AUDIT,
+    id: 'os-102',
+    code: 'OS-2026-002',
+    description: 'Plantio Milho — Talhão 03',
+    type: 'PREVENTIVA',
+    priority: 'MEDIA',
+    status: 'ABERTA',
+    equipmentId: 'e-4',
+    operatorId: 'op-2',
+    farmId: 'f-1',
+    fieldId: 'tl-2',
+    costCenterId: 'cc-2',
+    operationId: 'op-plantio-1',
+    implementId: 'impl-1',
+    shift: 'DIURNO',
+    openedAt: new Date().toISOString(),
+    plannedAt: new Date(Date.now() + 172_800_000).toISOString(),
+  },
+  {
+    ...DEFAULT_AUDIT,
+    id: 'os-103',
+    code: 'OS-2026-003',
+    description: 'Aplicação de Defensivos — Área Norte',
+    type: 'CORRETIVA',
+    priority: 'ALTA',
+    status: 'ABERTA',
+    equipmentId: 'e-5',
+    costCenterId: 'cc-5',
+    shift: 'DIURNO',
+    openedAt: new Date().toISOString(),
+  },
+];
+
+export const INITIAL_COST_CENTERS: CostCenter[] = [
+  { ...DEFAULT_AUDIT, id: 'cc-1', code: 'CC-AGR-01', name: 'Colheita Soja', description: 'Centro de custo para operações de colheita de soja', status: 'ATIVO' },
+  { ...DEFAULT_AUDIT, id: 'cc-2', code: 'CC-AGR-02', name: 'Plantio Milho', description: 'Centro de custo para operações de plantio de milho', status: 'ATIVO' },
+  { ...DEFAULT_AUDIT, id: 'cc-3', code: 'CC-MAN-01', name: 'Manutenção Frota', description: 'Centro de custo para manutenção de equipamentos', status: 'ATIVO' },
+  { ...DEFAULT_AUDIT, id: 'cc-4', code: 'CC-LOG-01', name: 'Logística Interna', description: 'Centro de custo para transporte e logística interna', status: 'ATIVO' },
+  { ...DEFAULT_AUDIT, id: 'cc-5', code: 'CC-AGR-03', name: 'Aplicação Defensivos', description: 'Centro de custo para pulverização e aplicação', status: 'ATIVO' },
 ];
 
 export const INITIAL_OPERATIONAL_MESSAGES: OperationalMessage[] = [

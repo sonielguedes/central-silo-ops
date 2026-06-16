@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireRole } from '@/lib/auth/rbac-server';
 import fs from 'fs';
 import path from 'path';
 
@@ -87,7 +88,11 @@ function getTenantHealth(): TenantHealth[] {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Apenas usuários autenticados com papel >= ADMIN
+  const guard = requireRole(req, 'ADMIN_EMPRESA', 'silo-ops-system');
+  if (guard) return guard;
+
   const startedAt = Date.now();
   const now = new Date().toISOString();
   const dataDir = checkDir(DATA_ROOT);
