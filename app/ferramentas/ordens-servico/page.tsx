@@ -56,7 +56,7 @@ const TYPE_LABEL: Record<OSType, string> = {
   PREVENTIVA: 'Preventiva',
   CORRETIVA:  'Corretiva',
   PREDITIVA:  'Preditiva',
-  INSPECAO:   'Inspeção',
+  INSPECAO:   'Inspecao',
 };
 const PRIORITY_COLOR: Record<OSPriority, string> = {
   BAIXA:  'text-gray-400',
@@ -66,16 +66,16 @@ const PRIORITY_COLOR: Record<OSPriority, string> = {
 };
 
 const fmtDate = (iso?: string) =>
-  iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '\u2014';
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
-/** Lê o token CSRF do cookie silo_csrf (httpOnly: false, by design) e retorna como header. */
+/** Le o token CSRF do cookie silo_csrf (httpOnly: false, by design) e retorna como header. */
 function csrfHeaders(): Record<string, string> {
   const token = getCsrfTokenFromDocument();
   return token ? { 'x-csrf-token': token } : {};
 }
 
-/** Extrai mensagem legível de uma resposta de erro (tenta JSON.error, cai no texto raw). */
+/** Extrai mensagem legivel de uma resposta de erro (tenta JSON.error, cai no texto raw). */
 async function extractApiError(r: Response): Promise<string> {
   const text = await r.text();
   try { return (JSON.parse(text) as { error?: string }).error ?? text; } catch { return text; }
@@ -160,7 +160,7 @@ export default function OrdensServicoPage() {
       if (search)       params.set('search', search);
       const data = await apiGet('/api/ordens-servico?' + params.toString());
       setItems(data.items ?? data);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
   }, [filterStatus, filterType, search]);
 
@@ -197,9 +197,8 @@ export default function OrdensServicoPage() {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!form.code.trim() || !form.description.trim()) {
-      setFormError('Código e Descrição são obrigatórios.'); return;
-    }
+    if (!form.code.trim()) { setFormError('Codigo e obrigatorio.'); return; }
+    if (!form.description.trim()) { setFormError('Descricao e obrigatoria.'); return; }
     setSaving(true); setFormError(null);
     try {
       const body = {
@@ -210,7 +209,7 @@ export default function OrdensServicoPage() {
       if (drawerMode === 'create') await apiPost('/api/ordens-servico', body);
       else if (drawerMode === 'edit' && selected) await apiPut('/api/ordens-servico/' + selected.id, body);
       closeDrawer(); load();
-    } catch (e: any) { setFormError(e.message); }
+    } catch (e: unknown) { setFormError(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   };
 
@@ -223,7 +222,7 @@ export default function OrdensServicoPage() {
     try {
       await apiPatch('/api/ordens-servico/' + confirmAction.os.id, { status: confirmAction.status });
       setConfirmAction(null); load();
-    } catch (e: any) { alert(e.message); setConfirmAction(null); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); setConfirmAction(null); }
   };
 
   // ── Filtered list ─────────────────────────────────────────────────────────
@@ -244,8 +243,8 @@ export default function OrdensServicoPage() {
         <Header />
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
           <PageHeader
-            title="Ordens de Serviço"
-            description="Gestão de ordens de serviço e manutenções da frota"
+            title="Ordens de Servico"
+            description="Gestao de ordens de servico e manutencoes da frota"
           >
             <button onClick={openCreate}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
@@ -259,7 +258,7 @@ export default function OrdensServicoPage() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
               <input
                 className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                placeholder="Buscar por código ou descrição..."
+                placeholder="Buscar por codigo ou descricao..."
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as OSStatus | '')}
@@ -283,7 +282,7 @@ export default function OrdensServicoPage() {
           {/* ── Lista ─────────────────────────────────────────────────────── */}
           {loading ? (
             <div className="flex items-center justify-center py-20 gap-3 text-gray-500">
-              <Loader2 size={20} className="animate-spin" /> Carregando ordens de serviço...
+              <Loader2 size={20} className="animate-spin" /> Carregando ordens de servico...
             </div>
           ) : error ? (
             <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
@@ -292,7 +291,7 @@ export default function OrdensServicoPage() {
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-500">
               <ClipboardList size={40} className="opacity-30" />
-              <p>Nenhuma ordem de serviço encontrada.</p>
+              <p>Nenhuma ordem de servico encontrada.</p>
               <button onClick={openCreate} className="text-sm text-blue-400 hover:underline">Criar primeira OS</button>
             </div>
           ) : (
@@ -318,7 +317,7 @@ export default function OrdensServicoPage() {
             {/* header */}
             <div className="flex items-center justify-between p-5 border-b border-white/10">
               <h2 className="font-semibold text-white">
-                {drawerMode === 'create' ? 'Nova Ordem de Serviço'
+                {drawerMode === 'create' ? 'Nova Ordem de Servico'
                   : drawerMode === 'edit'   ? 'Editar OS — ' + (selected?.code ?? '')
                   :                            'Detalhes — ' + (selected?.code ?? '')}
               </h2>
@@ -355,18 +354,18 @@ export default function OrdensServicoPage() {
         </div>
       )}
 
-      {/* ── Histórico modal ────────────────────────────────────────────────── */}
+      {/* ── Historico modal ────────────────────────────────────────────────── */}
       {historyOs && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setHistoryOs(null)} />
           <div className="relative w-full max-w-md bg-[#0a0f1e] border border-white/10 rounded-xl overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-white/10">
-              <h3 className="font-semibold flex items-center gap-2"><History size={16} /> Histórico — {historyOs.code}</h3>
+              <h3 className="font-semibold flex items-center gap-2"><History size={16} /> Historico — {historyOs.code}</h3>
               <button onClick={() => setHistoryOs(null)} className="text-gray-500 hover:text-white"><X size={18} /></button>
             </div>
             <div className="max-h-80 overflow-y-auto custom-scrollbar p-4 flex flex-col gap-3">
               {(historyOs.history ?? []).length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">Sem histórico registrado.</p>
+                <p className="text-sm text-gray-500 text-center py-4">Sem historico registrado.</p>
               ) : [...(historyOs.history ?? [])].reverse().map((h, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="mt-1 w-2 h-2 rounded-full bg-blue-500 shrink-0" />
@@ -394,7 +393,7 @@ export default function OrdensServicoPage() {
             <div className="flex gap-3 justify-end">
               <button onClick={() => setConfirmAction(null)}
                 className="px-4 py-2 rounded-lg border border-white/10 text-gray-400 hover:text-white text-sm">
-                Não
+                Nao
               </button>
               <button onClick={confirmTransition}
                 className={cn(
@@ -442,7 +441,7 @@ function OSCard({ os, onView, onEdit, onHistory, onCancel, onFinalize }: {
             {TYPE_LABEL[os.type]}
           </span>
           <span className={cn('text-xs font-semibold', PRIORITY_COLOR[os.priority])}>
-            ● {os.priority}
+            &#x25CF; {os.priority}
           </span>
         </div>
         <p className="text-sm text-gray-300 truncate">{os.description}</p>
@@ -456,7 +455,7 @@ function OSCard({ os, onView, onEdit, onHistory, onCancel, onFinalize }: {
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
         <ActionBtn icon={<Eye size={14}/>}      title="Ver detalhes"  onClick={onView} />
-        <ActionBtn icon={<History size={14}/>}  title="Histórico"    onClick={onHistory} />
+        <ActionBtn icon={<History size={14}/>}  title="Historico"    onClick={onHistory} />
         {canEdit     && <ActionBtn icon={<Pencil size={14}/>}      title="Editar"       onClick={onEdit}     color="blue" />}
         {canFinalize && <ActionBtn icon={<CheckSquare size={14}/>} title="Finalizar OS" onClick={onFinalize} color="green" />}
         {canCancel   && <ActionBtn icon={<Ban size={14}/>}         title="Cancelar OS"  onClick={onCancel}   color="red" />}
@@ -492,13 +491,13 @@ function ViewPanel({ os }: { os: OS }) {
       <div className="flex flex-wrap gap-2">
         <span className={cn('text-xs px-2.5 py-1 rounded-full border font-medium', STATUS_COLOR[os.status])}>{STATUS_LABEL[os.status]}</span>
         <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-gray-400">{TYPE_LABEL[os.type]}</span>
-        <span className={cn('text-xs font-semibold px-2.5 py-1', PRIORITY_COLOR[os.priority])}>● {os.priority}</span>
+        <span className={cn('text-xs font-semibold px-2.5 py-1', PRIORITY_COLOR[os.priority])}>&#x25CF; {os.priority}</span>
       </div>
 
       <section>
-        <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Identificação</h4>
+        <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Identificacao</h4>
         <div className="grid grid-cols-2 gap-3">
-          <Detail label="Código" value={os.code} />
+          <Detail label="Codigo" value={os.code} />
           <Detail label="Status" value={STATUS_LABEL[os.status]} />
           <Detail label="Tipo"   value={TYPE_LABEL[os.type]} />
           <Detail label="Prioridade" value={os.priority} />
@@ -506,7 +505,7 @@ function ViewPanel({ os }: { os: OS }) {
       </section>
 
       <section>
-        <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Descrição</h4>
+        <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Descricao</h4>
         <p className="text-sm text-gray-300 leading-relaxed">{os.description}</p>
         {os.observations && <p className="mt-2 text-sm text-gray-400 italic">{os.observations}</p>}
       </section>
@@ -516,19 +515,19 @@ function ViewPanel({ os }: { os: OS }) {
         <div className="grid grid-cols-2 gap-3">
           <Detail label="Abertura"   value={fmtDate(os.openedAt)} />
           <Detail label="Planejada"  value={fmtDate(os.plannedAt)} />
-          <Detail label="Início"     value={fmtDate(os.startedAt)} />
+          <Detail label="Inicio"     value={fmtDate(os.startedAt)} />
           <Detail label="Fechamento" value={fmtDate(os.closedAt)} />
         </div>
       </section>
 
       {(os.equipmentId || os.operatorId || os.costCenterId || os.operationId) && (
         <section>
-          <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Vínculos</h4>
+          <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Vinculos</h4>
           <div className="grid grid-cols-2 gap-3">
             {os.equipmentId  && <Detail label="Equipamento"   value={os.equipmentId} />}
             {os.operatorId   && <Detail label="Operador"      value={os.operatorId} />}
             {os.costCenterId && <Detail label="Centro Custo"  value={os.costCenterId} />}
-            {os.operationId  && <Detail label="Operação"      value={os.operationId} />}
+            {os.operationId  && <Detail label="Operacao"      value={os.operationId} />}
           </div>
         </section>
       )}
@@ -540,7 +539,7 @@ function Detail({ label, value }: { label: string; value?: string }) {
   return (
     <div>
       <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-      <p className="text-sm text-white font-medium">{value || '—'}</p>
+      <p className="text-sm text-white font-medium">{value || '\u2014'}</p>
     </div>
   );
 }
@@ -559,7 +558,7 @@ function OSForm({ form, setForm, readOnly }: {
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Código *</label>
+          <label className={labelCls}>Codigo *</label>
           <input className={inputCls} value={form.code} onChange={set('code')} disabled={readOnly} placeholder="OS-2026-001" />
         </div>
         <div>
@@ -568,7 +567,7 @@ function OSForm({ form, setForm, readOnly }: {
             <option value="CORRETIVA">Corretiva</option>
             <option value="PREVENTIVA">Preventiva</option>
             <option value="PREDITIVA">Preditiva</option>
-            <option value="INSPECAO">Inspeção</option>
+            <option value="INSPECAO">Inspecao</option>
           </select>
         </div>
       </div>
@@ -578,9 +577,9 @@ function OSForm({ form, setForm, readOnly }: {
           <label className={labelCls}>Prioridade *</label>
           <select className={inputCls} value={form.priority} onChange={set('priority')} disabled={readOnly}>
             <option value="BAIXA">Baixa</option>
-            <option value="MEDIA">Média</option>
+            <option value="MEDIA">Media</option>
             <option value="ALTA">Alta</option>
-            <option value="CRITICA">Crítica</option>
+            <option value="CRITICA">Critica</option>
           </select>
         </div>
         <div>
@@ -596,8 +595,8 @@ function OSForm({ form, setForm, readOnly }: {
       </div>
 
       <div>
-        <label className={labelCls}>Descrição *</label>
-        <textarea className={inputCls + " resize-none"} rows={3} value={form.description} onChange={set('description')} disabled={readOnly} placeholder="Descreva o problema ou serviço..." />
+        <label className={labelCls}>Descricao *</label>
+        <textarea className={inputCls + " resize-none"} rows={3} value={form.description} onChange={set('description')} disabled={readOnly} placeholder="Descreva o problema ou servico..." />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -612,7 +611,7 @@ function OSForm({ form, setForm, readOnly }: {
       </div>
 
       <details className="rounded-lg border border-white/8 overflow-hidden">
-        <summary className="px-4 py-2 cursor-pointer text-xs text-gray-400 uppercase tracking-wider hover:text-white">Vínculos (opcional)</summary>
+        <summary className="px-4 py-2 cursor-pointer text-xs text-gray-400 uppercase tracking-wider hover:text-white">Vinculos (opcional)</summary>
         <div className="px-4 pb-4 pt-2 grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>ID Equipamento</label>
@@ -627,15 +626,15 @@ function OSForm({ form, setForm, readOnly }: {
             <input className={inputCls} value={form.costCenterId} onChange={set('costCenterId')} disabled={readOnly} placeholder="CC-AGR-01" />
           </div>
           <div>
-            <label className={labelCls}>Operação</label>
+            <label className={labelCls}>Operacao</label>
             <input className={inputCls} value={form.operationId} onChange={set('operationId')} disabled={readOnly} placeholder="OP-AGR-01" />
           </div>
         </div>
       </details>
 
       <div>
-        <label className={labelCls}>Observações</label>
-        <textarea className={inputCls + " resize-none"} rows={2} value={form.observations} onChange={set('observations')} disabled={readOnly} placeholder="Observações adicionais..." />
+        <label className={labelCls}>Observacoes</label>
+        <textarea className={inputCls + " resize-none"} rows={2} value={form.observations} onChange={set('observations')} disabled={readOnly} placeholder="Observacoes adicionais..." />
       </div>
     </div>
   );
