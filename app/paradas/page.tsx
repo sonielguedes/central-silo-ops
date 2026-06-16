@@ -57,8 +57,11 @@ function ParadasPage() {
 
   const onSubmit = async (formData: StopReasonFormData) => {
     try {
-      if (selectedItem) await StopReasonService.update(selectedItem.id, formData);
-      else await StopReasonService.create(formData);
+      // A API genérica exige o campo `name` como identificador único.
+      // O campo visual é "Descrição", mas deve ser enviado como `name`.
+      const payload = { ...formData, name: formData.description, status: 'ATIVO', entityStatus: 'ATIVO' };
+      if (selectedItem) await StopReasonService.update(selectedItem.id, payload);
+      else await StopReasonService.create(payload);
       setIsDrawerOpen(false);
       loadData();
       setFeedback({ type: 'success', message: selectedItem ? 'Motivo atualizado com sucesso' : 'Motivo criado com sucesso' });
