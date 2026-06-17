@@ -51,6 +51,17 @@ function sha1(payload: unknown): string {
     .slice(0, 12);
 }
 
+/**
+ * Extrai apenas os dígitos de um valor.
+ * "OS-100" → "100", "100" → "100", "z31nbt2kz" → null (sem dígitos suficientes não conta)
+ * Retorna null se o resultado for vazio.
+ */
+function extractNumber(val: unknown): string | null {
+  if (val == null) return null;
+  const s = String(val).trim();
+  const digits = s.replace(/\D/g, '');
+  return digits.length > 0 ? digits : null;
+}
 
 // Remove campos sensíveis do objeto operador antes de enviar ao APK
 function redactOperator(op: StorageItem): StorageItem {
@@ -74,9 +85,43 @@ export async function GET(req: NextRequest) {
     const equipments = (CadastroStorage.getAll(tenantId, 'equipamentos') as StorageItem[])
       .filter(e => isEntityActive(e) && isMobileEnabled(e));
 
-    // ── 2. Ordens de Serviço (abertas) ───────────────────────────────────────
-    const workOrders = (CadastroStorage.getAll(tenantId, 'ordens-servico') as StorageItem[])
+    // ── 2. Ordens de Servico (abertas) ───────────────────────────────────────
+    const rawWorkOrders = (CadastroStorage.getAll(tenantId, 'ordens-servico') as StorageItem[])
       .filter(o => isEntityActive(o) && o.status === 'ABERTA');
+
+    const workOrders = rawWorkOrders.map(o => {
+      // number: extrair digitos para garantir valor limpo no APK (evita WorkOrderEntity NPE)
+      // fallback em cadeia: number -> code -> osNumber -> orderNumber -> id -> SEM_NUMERO
+      const number =
+        extractNumber(o.number) ??
+        extractNumber(o.code) ??
+        extractNumber(o.osNumber) ??
+        extractNumber(o.orderNumber) ??
+        (o.id ? String(o.id) : null) ??
+        'SEM_NUMERO';
+
+      const code = String(o.code || o.number || o.osNumber || o.orderNumber || o.id || 'SEM_CODIGO');
+      const displayName = `OS ${number}`;
+
+      return {
+        ...o,
+        id: o.id,
+        number,
+        code,
+        displayName,
+        status: o.status || 'ABERTA',
+        type: o.type || null,
+        priority: o.priority || null,
+        description: o.description || null,
+        equipmentId: o.equipmentId || '',
+        operatorId: o.operatorId || '',
+        costCenterId: o.costCenterId || '',
+        operationId: o.operationId || '',
+        openedAt: o.openedAt || null,
+        createdAt: o.createdAt || null,
+        updatedAt: o.updatedAt || null,
+      };
+    });
 
     // ── 3. Centros de Custo (ativos) ─────────────────────────────────────────
     const costCenters = (CadastroStorage.getAll(tenantId, 'centros-custo') as StorageItem[])
@@ -87,7 +132,7 @@ export async function GET(req: NextRequest) {
     const implements_ = (CadastroStorage.getAll(tenantId, 'implementos') as StorageItem[])
       .filter(i => isEntityActive(i) && !BLOCKED_IMPL.has(String(i.status ?? '')));
 
-    // ── 5. Operações (não finalizadas) ────────────────────────────────────────
+    // ── 5. Operacoes (nao finalizadas) ────────────────────────────────────────
     const TERMINAL_OPS = new Set(['FINALIZADA', 'CANCELADA']);
     const operations = (CadastroStorage.getAll(tenantId, 'operacoes') as StorageItem[])
       .filter(o => isEntityActive(o) && !TERMINAL_OPS.has(String(o.status ?? '')));
@@ -124,7 +169,7 @@ export async function GET(req: NextRequest) {
 
     console.info('[mobile/bootstrap] synced', {
       tenantId,
-      operatorId: operatorId ?? '—',
+      operatorId: operatorId ?? '-',
       equipments:  equipments.length,
       workOrders:  workOrders.length,
       costCenters: costCenters.length,
