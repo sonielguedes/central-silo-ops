@@ -1,3 +1,11 @@
+> ⚠️ **DOCUMENTO PARCIALMENTE OBSOLETO** — gerado em 06/06/2026.
+> A migração para `CadastroStorage` server-side foi **concluída** para todos os módulos listados como localStorage.
+> Auth real (session cookie + RBAC) implementado — P0-01 a P0-06 concluídos.
+> Consulte `docs/STATUS.md` e `docs/ROADMAP.md` para o estado e prioridades atuais.
+> Mantido para referência histórica de funcionalidades planejadas.
+
+---
+
 # ROADMAP DE FUNCIONALIDADES FALTANTES — CENTRAL SILO OPS
 **Data:** 06/06/2026 | **Versão:** v0.1.0-piloto → v1.0.0-comercial
 

@@ -1,3 +1,9 @@
+> **Atualizado em 2026-06-16:** C5.1 (Segurança), C5.2 (Multi-tenant) e C5.3 (RBAC/Usuários) **CONCLUÍDOS**.
+> C5.4 (Estabilidade 24/7), C5.5 (APK Produção) e C5.6 (Comercial) **PENDENTES**.
+> Bloqueador atual: `operations = 0` no bootstrap — APK precisa de ≥1 operação.
+
+---
+
 # PLANO DE FINALIZAÇÃO — SILO OPS v1.0 PRODUÇÃO
 
 **Produto:** SILO OPS — Sistema de Inteligência Logística Operacional  
@@ -249,15 +255,15 @@ Ao concluir estes três itens, o sistema é promovido de **v0.9 Pré-Produção*
 | Rate limit (rate-limit.ts) | CONCLUÍDO |
 | Backup script (backup-data.sh) | CONCLUÍDO |
 | Validação TypeScript C5.1 | CONCLUÍDO |
-| Commit C5.1 | PENDENTE |
-| Isolamento por tenant | PENDENTE |
-| Token por empresa validado | PENDENTE |
-| Usuário só vê sua empresa | PENDENTE |
-| API rejeita tenant divergente | PENDENTE |
-| Backup por cliente | PENDENTE |
-| SUPER_ADMIN / ADMIN_EMPRESA / GESTOR / COA / CONSULTA / AUDITOR | PENDENTE |
-| Permissões por módulo | PENDENTE |
-| Bloqueio de rota e menu | PENDENTE |
+| Commit C5.1 | CONCLUÍDO |
+| Isolamento por tenant | CONCLUÍDO |
+| Token por empresa validado | CONCLUÍDO |
+| Usuário só vê sua empresa | CONCLUÍDO |
+| API rejeita tenant divergente | CONCLUÍDO |
+| Backup por cliente | CONCLUÍDO |
+| SUPER_ADMIN / ADMIN_EMPRESA / GESTOR / COA / CONSULTA / AUDITOR | CONCLUÍDO |
+| Permissões por módulo | CONCLUÍDO |
+| Bloqueio de rota e menu | CONCLUÍDO |
 | Logs estruturados | PENDENTE |
 | Healthcheck externo | PENDENTE |
 | Backup automático (cron) | PENDENTE |

@@ -1,3 +1,10 @@
+> ⚠️ **DOCUMENTO OBSOLETO** — auditoria de 06/06/2026 (estado pré-migração server-side).
+> Todos os módulos descritos como `localStorage` foram migrados para `CadastroStorage` server-side.
+> Auth real implementado — `withAuth` HOC usa sessão real, sem mock.
+> Consulte `docs/STATUS.md` para o estado atual de cada módulo.
+
+---
+
 # AUDITORIA DE MÓDULOS — CENTRAL SILO OPS
 **Data:** 06/06/2026 | **Auditor:** Arquiteto Sênior + Auditor SaaS Agro | **Versão:** v0.1.0-piloto
 

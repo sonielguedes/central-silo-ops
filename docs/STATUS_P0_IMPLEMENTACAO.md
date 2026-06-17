@@ -1,3 +1,9 @@
+> ⚠️ **DOCUMENTO HISTÓRICO** — gerado em 04/06/2026 (fase pré-CadastroStorage server-side).
+> O sistema migrou para armazenamento server-side por tenant. Consulte `docs/STATUS.md` para o estado atual.
+> Mantido para rastreabilidade histórica.
+
+---
+
 # RELATÓRIO DE FINALIZAÇÃO - ETAPA P0
 **Data:** 04 de Junho de 2024  
 **Status:** ✅ 100% Concluído
