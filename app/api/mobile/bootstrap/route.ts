@@ -144,17 +144,34 @@ export async function GET(req: NextRequest) {
     const stopReasons = (CadastroStorage.getAll(tenantId, 'paradas') as StorageItem[])
       .filter(p => isEntityActive(p) && p.isActive !== false);
 
-    // ── 7. Operador autenticado (se enviado no header) ───────────────────────
+    // ── 7. Operadores ativos do tenant (array completo para o APK) ────────────
+    // Permite que o APK identifique localmente a matrícula sem depender de sessão web.
+    // registration é mantido como string para preservar zeros à esquerda (ex: "00125").
+    const operators = (CadastroStorage.getAll(tenantId, 'operadores') as StorageItem[])
+      .filter(o => isEntityActive(o) && (o.status === 'ATIVO' || o.entityStatus === 'ATIVO'))
+      .map(o => ({
+        id:           o.id,
+        tenantId:     tenantId,
+        registration: o.registration != null ? String(o.registration) : null,
+        name:         o.name || null,
+        phone:        o.phone || null,
+        role:         o.role || o.cargo || 'Operador',
+        shift:        o.shift || o.turno || null,
+        status:       o.status || 'ATIVO',
+        entityStatus: o.entityStatus || 'ATIVO',
+      }));
+
+    // ── 8. Operador autenticado (se enviado no header) ───────────────────────
     let operator: StorageItem | undefined;
     if (operatorId) {
-      const operators = CadastroStorage.getAll(tenantId, 'operadores') as StorageItem[];
+      const allOperatorsRaw = CadastroStorage.getAll(tenantId, 'operadores') as StorageItem[];
       const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
-      operator = operators.find(op =>
+      operator = allOperatorsRaw.find(op =>
         [op.id, op.registration, op.matricula].map(norm).includes(norm(operatorId))
       );
     }
 
-    // ── 8. Montar pacote ──────────────────────────────────────────────────────
+    // ── 9. Montar pacote ──────────────────────────────────────────────────────
     const updatedAt = new Date().toISOString();
     const payload = {
       tenantId,
@@ -164,6 +181,7 @@ export async function GET(req: NextRequest) {
       costCenters,
       implements: implements_,
       operations,
+      operators,
       stopReasons,
       updatedAt,
     };
@@ -178,6 +196,7 @@ export async function GET(req: NextRequest) {
       costCenters: costCenters.length,
       implements:  implements_.length,
       operations:  operations.length,
+      operators:   operators.length,
       stopReasons: stopReasons.length,
       hasOperator: !!operator,
       version,
