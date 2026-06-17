@@ -3,6 +3,7 @@ import {
   deriveFichaStatus,
   getEffectiveBlockingInconsistencies,
 } from '@/lib/ficha-store';
+import { calculateTotalHours } from '@/lib/daily-sheet-builder';
 import type { FichaDiaria } from '@/lib/daily-sheet-builder';
 import type { FichaOverlay } from '@/lib/ficha-store';
 
@@ -96,6 +97,15 @@ function fmtH(v: number | null | undefined): string {
   return String(Math.round(v * 100) / 100).replace('.', ',');
 }
 
+function isOperationLikeCostCenter(value: unknown, operationValues: Array<unknown>): boolean {
+  const cc = value === null || value === undefined ? '' : String(value).trim().toUpperCase();
+  if (!cc) return false;
+  return operationValues.some(op => {
+    const normalized = op === null || op === undefined ? '' : String(op).trim().toUpperCase();
+    return normalized === cc;
+  });
+}
+
 export function canExportFicha(ficha: FichaDiaria, overlay: FichaOverlay | null): CanExportResult {
   const blockingReasons: string[] = [];
   const warnings: string[] = [];
@@ -138,6 +148,16 @@ export function buildFichaExportRow(ficha: FichaDiaria, overlay: FichaOverlay | 
     hasBlockingInconsistency: hasBlockingInc,
   });
   const pims = overlay?.pims ?? {};
+  const hourmeterStart = get('hourmeterStart', ficha.hourmeterStart) as number | null | undefined;
+  const hourmeterEnd = get('hourmeterEnd', ficha.hourmeterEnd) as number | null | undefined;
+  const totalHourmeter = calculateTotalHours(hourmeterStart, hourmeterEnd);
+  const operationValues = [
+    ficha.operationCode,
+    ficha.operationName,
+    ...ficha.journeys.flatMap(j => [j.operationCode, j.operationName]),
+  ];
+  const costCenterValue = get('costCenterName', ficha.costCenterName);
+  const costCenterName = isOperationLikeCostCenter(costCenterValue, operationValues) ? '' : costCenterValue;
   const cells = [
     esc(ficha.date),
     esc(fmtBR(ficha.periodStart)),
@@ -152,16 +172,16 @@ export function buildFichaExportRow(ficha: FichaDiaria, overlay: FichaOverlay | 
     esc(get('workOrderNumber', ficha.workOrderNumber)),
     esc(get('operationCode', ficha.operationCode)),
     esc(get('operationName', ficha.operationName)),
-    esc(get('costCenterName', ficha.costCenterName)),
+    esc(costCenterName),
     esc(get('implementCode', ficha.implementCode)),
     esc(get('implementName', ficha.implementName)),
     esc(''),
     esc(''),
     esc(''),
-    esc(fmtH(get('hourmeterStart', ficha.hourmeterStart) as number | null | undefined)),
+    esc(fmtH(hourmeterStart)),
     esc(fmtH(ficha.hourmeterCurrent)),
-    esc(fmtH(get('hourmeterEnd', ficha.hourmeterEnd) as number | null | undefined)),
-    esc(fmtH(ficha.totalHourmeter)),
+    esc(fmtH(hourmeterEnd)),
+    esc(fmtH(totalHourmeter)),
     esc(fmtMin(ficha.minutesOperating)),
     esc(fmtMin(ficha.minutesStopped)),
     esc(fmtMin(ficha.minutesUndetermined)),

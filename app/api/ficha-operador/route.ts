@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
 import { requirePermission } from '@/lib/auth/rbac-server';
-import { buildDailySheet, buildDailySheetList } from '@/lib/daily-sheet-builder';
+import { buildDailySheet, buildDailySheetList, calculateTotalHours } from '@/lib/daily-sheet-builder';
 import {
   FichaStore,
   deriveFichaStatus,
@@ -46,6 +46,27 @@ function mergeFichaWithOverlay(ficha: FichaDiaria, tenantId: string): FichaMerge
   if (overlay?.correctedFields) {
     for (const [field, value] of Object.entries(overlay.correctedFields)) {
       merged[field] = value;
+    }
+  }
+
+  merged.totalHourmeter = calculateTotalHours(
+    merged.hourmeterStart as number | null | undefined,
+    merged.hourmeterEnd as number | null | undefined,
+  );
+
+  const costCenter = String(merged.costCenterName ?? '').trim().toUpperCase();
+  if (costCenter) {
+    const operationValues = new Set<string>();
+    for (const j of merged.journeys ?? []) {
+      if (j.operationCode) operationValues.add(String(j.operationCode).trim().toUpperCase());
+      if (j.operationName) operationValues.add(String(j.operationName).trim().toUpperCase());
+    }
+    if (
+      (merged.operationCode && String(merged.operationCode).trim().toUpperCase() === costCenter) ||
+      (merged.operationName && String(merged.operationName).trim().toUpperCase() === costCenter) ||
+      operationValues.has(costCenter)
+    ) {
+      merged.costCenterName = null;
     }
   }
 

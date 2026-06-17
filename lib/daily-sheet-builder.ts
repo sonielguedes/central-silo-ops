@@ -129,9 +129,27 @@ function asStr(v: unknown): string {
   return typeof v === 'string' && v.trim() ? v.trim() : '';
 }
 
-function asNum(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? n : null;
+export function toNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+  if (typeof value !== 'string') return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  const normalized = raw.includes(',') && raw.includes('.')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw.replace(',', '.');
+  const n = Number(normalized);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+export function calculateTotalHours(start: unknown, end: unknown): number | null {
+  const hStart = toNumber(start);
+  const hEnd = toNumber(end);
+  if (hStart === null || hEnd === null) return null;
+  const total = hEnd - hStart;
+  if (total < 0) return null;
+  return Math.round(total * 100) / 100;
 }
 
 function minutesBetween(a: string | null | undefined, b: string | null | undefined): number | null {
@@ -221,18 +239,68 @@ function pick(...values: unknown[]): string | null {
 }
 
 function normalizeComparable(value: string | null | undefined): string {
-  return asStr(value).toUpperCase();
+  return asStr(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
 }
 
 function resolveCostCenter(
-  rawCostCenter: string | null | undefined,
-  operationValues: Array<string | null | undefined>,
+  tenantId: string,
+  rawCostCenter: unknown,
+  operationValues: Array<unknown>,
+  workOrderNumber: unknown = null,
 ): string | null {
   const costCenter = asStr(rawCostCenter);
-  if (!costCenter) return null;
   const comparable = normalizeComparable(costCenter);
-  if (operationValues.some(op => normalizeComparable(op) === comparable)) return null;
-  return costCenter;
+  try {
+    const findMatch = (items: Array<Record<string, unknown>>, value: unknown): Record<string, unknown> | null => {
+      const needle = normalizeComparable(asStr(value));
+      if (!needle) return null;
+      return items.find(item =>
+        [item.id, item.code, item.name, item.description].some(candidate => normalizeComparable(asStr(candidate)) === needle)
+      ) ?? null;
+    };
+    const costCenters = CadastroStorage.getAll(tenantId, 'centros-custo') as Array<Record<string, unknown>>;
+    const workOrders = CadastroStorage.getAll(tenantId, 'ordens-servico') as Array<Record<string, unknown>>;
+    const workOrderId = asStr(workOrderNumber);
+    if (workOrderId) {
+      const workOrder = findMatch(workOrders, workOrderId);
+      const costCenterId = asStr(workOrder?.costCenterId);
+      if (costCenterId) {
+        const resolved = findMatch(costCenters, costCenterId);
+        const canonical = asStr(resolved?.code) || asStr(resolved?.name);
+        if (canonical) return canonical;
+      }
+    }
+    const operationCatalog = CadastroStorage.getAll(tenantId, 'operacoes') as Array<Record<string, unknown>>;
+    const operationValuesFromCatalog = new Set<string>();
+    for (const op of operationCatalog) {
+      for (const candidate of [op.code, op.type, op.name, op.description]) {
+        const normalized = normalizeComparable(asStr(candidate));
+        if (normalized) operationValuesFromCatalog.add(normalized);
+      }
+    }
+    if (operationValuesFromCatalog.has(comparable)) return null;
+    if (operationValues.some(op => normalizeComparable(asStr(op)) === comparable)) return null;
+    const direct = findMatch(costCenters, costCenter);
+    if (direct) {
+      const canonical = asStr(direct.code) || asStr(direct.name);
+      if (canonical) return canonical;
+    }
+  } catch {
+    // Se o cadastro não estiver disponível, mantém a regra local de exclusão.
+  }
+  return null;
+}
+
+function resolveHoursAndInconsistency(start: unknown, end: unknown): { totalHourmeter: number | null; isInvalid: boolean } {
+  const totalHourmeter = calculateTotalHours(start, end);
+  return {
+    totalHourmeter,
+    isInvalid: totalHourmeter === null && toNumber(start) !== null && toNumber(end) !== null,
+  };
 }
 
 // ── Period helpers (BRT-aware) ───────────────────────────────────────────────
@@ -328,7 +396,7 @@ function groupByJourney(events: MobileEvent[]): JourneyGroup[] {
 }
 
 // ── Journey summary from event list ─────────────────────────────────────────
-function buildJourneySummary(group: JourneyGroup): JourneySummary {
+function buildJourneySummary(tenantId: string, group: JourneyGroup): JourneySummary {
   const { journeyId, events } = group;
 
   const startEv = events.find(e => e.type === 'JOURNEY_START');
@@ -355,21 +423,18 @@ function buildJourneySummary(group: JourneyGroup): JourneySummary {
     wo        = pick(p.workOrderNumber, p.workOrder, wo);
     cc        = pick(p.costCenterName, p.costCenterCode, p.costCenter, cc);
 
-    const h = asNum(p.hourmeterStart ?? p.hourmeter);
+    const h = toNumber(p.hourmeterStart ?? p.hourmeter);
     if (h !== null && hStart === null) hStart = h;
     if (ev.type === 'JOURNEY_END') {
-      const he = asNum(p.hourmeterEnd ?? p.hourmeter);
+      const he = toNumber(p.hourmeterEnd ?? p.hourmeter);
       if (he !== null) hEnd = he;
     }
   }
 
-  if (hStart === null && sp) hStart = asNum(sp.hourmeterStart ?? sp.hourmeter);
-  if (hEnd   === null && ep) hEnd   = asNum(ep.hourmeterEnd   ?? ep.hourmeter);
+  if (hStart === null && sp) hStart = toNumber(sp.hourmeterStart ?? sp.hourmeter);
+  if (hEnd   === null && ep) hEnd   = toNumber(ep.hourmeterEnd   ?? ep.hourmeter);
 
-  const total =
-    hEnd !== null && hStart !== null
-      ? Math.round((hEnd - hStart) * 100) / 100
-      : null;
+  const total = calculateTotalHours(hStart, hEnd);
 
   const stopSeen = new Set<string>();
   const stops: StopDiaria[] = [];
@@ -407,7 +472,7 @@ function buildJourneySummary(group: JourneyGroup): JourneySummary {
     implementCode:  implCode,
     implementName:  implName,
     workOrderNumber: wo,
-    costCenterName:  cc,
+    costCenterName:  resolveCostCenter(tenantId, cc, [opNameStr, opCode], wo),
     stops,
     hasJourneyEnd: !!endEv,
   };
@@ -490,9 +555,10 @@ function buildFichaFromLiveState(
     endedAt: machine.endedAt ?? null,
     hourmeterStart: machine.hourmeterStart ?? null,
     hourmeterEnd: machine.hourmeterEnd ?? machine.hourmeterFinal ?? null,
-    totalHourmeter: (machine.hourmeterEnd ?? machine.hourmeterFinal ?? null) !== null && (machine.hourmeterStart ?? machine.hourmeterInitial ?? null) !== null
-      ? Math.round((((machine.hourmeterEnd ?? machine.hourmeterFinal ?? null) as number) - ((machine.hourmeterStart ?? machine.hourmeterInitial ?? null) as number)) * 100) / 100
-      : null,
+    totalHourmeter: calculateTotalHours(
+      machine.hourmeterStart ?? machine.hourmeterInitial ?? null,
+      machine.hourmeterEnd ?? machine.hourmeterFinal ?? null,
+    ),
     operatorRegistration: machine.operatorRegistration ?? machine.registration ?? null,
     operatorName: machine.operatorName ?? machine.currentOperator ?? null,
     operationCode: machine.operationCode ?? null,
@@ -501,8 +567,10 @@ function buildFichaFromLiveState(
     implementName: machine.implementName ?? null,
     workOrderNumber: machine.workOrder ?? null,
     costCenterName: resolveCostCenter(
+      machine.tenantId ?? '',
       machine.costCenterName ?? machine.costCenterCode ?? machine.costCenter,
       [machine.operationName, machine.currentOperation],
+      machine.workOrder ?? null,
     ),
     stops: [],
     hasJourneyEnd: false,
@@ -540,6 +608,8 @@ function buildFichaFromLiveState(
     inconsistencies.push(DAILY_INCONSISTENCY.OPERADOR_NAO_IDENTIFICADO);
   if (!machine.operationCode)
     inconsistencies.push(DAILY_INCONSISTENCY.OPERACAO_NAO_INFORMADA);
+  if (hourmeterStart !== null && hourmeterEnd !== null && hourmeterEnd < hourmeterStart)
+    inconsistencies.push(DAILY_INCONSISTENCY.HORIMETRO_FINAL_MENOR_QUE_INICIAL);
   if (sortedTrail.length === 0)
     inconsistencies.push(DAILY_INCONSISTENCY.SEM_EVENTOS_GPS);
 
@@ -565,15 +635,15 @@ function buildFichaFromLiveState(
     implementName:  machine.implementName ?? null,
     workOrderNumber: machine.workOrder ?? null,
     costCenterName:  resolveCostCenter(
+      machine.tenantId ?? '',
       machine.costCenterName ?? machine.costCenterCode ?? machine.costCenter,
       [machine.operationName, machine.currentOperation],
+      machine.workOrder ?? null,
     ),
     hourmeterStart,
     hourmeterCurrent,
     hourmeterEnd,
-    totalHourmeter: hourmeterEnd !== null && hourmeterStart !== null
-      ? Math.round((hourmeterEnd - hourmeterStart) * 100) / 100
-      : null,
+    totalHourmeter: calculateTotalHours(hourmeterStart, hourmeterEnd),
     durationMinutes: null,
     minutesOperating: null,
     minutesStopped: null,
@@ -675,7 +745,7 @@ export function buildDailySheet(params: {
 
   // ── Group events by journey ───────────────────────────────────────────────
   const groups   = groupByJourney(dayEvents);
-  const journeys = groups.map(buildJourneySummary);
+  const journeys = groups.map(group => buildJourneySummary(tenantId, group));
 
   // ── Trail ─────────────────────────────────────────────────────────────────
   const allTrailPts: TrailPoint[] = [];
@@ -723,8 +793,10 @@ export function buildDailySheet(params: {
   const effectiveImpC   = implementCode         ?? pick(liveM.implementCode);
   const effectiveImpN   = implementName         ?? pick(liveM.implementName);
   const costCenterName  = resolveCostCenter(
+    tenantId,
     costCenterRaw ?? pick(liveM.costCenterName, liveM.costCenterCode, liveM.costCenter),
     [effectiveOpNm, liveM.operationName, liveM.currentOperation],
+    workOrderNumber ?? pick(liveM.workOrder),
   );
 
   // ── Horímetros ────────────────────────────────────────────────────────────
@@ -734,20 +806,15 @@ export function buildDailySheet(params: {
   let hourmeterCurrent: number | null = null;
   for (const ev of [...dayEvents].reverse()) {
     const p = ev.payload as Record<string, unknown> | null | undefined;
-    const h = asNum(p?.hourmeterCurrent ?? p?.hourmeter ?? p?.hourmeterEnd);
+    const h = toNumber(p?.hourmeterCurrent ?? p?.hourmeter ?? p?.hourmeterEnd);
     if (h !== null) { hourmeterCurrent = h; break; }
   }
   hourmeterCurrent = hourmeterCurrent ?? liveM.hourmeterCurrent ?? liveM.hourmeter ?? null;
 
   const hourmeterEnd = journeys.reduce<number|null>((a, j) => j.hourmeterEnd ?? a, null);
 
-  const totalHourmeter = (() => {
-    if (hourmeterEnd !== null && hourmeterStart !== null) {
-      const d = Math.round((hourmeterEnd - hourmeterStart) * 100) / 100;
-      return d >= 0 ? d : null;
-    }
-    return null;
-  })();
+  const hourmeterAnalysis = resolveHoursAndInconsistency(hourmeterStart, hourmeterEnd);
+  const totalHourmeter = hourmeterAnalysis.totalHourmeter;
 
   const firstJourney = journeys[0];
   const startedAt = firstJourney?.startedAt ?? null;
@@ -789,7 +856,7 @@ export function buildDailySheet(params: {
   if (!isDayOpen && !hasActiveJourney && hourmeterEnd === null && hourmeterStart !== null)
     inconsistencies.push(DAILY_INCONSISTENCY.SEM_HORIMETRO_FINAL_APOS_FECHAMENTO);
 
-  if (totalHourmeter !== null && totalHourmeter < 0)
+  if (hourmeterAnalysis.isInvalid)
     inconsistencies.push(DAILY_INCONSISTENCY.TOTAL_HORAS_INCONSISTENTE);
 
   if (trailSummary.points === 0)

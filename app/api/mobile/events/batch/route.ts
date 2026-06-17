@@ -49,6 +49,46 @@ function shouldAcceptCostCenter(costCenter: unknown, operationName: unknown): bo
   return !op || cc !== op;
 }
 
+function isOperationLikeCostCenter(tenantId: string, value: unknown, operationValues: Array<unknown>): boolean {
+  const cc = asString(value)?.toUpperCase();
+  if (!cc) return false;
+  if (operationValues.some(v => asString(v)?.toUpperCase() === cc)) return true;
+
+  try {
+    const ops = CadastroStorage.getAll(tenantId, 'operacoes') as Array<Record<string, unknown>>;
+    for (const op of ops) {
+      for (const candidate of [op.code, op.type, op.name, op.description]) {
+        if (asString(candidate)?.toUpperCase() === cc) return true;
+      }
+    }
+  } catch {
+    // Falha de cadastro não pode quebrar a ingestão; usamos apenas a checagem local.
+  }
+
+  return false;
+}
+
+function sanitizeOperationalCostCenter(tenantId: string, target: Record<string, unknown>): void {
+  const currentOperationValues = [
+    target.operationCode,
+    target.operationName,
+    target.currentOperation,
+  ];
+  const rawValues = [target.costCenterCode, target.costCenterName, target.costCenter];
+  if (!rawValues.some(v => asString(v))) return;
+
+  if (rawValues.every(v => isOperationLikeCostCenter(tenantId, v, currentOperationValues))) {
+    delete target.costCenterCode;
+    delete target.costCenterName;
+    delete target.costCenter;
+    return;
+  }
+
+  if (isOperationLikeCostCenter(tenantId, target.costCenterCode, currentOperationValues)) delete target.costCenterCode;
+  if (isOperationLikeCostCenter(tenantId, target.costCenterName, currentOperationValues)) delete target.costCenterName;
+  if (isOperationLikeCostCenter(tenantId, target.costCenter, currentOperationValues)) delete target.costCenter;
+}
+
 const asNumber = (value: unknown): number | undefined => {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 };
@@ -658,6 +698,8 @@ export async function POST(req: NextRequest) {
           applyOperationalFields(liveUpdates, d);
           const diesel   = asNumber(d.dieselLiters);
           const hourmeter = asValidHourmeter(d.hourmeter);
+          const fuelType = asString(d.fuelType ?? d.fuelTypeCode);
+          const targetFleetCode = asString(d.targetFleetCode ?? d.fueledFleetCode ?? d.abastecidaFleetCode ?? d.fleetCode);
 
           if (diesel != null && diesel > 0) liveUpdates.lastDieselLiters = diesel;
           if (hourmeter != null) liveUpdates.hourmeterCurrent = hourmeter;
@@ -669,21 +711,26 @@ export async function POST(req: NextRequest) {
               eventId:              event.uuid,
               tenantId,
               equipmentId:          validation.equipment.id,
-              fleetCode:            validation.equipment.code,
+              fleetCode:            targetFleetCode ?? validation.equipment.code,
+              truckFleetCode:       validation.equipment.code,
               dieselLiters:         diesel ?? 0,
               hourmeter:            hourmeter ?? 0,
+              fuelType,
+              gpsLatitude:          asNumber(d.gpsLatitude ?? d.latitude),
+              gpsLongitude:         asNumber(d.gpsLongitude ?? d.longitude),
               operatorRegistration: asString(d.operatorRegistration ?? d.registration),
               operatorName:         asString(d.operatorName ?? d.currentOperator),
               operationCode:        asString(d.operationCode),
+              targetFleetCode:      targetFleetCode ?? validation.equipment.code,
               fueledAt:             ts,
             });
             auditFromRequest(req, tenantId, {
               action:   'FUELING_RECEIVED',
               entity:   'fueling',
               entityId: event.uuid,
-              metadata: { fleetCode: validation.equipment.code, liters: diesel, hourmeter, source: 'APK' },
+              metadata: { fleetCode: targetFleetCode ?? validation.equipment.code, truckFleetCode: validation.equipment.code, liters: diesel, hourmeter, fuelType, source: 'APK' },
             });
-            console.info('[Fueling] persisted eventId=' + event.uuid + ' fleetCode=' + validation.equipment.code + ' liters=' + String(diesel) + ' h=' + String(hourmeter));
+            console.info('[Fueling] persisted eventId=' + event.uuid + ' fleetCode=' + String(targetFleetCode ?? validation.equipment.code) + ' truck=' + validation.equipment.code + ' liters=' + String(diesel) + ' h=' + String(hourmeter));
           } else {
             console.info('[Fueling] idempotent eventId=' + event.uuid + ' fleetCode=' + validation.equipment.code);
           }
@@ -715,6 +762,7 @@ export async function POST(req: NextRequest) {
     const loggedHourmeter = liveUpdates.hourmeterCurrent ?? liveUpdates.hourmeterEnd ?? liveUpdates.hourmeterStart ?? 'missing';
     console.info('[operational-fields] received fleetCode=' + validation.equipment.code);
     enrichOperationalFields(tenantId, liveUpdates);
+    sanitizeOperationalCostCenter(tenantId, liveUpdates);
     console.info('[batch-operational] fleetCode=' + validation.equipment.code + ' operator=' + String(liveUpdates.operatorName || liveUpdates.operatorRegistration || 'missing') + ' operation=' + String(liveUpdates.operationName || liveUpdates.operationCode || 'missing') + ' hourmeter=' + String(loggedHourmeter));
     console.info('[Hourmeter] source=' + String(liveUpdates.hourmeterSource || 'missing'));
     console.info('[Hourmeter] start=' + String(liveUpdates.hourmeterStart ?? 'missing'));
