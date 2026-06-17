@@ -642,6 +642,8 @@ export interface EquipmentLiveState {
   registration?: string;
   /** Matrícula do operador (campo canônico da API) */
   operatorRegistration?: string;
+  /** ID interno do operador (nunca usar como matrícula) */
+  operatorId?: string;
   /** Código da operação atual */
   operationCode?: string;
   /** Centro de custo */
@@ -650,6 +652,8 @@ export interface EquipmentLiveState {
   workOrder?: string;
   /** Código do implemento acoplado */
   implementCode?: string;
+  /** ID interno do implemento */
+  implementId?: string;
   /** Nome do implemento acoplado */
   implementName?: string;
 
@@ -716,7 +720,7 @@ export interface BootstrapPackage {
   equipments: Equipment[];
   workOrders: ServiceOrder[];
   costCenters: CostCenter[];
-  implements: Implement[];
+  implementsList: Implement[];
   operations: Operation[];
   updatedAt: string;
   version: string;

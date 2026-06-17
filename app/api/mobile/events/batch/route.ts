@@ -30,9 +30,9 @@ function fsmToStatus(state: string): EquipmentLiveStatus {
  *  Preserves: equipmentId, fleetCode, tenantId, hourmeter*, status, endedAt, updatedAt. */
 const JORNADA_FINALIZADA_CLEAR_FIELDS = [
   'journeyId',
-  'operatorRegistration', 'registration', 'operatorName', 'currentOperator',
+  'operatorRegistration', 'registration', 'operatorId', 'operatorName', 'currentOperator',
   'operationCode', 'operationName', 'currentOperation', 'costCenter', 'workOrder',
-  'implementCode', 'implementName',
+  'implementCode', 'implementId', 'implementName',
   'stopCode', 'stopDescription', 'stopReason', 'stopStartedAt', 'stopDurationSeconds',
 ] satisfies (keyof EquipmentLiveState)[];
 
@@ -88,16 +88,20 @@ interface MobileBatchBody {
 }
 
 function applyOperationalFields(target: Record<string, unknown>, data: Record<string, unknown>) {
-  const operatorRegistration = data.operatorRegistration ?? data.registration ?? data.operatorId;
-  const operatorName = data.operatorName ?? data.currentOperator;
+  const operatorRegistration = data.operatorRegistration ?? data.registration;
+  // operatorId: internal ID (never used as registration fallback — would corrupt matrícula)
+  const operatorId    = data.operatorId;
+  const operatorName  = data.operatorName ?? data.currentOperator;
   const operationCode = data.operationCode;
   const operationName = data.operationName ?? data.currentOperation;
   const implementCode = data.implementCode;
+  const implementId   = data.implementId;   // APK may send implementId instead of implementCode
   const implementName = data.implementName;
   const hourmeterCurrent = asValidHourmeter(data.hourmeterCurrent ?? data.hourmeter);
 
   putIfValid(target, 'operatorRegistration', operatorRegistration);
   putIfValid(target, 'registration', operatorRegistration);
+  putIfValid(target, 'operatorId', operatorId);
   putIfValid(target, 'operatorName', operatorName);
   putIfValid(target, 'currentOperator', operatorName);
   putIfValid(target, 'operationCode', operationCode);
@@ -106,6 +110,7 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   putIfValid(target, 'costCenter', data.costCenter);
   putIfValid(target, 'workOrder', data.workOrder);
   putIfValid(target, 'implementCode', implementCode);
+  putIfValid(target, 'implementId', implementId);
   putIfValid(target, 'implementName', implementName);
   // Stop fields: ONLY from explicit stopCode/stopDescription — no generic fallbacks.
   // Using data.code or data.description as fallback would overwrite a valid stopCode
@@ -124,15 +129,34 @@ function enrichOperationalFields(
   tenantId: string,
   updates: Record<string, unknown>
 ): void {
-  // Operator: registration -> name
-  const reg = asString(updates.operatorRegistration);
-  if (reg && !asString(updates.operatorName)) {
+  // Operator: normalize operatorRegistration to real matrícula.
+  // APK may send operatorId (internal id) instead of the registration number.
+  // Strategy: match by registration first; if no match, try matching by id.
+  // When matched by id, overwrite operatorRegistration with the real matrícula.
+  const regRaw  = asString(updates.operatorRegistration);
+  const idRaw   = asString(updates.operatorId);
+  const searchKey = regRaw || idRaw;
+  if (searchKey) {
     const ops = CadastroStorage.getAll(tenantId, 'operadores') as Array<Record<string, unknown>>;
-    const found = ops.find(o => asString(o.registration) === reg);
-    if (found && asString(found.name)) {
-      updates.operatorName  = found.name;
-      updates.currentOperator = found.name;
-      console.info('[operational-fields] enriched operator=' + String(found.name) + ' reg=' + reg);
+    // 1st pass: exact registration match
+    let found = ops.find(o => asString(o.registration) === searchKey);
+    // 2nd pass: id match (APK sent internal id as operatorRegistration)
+    if (!found) found = ops.find(o => asString(o.id) === searchKey);
+    if (found) {
+      const realReg = asString(found.registration);
+      if (realReg) {
+        updates.operatorRegistration = realReg;
+        updates.registration         = realReg;
+      }
+      updates.operatorId = asString(found.id) || updates.operatorId;
+      if (asString(found.name)) {
+        updates.operatorName    = found.name;
+        updates.currentOperator = found.name;
+      }
+      console.info(
+        '[operational-fields] enriched operator=' + String(found.name ?? '') +
+        ' reg=' + String(realReg ?? searchKey)
+      );
     }
   }
 
@@ -156,14 +180,24 @@ function enrichOperationalFields(
     }
   }
 
-  // Implement: code -> name
+  // Implement: code -> name. If code absent, try implementId -> code + name.
   const impCode = asString(updates.implementCode);
-  if (impCode && !asString(updates.implementName)) {
+  const impId   = asString(updates.implementId);
+  if ((impCode || impId) && !asString(updates.implementName)) {
     const imps = CadastroStorage.getAll(tenantId, 'implementos') as Array<Record<string, unknown>>;
-    const found = imps.find(i => asString(i.code) === impCode);
-    if (found && asString(found.name)) {
-      updates.implementName = found.name;
-      console.info('[operational-fields] enriched implement=' + String(found.name) + ' code=' + impCode);
+    let found = impCode ? imps.find(i => asString(i.code) === impCode) : undefined;
+    if (!found && impId) found = imps.find(i => asString(i.id) === impId);
+    if (found) {
+      if (!impCode && asString(found.code)) {
+        updates.implementCode = found.code;
+      }
+      if (asString(found.name)) {
+        updates.implementName = found.name;
+      }
+      console.info(
+        '[operational-fields] enriched implement=' + String(found.name ?? '') +
+        ' code=' + String(found.code ?? impId ?? impCode ?? '')
+      );
     }
   }
 
@@ -690,7 +724,32 @@ export async function POST(req: NextRequest) {
       metadata: { received: events.length, processed: results.length },
     });
 
-    return NextResponse.json({ received: events.length, processed: results.length, results });
+    // Build per-event response arrays for new APK Outbox protocol.
+    // Legacy `results` array is preserved for backward compat.
+    const accepted: { eventId: string; status: 'ACCEPTED' }[] = [];
+    const duplicates: { eventId: string; status: 'DUPLICATE' }[] = [];
+    const rejected: { eventId: string; status: 'REJECTED'; reason: string }[] = [];
+    for (const r of results) {
+      const eventId = r.offlineId;
+      const s = r.status;
+      if (s === 'SYNCED') {
+        accepted.push({ eventId, status: 'ACCEPTED' });
+      } else if (s === 'DUPLICATE') {
+        duplicates.push({ eventId, status: 'DUPLICATE' });
+      } else {
+        const reason = ('reason' in r && typeof r.reason === 'string') ? r.reason : 'Rejeitado';
+        rejected.push({ eventId, status: 'REJECTED', reason });
+      }
+    }
+
+    return NextResponse.json({
+      received: events.length,
+      processed: results.length,
+      accepted,
+      duplicates,
+      rejected,
+      results,
+    });
 
   } catch (error) {
     console.error('[batch] unhandled error', error);
