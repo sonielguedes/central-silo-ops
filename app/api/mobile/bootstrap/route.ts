@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { CadastroStorage } from '@/lib/cadastro-storage';
 import { requireMobileAuth } from '@/lib/auth/api-guard';
+import { ensureOperationsCatalogForTenant } from '@/lib/catalog/ensure-operations-catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,6 +134,8 @@ export async function GET(req: NextRequest) {
       .filter(i => isEntityActive(i) && !BLOCKED_IMPL.has(String(i.status ?? '')));
 
     // ── 5. Operacoes (nao finalizadas) ────────────────────────────────────────
+    // Garante que o catalogo mestre existe antes de ler — nao depende de login web
+    ensureOperationsCatalogForTenant(tenantId);
     const TERMINAL_OPS = new Set(['FINALIZADA', 'CANCELADA']);
     const operations = (CadastroStorage.getAll(tenantId, 'operacoes') as StorageItem[])
       .filter(o => isEntityActive(o) && !TERMINAL_OPS.has(String(o.status ?? '')));
