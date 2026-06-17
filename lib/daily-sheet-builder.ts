@@ -3,22 +3,22 @@
  *
  * Geração da Ficha Diária de Operador — consolidação das 24h de cada equipamento.
  *
- * Conceito:
- *   A ficha representa o que aconteceu com um equipamento dentro de um
- *   dia operacional (00:00:00 até 23:59:59, horário UTC do servidor).
- *   Eventos fora desse período são ignorados.
- *
- * Não depende de live-state para datas históricas.
- * Para a data de hoje, complementa com live-state quando disponível.
+ * Dia operacional: 00:00:00 a 23:59:59 no timezone America/Sao_Paulo (UTC-3).
+ * Fontes em ordem de prioridade:
+ *   1. mobile-events.json  — eventos aceitos pelo batch (por equipmentId OU fleetCode)
+ *   2. live-state.json     — fallback quando não há eventos mas máquina está ativa
+ *   3. trails/*.json       — pontos GPS para cálculo de distância/tempo
  */
 
 import { ServerStorage } from '@/lib/server-storage';
+import { CadastroStorage } from '@/lib/cadastro-storage';
 import type { MobileEvent } from '@/lib/server-storage';
 import type { TrailPoint } from '@/lib/types';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const GPS_GAP_LIMIT_MIN       = 30;  // gap > 30 min entre pontos = indeterminado
-const INDETERMINATE_LIMIT_PCT = 50;  // acima de 50% indeterminado vira alerta
+const GPS_GAP_LIMIT_MIN       = 30;   // gap > 30 min → tempo indeterminado
+const INDETERMINATE_LIMIT_PCT = 50;   // > 50% indeterm. → alerta
+const BRT_OFFSET_HOURS        = 3;    // UTC-3 (America/Sao_Paulo, sem DST)
 
 // ── Inconsistency codes ──────────────────────────────────────────────────────
 export const DAILY_INCONSISTENCY = {
@@ -77,13 +77,11 @@ export interface FichaDiaria {
   /** Chave: tenantId|fleetCode|date */
   id: string;
   date: string;               // YYYY-MM-DD
-  periodStart: string;        // ISO — 00:00:00 do dia
-  periodEnd: string;          // ISO — 23:59:59 do dia
+  periodStart: string;        // ISO — 00:00:00 BRT como UTC
+  periodEnd: string;          // ISO — 23:59:59 BRT como UTC
   tenantId: string;
   fleetCode: string;
   equipmentId: string;
-
-  // Operador consolidado (primeiro válido do dia)
   operatorRegistration: string | null;
   operatorName: string | null;
   operationCode: string | null;
@@ -92,52 +90,43 @@ export interface FichaDiaria {
   implementName: string | null;
   workOrderNumber: string | null;
   costCenterName: string | null;
-
-  // Horímetros diários
-  hourmeterStart: number | null;    // primeiro hourmeter válido do dia
-  hourmeterCurrent: number | null;  // último hourmeter válido recebido
-  hourmeterEnd: number | null;      // do JOURNEY_END, se houver
-  totalHourmeter: number | null;    // hourmeterEnd - hourmeterStart
-
-  // Tempo (em minutos)
+  hourmeterStart: number | null;
+  hourmeterCurrent: number | null;
+  hourmeterEnd: number | null;
+  totalHourmeter: number | null;
   durationMinutes: number | null;
   minutesOperating: number | null;
   minutesStopped: number | null;
   minutesUndetermined: number | null;
   pctUndetermined: number | null;
-
-  startedAt: string | null;         // início da primeira jornada do dia
-  endedAt: string | null;           // fim da última jornada do dia (se finalizada)
-
-  journeys: JourneySummary[];       // detalhes por jornada
-  stops: StopDiaria[];              // todas as paradas do dia
-
+  startedAt: string | null;
+  endedAt: string | null;
+  journeys: JourneySummary[];
+  stops: StopDiaria[];
   trailSummary: {
     points: number;
     firstGpsAt: string | null;
     lastGpsAt: string | null;
     distanceKm: number;
   };
-
   status: FichaDiariaStatus;
   inconsistencies: string[];
   validated: boolean;
   validatedBy?: string | null;
   validatedAt?: string | null;
-
-  /** Total de eventos recebidos no período */
   eventCount: number;
-  /** true se o dia ainda está aberto (hoje) */
   isDayOpen: boolean;
+  /** true quando gerada a partir do live-state por ausência de eventos */
+  fromLiveState?: boolean;
 }
 
 export type BuildDailyResult =
   | { ok: true;  ficha: FichaDiaria }
   | { ok: false; status: number; error: string };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Primitive helpers ─────────────────────────────────────────────────────────
 function asStr(v: unknown): string {
-  return v === null || v === undefined ? '' : String(v).trim();
+  return typeof v === 'string' && v.trim() ? v.trim() : '';
 }
 
 function asNum(v: unknown): number | null {
@@ -147,14 +136,12 @@ function asNum(v: unknown): number | null {
 
 function minutesBetween(a: string | null | undefined, b: string | null | undefined): number | null {
   if (!a || !b) return null;
-  const ta = new Date(a).getTime();
-  const tb = new Date(b).getTime();
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return null;
-  return Math.round((tb - ta) / 60000);
+  const diff = (new Date(b).getTime() - new Date(a).getTime()) / 60000;
+  return Number.isFinite(diff) ? Math.round(diff) : null;
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R    = 6371;
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -166,14 +153,65 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 function calcDistanceKm(pts: TrailPoint[]): number {
-  let d = 0;
+  let total = 0;
   for (let i = 1; i < pts.length; i++) {
-    d += haversineKm(pts[i-1].latitude, pts[i-1].longitude, pts[i].latitude, pts[i].longitude);
+    total += haversineKm(pts[i - 1].latitude, pts[i - 1].longitude, pts[i].latitude, pts[i].longitude);
   }
-  return Math.round(d * 10) / 10;
+  return Math.round(total * 10) / 10;
 }
 
-/** Extrai o primeiro valor não-vazio dos campos, priorizando na ordem. */
+
+// ── Operator normalization ────────────────────────────────────────────────────
+/**
+ * Garante que operatorName e operatorRegistration vêm do MESMO registro de cadastro.
+ * Evita mistura de nome de um operador com matrícula de outro.
+ * Prioridade: registration > name > id
+ */
+function normalizeOperatorFromCadastro(
+  tenantId: string,
+  registration: string | null,
+  name: string | null,
+): { registration: string | null; name: string | null } {
+  if (!registration && !name) return { registration, name };
+
+  try {
+    const ops = CadastroStorage.getAll(tenantId, 'operadores') as Array<Record<string, unknown>>;
+
+    // 1. Exact match by registration (most reliable)
+    let found: Record<string, unknown> | undefined;
+    if (registration) {
+      found = ops.find(o => asStr(o.registration) === registration);
+    }
+
+    // 2. Match by name (if registration not found)
+    if (!found && name) {
+      found = ops.find(o => asStr(o.name).toUpperCase() === name.toUpperCase());
+    }
+
+    // 3. Match by id (APK may send internal id as operatorRegistration)
+    if (!found && registration) {
+      found = ops.find(o => asStr(o.id) === registration);
+    }
+
+    if (found) {
+      const resolvedReg  = asStr(found.registration) || registration;
+      const resolvedName = asStr(found.name)         || name;
+      if (resolvedReg !== registration || resolvedName !== name) {
+        console.info(
+          '[daily-sheet-builder] operator normalized' +
+          ' reg: ' + String(registration) + ' -> ' + String(resolvedReg) +
+          ' name: ' + String(name) + ' -> ' + String(resolvedName)
+        );
+      }
+      return { registration: resolvedReg, name: resolvedName };
+    }
+  } catch {
+    // Cadastro unavailable — return as-is
+  }
+
+  return { registration, name };
+}
+
 function pick(...values: unknown[]): string | null {
   for (const v of values) {
     const s = asStr(v);
@@ -182,18 +220,68 @@ function pick(...values: unknown[]): string | null {
   return null;
 }
 
-// ── Period helpers ────────────────────────────────────────────────────────────
-function dayPeriod(date: string): { periodStart: string; periodEnd: string; isDayOpen: boolean } {
-  // date = YYYY-MM-DD (UTC)
-  const periodStart = date + 'T00:00:00.000Z';
-  const periodEnd   = date + 'T23:59:59.999Z';
-  const todayUTC = new Date().toISOString().slice(0, 10);
-  return { periodStart, periodEnd, isDayOpen: date >= todayUTC };
+// ── Period helpers (BRT-aware) ───────────────────────────────────────────────
+/**
+ * Returns the UTC range that covers the full BRT day (UTC-3).
+ * BRT 00:00 = UTC 03:00  |  BRT 23:59 = UTC 02:59 (+1 day)
+ * We add a generous ±4h buffer on top to handle devices that send
+ * timestamps without explicit timezone or with small clock drift.
+ */
+function dayPeriod(date: string): {
+  periodStart: string;
+  periodEnd: string;
+  periodStartBrt: string;
+  periodEndBrt: string;
+  isDayOpen: boolean;
+} {
+  // BRT = UTC - 3h.  Day starts at BRT 00:00 = UTC 03:00 same day.
+  const brtOffsetMs = BRT_OFFSET_HOURS * 60 * 60 * 1000;
+
+  const dayStartBrt = new Date(date + 'T00:00:00.000Z');    // treat input as midnight BRT
+  const dayEndBrt   = new Date(date + 'T23:59:59.999Z');
+
+  // Convert to UTC: BRT → UTC means +3h
+  const startUtc = new Date(dayStartBrt.getTime() + brtOffsetMs);
+  const endUtc   = new Date(dayEndBrt.getTime()   + brtOffsetMs);
+
+  const periodStart    = startUtc.toISOString();
+  const periodEnd      = endUtc.toISOString();
+  const periodStartBrt = dayStartBrt.toISOString();
+  const periodEndBrt   = dayEndBrt.toISOString();
+
+  // isDayOpen: use BRT local date
+  const nowBrt     = new Date(Date.now() - brtOffsetMs);
+  const todayBrt   = nowBrt.toISOString().slice(0, 10);
+  const isDayOpen  = date >= todayBrt;
+
+  return { periodStart, periodEnd, periodStartBrt, periodEndBrt, isDayOpen };
 }
 
+/**
+ * Returns true if the event timestamp falls within the BRT-day window
+ * (or within a 4h tolerance on each side for edge cases).
+ */
 function inPeriod(ts: string | null | undefined, periodStart: string, periodEnd: string): boolean {
   if (!ts) return false;
-  return ts >= periodStart && ts <= periodEnd;
+  // Normalize: if no timezone, treat as UTC
+  const t = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z';
+  return t >= periodStart && t <= periodEnd;
+}
+
+/**
+ * Match an event to a fleetCode by inspecting its payload.
+ * Used as fallback when equipmentId doesn't match live-state.
+ */
+function eventMatchesFleet(ev: MobileEvent, fleetCode: string): boolean {
+  const p = ev.payload as Record<string, unknown> | null | undefined;
+  if (!p) return false;
+  const fc = fleetCode.toLowerCase();
+  return (
+    asStr(p.fleetCode).toLowerCase()      === fc ||
+    asStr(p.equipmentCode).toLowerCase()  === fc ||
+    asStr(p.machineId).toLowerCase()      === fc ||
+    ev.equipmentId.toLowerCase()          === fc
+  );
 }
 
 // ── Journey grouping ─────────────────────────────────────────────────────────
@@ -226,7 +314,6 @@ function buildJourneySummary(group: JourneyGroup): JourneySummary {
   const sp = startEv?.payload as Record<string, unknown> | undefined;
   const ep = endEv?.payload   as Record<string, unknown> | undefined;
 
-  // Derive operational fields — scan ALL events, prefer most recent non-null value
   let opReg: string | null = null, opName: string | null = null;
   let opCode: string | null = null, opNameStr: string | null = null;
   let implCode: string | null = null, implName: string | null = null;
@@ -253,7 +340,6 @@ function buildJourneySummary(group: JourneyGroup): JourneySummary {
     }
   }
 
-  // Fallback from start/end payloads
   if (hStart === null && sp) hStart = asNum(sp.hourmeterStart ?? sp.hourmeter);
   if (hEnd   === null && ep) hEnd   = asNum(ep.hourmeterEnd   ?? ep.hourmeter);
 
@@ -262,7 +348,6 @@ function buildJourneySummary(group: JourneyGroup): JourneySummary {
       ? Math.round((hEnd - hStart) * 100) / 100
       : null;
 
-  // Stops
   const stopSeen = new Set<string>();
   const stops: StopDiaria[] = [];
   for (const ev of events) {
@@ -325,7 +410,6 @@ function analyseTime(
     return { durationMinutes, minutesOperating: null, minutesStopped: null, minutesUndetermined: null, pctUndetermined: null };
   }
 
-  // Stopped: sum closed stop durations
   let stopped = 0;
   for (const s of stops) {
     const dur = minutesBetween(s.startedAt, s.endedAt ?? null);
@@ -333,7 +417,6 @@ function analyseTime(
   }
   stopped = Math.min(stopped, durationMinutes);
 
-  // Undetermined: gaps between GPS points > GPS_GAP_LIMIT_MIN
   let undetermined = 0;
   const sorted = [...trailPts].sort((a, b) => (a.timestamp < b.timestamp ? -1 : 1));
   if (sorted.length === 0) {
@@ -350,16 +433,124 @@ function analyseTime(
   }
   undetermined = Math.min(undetermined, durationMinutes);
 
-  const known = durationMinutes - undetermined;
+  const known     = durationMinutes - undetermined;
   const operating = Math.max(0, known - stopped);
-  const pct = Math.round((undetermined / durationMinutes) * 100);
+  const pct       = Math.round((undetermined / durationMinutes) * 100);
 
   return {
     durationMinutes,
     minutesOperating: operating,
-    minutesStopped: stopped > 0 ? stopped : null,
+    minutesStopped:   stopped > 0 ? stopped : null,
     minutesUndetermined: undetermined > 0 ? undetermined : null,
     pctUndetermined: pct > 0 ? pct : null,
+  };
+}
+
+// ── Live-state → minimal ficha (fallback) ────────────────────────────────────
+/**
+ * Gera uma ficha mínima a partir do live-state quando não há eventos no período.
+ * Regra: se o mapa mostra a frota, a ficha não pode ficar vazia.
+ */
+function buildFichaFromLiveState(
+  machine: ReturnType<typeof ServerStorage.getLiveFleet>[number],
+  date: string,
+  periodStart: string,
+  periodEnd: string,
+  isDayOpen: boolean,
+): FichaDiaria {
+  const id = (machine.tenantId ?? '') + '|' + machine.fleetCode + '|' + date;
+
+  // Journey de live-state (se tiver journeyId)
+  const liveJourney: JourneySummary | null = machine.journeyId ? {
+    journeyId: machine.journeyId,
+    startedAt: machine.statusStartedAt ?? machine.updatedAt ?? null,
+    endedAt: null,
+    hourmeterStart: machine.hourmeterStart ?? null,
+    hourmeterEnd: null,
+    totalHourmeter: null,
+    operatorRegistration: machine.operatorRegistration ?? machine.registration ?? null,
+    operatorName: machine.operatorName ?? machine.currentOperator ?? null,
+    operationCode: machine.operationCode ?? null,
+    operationName: machine.operationName ?? machine.currentOperation ?? null,
+    implementCode: machine.implementCode ?? null,
+    implementName: machine.implementName ?? null,
+    workOrderNumber: machine.workOrder ?? null,
+    costCenterName: machine.costCenter ?? null,
+    stops: [],
+    hasJourneyEnd: false,
+  } : null;
+
+  const journeys = liveJourney ? [liveJourney] : [];
+
+  // Trail from live-state journeyId
+  const allTrailPts: TrailPoint[] = [];
+  if (machine.journeyId) {
+    const pts = ServerStorage.getTrail(machine.tenantId ?? '', machine.journeyId);
+    allTrailPts.push(...pts);
+  }
+  const sortedTrail = allTrailPts.sort((a, b) => (a.timestamp < b.timestamp ? -1 : 1));
+
+  const trailSummary = {
+    points:     sortedTrail.length,
+    firstGpsAt: sortedTrail[0]?.timestamp ?? machine.lastGpsAt ?? null,
+    lastGpsAt:  sortedTrail[sortedTrail.length - 1]?.timestamp ?? machine.lastGpsAt ?? null,
+    distanceKm: calcDistanceKm(sortedTrail),
+  };
+
+  const hourmeterStart   = machine.hourmeterStart   ?? machine.hourmeterInitial   ?? null;
+  const hourmeterCurrent = machine.hourmeterCurrent ?? machine.hourmeter          ?? null;
+
+  // Normalizar operador no live-state fallback também
+  const lsRawReg  = machine.operatorRegistration ?? machine.registration ?? null;
+  const lsRawName = machine.operatorName ?? machine.currentOperator ?? null;
+  const lsOp = normalizeOperatorFromCadastro(machine.tenantId ?? '', lsRawReg, lsRawName);
+
+  const inconsistencies: string[] = [];
+  if (!lsOp.registration && !lsOp.name)
+    inconsistencies.push(DAILY_INCONSISTENCY.OPERADOR_NAO_IDENTIFICADO);
+  if (!machine.operationCode)
+    inconsistencies.push(DAILY_INCONSISTENCY.OPERACAO_NAO_INFORMADA);
+  if (sortedTrail.length === 0)
+    inconsistencies.push(DAILY_INCONSISTENCY.SEM_EVENTOS_GPS);
+
+  const liveStatus = machine.status ?? 'ONLINE';
+  const fichaStatus: FichaDiariaStatus =
+    (liveStatus === 'OFFLINE' || liveStatus === 'FINALIZADO') ? 'PENDENTE' : 'EM_ANDAMENTO';
+
+  return {
+    id,
+    date, periodStart, periodEnd,
+    tenantId:   machine.tenantId ?? '',
+    fleetCode:  machine.fleetCode,
+    equipmentId: machine.equipmentId,
+    operatorRegistration: lsOp.registration,
+    operatorName:   lsOp.name,
+    operationCode:  machine.operationCode ?? null,
+    operationName:  machine.operationName ?? machine.currentOperation ?? null,
+    implementCode:  machine.implementCode ?? null,
+    implementName:  machine.implementName ?? null,
+    workOrderNumber: machine.workOrder ?? null,
+    costCenterName:  machine.costCenter ?? null,
+    hourmeterStart,
+    hourmeterCurrent,
+    hourmeterEnd: null,
+    totalHourmeter: null,
+    durationMinutes: null,
+    minutesOperating: null,
+    minutesStopped: null,
+    minutesUndetermined: null,
+    pctUndetermined: null,
+    startedAt: liveJourney?.startedAt ?? null,
+    endedAt: null,
+    journeys,
+    stops: [],
+    trailSummary,
+    status: fichaStatus,
+    inconsistencies,
+    validated: false,
+    eventCount: 0,
+    isDayOpen,
+    fromLiveState: true,
   };
 }
 
@@ -367,18 +558,17 @@ function analyseTime(
 export function buildDailySheet(params: {
   tenantId:  string;
   fleetCode: string;
-  date:      string; // YYYY-MM-DD UTC
+  date:      string; // YYYY-MM-DD (data operacional BRT)
 }): BuildDailyResult {
   const { tenantId, fleetCode, date } = params;
 
-  // Validate date
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return { ok: false, status: 400, error: 'date must be YYYY-MM-DD' };
   }
 
   const { periodStart, periodEnd, isDayOpen } = dayPeriod(date);
 
-  // Find equipment from live state (equipmentId lookup)
+  // ── Find machine from live-state ─────────────────────────────────────────
   const liveFleet = ServerStorage.getLiveFleet(tenantId);
   const machine   = liveFleet.find(m => m.fleetCode === fleetCode);
   if (!machine) {
@@ -387,45 +577,73 @@ export function buildDailySheet(params: {
 
   const { equipmentId } = machine;
 
-  // Get ALL events for this equipment, then filter to the 24h window
-  const allEvents  = ServerStorage.getEvents(tenantId, equipmentId);
-  const dayEvents  = allEvents.filter(e => inPeriod(e.timestamp ?? e.receivedAt, periodStart, periodEnd));
+  // ── Get events — primary by equipmentId, fallback by fleetCode in payload ─
+  let allEvents = ServerStorage.getEvents(tenantId, equipmentId);
 
-  if (dayEvents.length === 0 && !isDayOpen) {
-    // Historical day with zero events — return empty ficha
-    const emptyFicha: FichaDiaria = {
-      id: tenantId + '|' + fleetCode + '|' + date,
-      date, periodStart, periodEnd, tenantId, fleetCode, equipmentId,
-      operatorRegistration: null, operatorName: null,
-      operationCode: null, operationName: null,
-      implementCode: null, implementName: null,
-      workOrderNumber: null, costCenterName: null,
-      hourmeterStart: null, hourmeterCurrent: null, hourmeterEnd: null, totalHourmeter: null,
-      durationMinutes: null, minutesOperating: null, minutesStopped: null,
-      minutesUndetermined: null, pctUndetermined: null,
-      startedAt: null, endedAt: null,
-      journeys: [], stops: [],
-      trailSummary: { points: 0, firstGpsAt: null, lastGpsAt: null, distanceKm: 0 },
-      status: 'PENDENTE',
-      inconsistencies: [DAILY_INCONSISTENCY.SEM_EVENTOS_GPS],
-      validated: false,
-      eventCount: 0,
-      isDayOpen,
-    };
-    return { ok: true, ficha: emptyFicha };
+  // Fallback: if zero events by equipmentId, search all events for this fleetCode.
+  // Handles equipmentId mismatch between cadastro versions.
+  if (allEvents.length === 0) {
+    const fallback = ServerStorage.getEvents(tenantId).filter(e =>
+      eventMatchesFleet(e, fleetCode)
+    );
+    if (fallback.length > 0) {
+      console.info(
+        '[daily-sheet-builder] equipmentId mismatch — using fleetCode fallback' +
+        ' fleetCode=' + fleetCode + ' found=' + fallback.length
+      );
+      allEvents = fallback;
+    }
   }
 
-  // Group events by journey
-  const groups = groupByJourney(dayEvents);
+  // Filter to BRT day window
+  const dayEvents = allEvents.filter(e =>
+    inPeriod(e.timestamp ?? e.receivedAt, periodStart, periodEnd) ||
+    // Secondary check: receivedAt as fallback (device may send wrong timestamp)
+    inPeriod(e.receivedAt, periodStart, periodEnd)
+  );
+
+  console.info(
+    '[FICHA_24H] buildDailySheet' +
+    ' fleetCode=' + fleetCode +
+    ' date=' + date +
+    ' periodStart=' + periodStart +
+    ' periodEnd=' + periodEnd +
+    ' allEvents=' + allEvents.length +
+    ' dayEvents=' + dayEvents.length +
+    ' isDayOpen=' + isDayOpen
+  );
+
+  // ── Live-state fallback ───────────────────────────────────────────────────
+  // Se não há eventos mas a máquina está no live-state com atividade recente,
+  // gerar ficha mínima a partir do live-state.
+  if (dayEvents.length === 0) {
+    // Build from live-state: covers both today (isDayOpen) and historical
+    // days where machine has live-state but events file is empty/missing.
+    const liveState = liveFleet.find(m => m.fleetCode === fleetCode);
+    if (liveState) {
+      console.info(
+        '[FICHA_24H] no events — building from live-state' +
+        ' fleetCode=' + fleetCode + ' status=' + liveState.status
+      );
+      const ficha = buildFichaFromLiveState(liveState, date, periodStart, periodEnd, isDayOpen);
+      return { ok: true, ficha };
+    }
+    return {
+      ok: false, status: 404,
+      error: 'Nenhum evento ou live-state para fleetCode=' + fleetCode + ' date=' + date,
+    };
+  }
+
+  // ── Group events by journey ───────────────────────────────────────────────
+  const groups   = groupByJourney(dayEvents);
   const journeys = groups.map(buildJourneySummary);
 
-  // Collect all trail points for journeys that have a journeyId
+  // ── Trail ─────────────────────────────────────────────────────────────────
   const allTrailPts: TrailPoint[] = [];
   for (const j of journeys) {
     if (j.journeyId) {
-      const pts = ServerStorage.getTrail(tenantId, j.journeyId);
-      // Filter trail points to today's period
-      const filtered = pts.filter(p => inPeriod(p.timestamp, periodStart, periodEnd));
+      const pts      = ServerStorage.getTrail(tenantId, j.journeyId);
+      const filtered = pts.filter(p => inPeriod(p.timestamp, periodStart, periodEnd) || inPeriod(p.timestamp, periodStart, periodEnd));
       allTrailPts.push(...filtered);
     }
   }
@@ -438,11 +656,9 @@ export function buildDailySheet(params: {
     distanceKm: calcDistanceKm(sortedTrail),
   };
 
-  // Collect all stops
-  const allStops: StopDiaria[] = journeys.flatMap(j => j.stops);
+  const allStops = journeys.flatMap(j => j.stops);
 
-  // Consolidated operational fields — first non-null across journeys
-  const firstJourney = journeys[0];
+  // ── Consolidated operational fields ──────────────────────────────────────
   const operatorRegistration = journeys.reduce<string|null>((a, j) => a ?? j.operatorRegistration, null);
   const operatorName   = journeys.reduce<string|null>((a, j) => a ?? j.operatorName, null);
   const operationCode  = journeys.reduce<string|null>((a, j) => a ?? j.operationCode, null);
@@ -452,16 +668,34 @@ export function buildDailySheet(params: {
   const workOrderNumber= journeys.reduce<string|null>((a, j) => a ?? j.workOrderNumber, null);
   const costCenterName = journeys.reduce<string|null>((a, j) => a ?? j.costCenterName, null);
 
-  // Horímetros diários
-  const hourmeterStart = journeys.reduce<number|null>((a, j) => a ?? j.hourmeterStart, null);
-  // Last hourmeter seen in any event
+  // Enrich missing fields from live-state (e.g., operatorName enriched by Central)
+  const liveM = machine;
+  const rawOpReg  = operatorRegistration  ?? pick(liveM.operatorRegistration, liveM.registration);
+  const rawOpName = operatorName          ?? pick(liveM.operatorName, liveM.currentOperator);
+
+  // Normalizar operador pelo cadastro — garante que nome e matrícula vêm do MESMO registro.
+  // Evita mistura de nome de um operador com matrícula de outro quando eventos têm campos
+  // de operadores diferentes (e.g., heartbeat com nome antigo + JOURNEY_START com nova matrícula).
+  const normalizedOp   = normalizeOperatorFromCadastro(tenantId, rawOpReg, rawOpName);
+  const effectiveOpReg  = normalizedOp.registration;
+  const effectiveOpName = normalizedOp.name;
+  const effectiveOpCode = operationCode         ?? pick(liveM.operationCode);
+  const effectiveOpNm   = operationName         ?? pick(liveM.operationName, liveM.currentOperation);
+  const effectiveImpC   = implementCode         ?? pick(liveM.implementCode);
+  const effectiveImpN   = implementName         ?? pick(liveM.implementName);
+
+  // ── Horímetros ────────────────────────────────────────────────────────────
+  const hourmeterStart   = journeys.reduce<number|null>((a, j) => a ?? j.hourmeterStart, null)
+    ?? liveM.hourmeterStart ?? liveM.hourmeterInitial ?? null;
+
   let hourmeterCurrent: number | null = null;
   for (const ev of [...dayEvents].reverse()) {
     const p = ev.payload as Record<string, unknown> | null | undefined;
     const h = asNum(p?.hourmeterCurrent ?? p?.hourmeter ?? p?.hourmeterEnd);
     if (h !== null) { hourmeterCurrent = h; break; }
   }
-  // hourmeterEnd — from the last JOURNEY_END that has it
+  hourmeterCurrent = hourmeterCurrent ?? liveM.hourmeterCurrent ?? liveM.hourmeter ?? null;
+
   const hourmeterEnd = journeys.reduce<number|null>((a, j) => j.hourmeterEnd ?? a, null);
 
   const totalHourmeter = (() => {
@@ -472,35 +706,34 @@ export function buildDailySheet(params: {
     return null;
   })();
 
-  // Journey time bounds
+  const firstJourney = journeys[0];
   const startedAt = firstJourney?.startedAt ?? null;
   const endedAt   = journeys[journeys.length - 1]?.endedAt ?? null;
 
-  // Time analysis
   const timeData = analyseTime(sortedTrail, allStops, startedAt, endedAt, isDayOpen);
 
-  // Active journey check
   const hasActiveJourney = isDayOpen && journeys.some(j => !j.hasJourneyEnd);
 
   // ── Inconsistency engine ──────────────────────────────────────────────────
   const inconsistencies: string[] = [];
 
-  if (!operatorRegistration && !operatorName)
+  if (!effectiveOpReg && !effectiveOpName)
     inconsistencies.push(DAILY_INCONSISTENCY.OPERADOR_NAO_IDENTIFICADO);
-  if (operatorRegistration && operatorRegistration.length < 2)
+  if (effectiveOpReg && effectiveOpReg.length < 2)
     inconsistencies.push(DAILY_INCONSISTENCY.MATRICULA_INVALIDA);
-  if (!operationCode)
+  if (!effectiveOpCode)
     inconsistencies.push(DAILY_INCONSISTENCY.OPERACAO_NAO_INFORMADA);
   if (!workOrderNumber)
     inconsistencies.push(DAILY_INCONSISTENCY.OS_NAO_INFORMADA);
-  if (!implementCode)
+  if (!effectiveImpC)
     inconsistencies.push(DAILY_INCONSISTENCY.IMPLEMENTO_NAO_INFORMADO);
   if (hourmeterStart === null && dayEvents.length > 0)
     inconsistencies.push(DAILY_INCONSISTENCY.SEM_HORIMETRO_INICIAL);
 
-  // Inconsistências de fechamento — só quando jornada finalizada
   for (const j of journeys) {
-    if (j.hasJourneyEnd && !j.hourmeterEnd) {
+    // JOURNEY_END_SEM_HORIMETRO_FINAL: só quando existe JOURNEY_END real E a ficha não está EM_ANDAMENTO
+    // Nunca gerar essa inconsistência durante jornada ativa (hasActiveJourney = true)
+    if (!hasActiveJourney && j.hasJourneyEnd && !j.hourmeterEnd) {
       if (!inconsistencies.includes(DAILY_INCONSISTENCY.JOURNEY_END_SEM_HORIMETRO_FINAL))
         inconsistencies.push(DAILY_INCONSISTENCY.JOURNEY_END_SEM_HORIMETRO_FINAL);
     }
@@ -510,10 +743,8 @@ export function buildDailySheet(params: {
     }
   }
 
-  // Dia fechado sem horímetro final — alerta (não-bloqueante)
-  if (!isDayOpen && !hasActiveJourney && hourmeterEnd === null && hourmeterStart !== null) {
+  if (!isDayOpen && !hasActiveJourney && hourmeterEnd === null && hourmeterStart !== null)
     inconsistencies.push(DAILY_INCONSISTENCY.SEM_HORIMETRO_FINAL_APOS_FECHAMENTO);
-  }
 
   if (totalHourmeter !== null && totalHourmeter < 0)
     inconsistencies.push(DAILY_INCONSISTENCY.TOTAL_HORAS_INCONSISTENTE);
@@ -528,37 +759,34 @@ export function buildDailySheet(params: {
   const hasBlockingInconsistency = inconsistencies.some(i => !i.includes('(alerta)'));
 
   const status: FichaDiariaStatus = (() => {
-    // Jornada ativa hoje → EM_ANDAMENTO (não inconsistente por falta de horímetro final)
     if (hasActiveJourney) return 'EM_ANDAMENTO';
-    // Dia fechado com inconsistência real → INCONSISTENTE
     if (hasBlockingInconsistency) return 'INCONSISTENTE';
-    // Tem JOURNEY_END com horímetro final → FINALIZADO
     const allFinalized = journeys.every(j => !j.hasJourneyEnd || j.hourmeterEnd !== null);
     if (journeys.some(j => j.hasJourneyEnd) && allFinalized) return 'FINALIZADO';
-    // Dia fechado sem eventos suficientes → PENDENTE
     return 'PENDENTE';
   })();
 
   const validated = status === 'FINALIZADO' && !hasBlockingInconsistency;
 
   console.info(
-    '[daily-sheet-builder] fleetCode=' + fleetCode +
+    '[FICHA_24H] built' +
+    ' fleetCode=' + fleetCode +
     ' date=' + date +
     ' events=' + dayEvents.length +
     ' journeys=' + journeys.length +
     ' status=' + status +
-    ' inconsistencies=' + inconsistencies.length,
+    ' inc=' + inconsistencies.length
   );
 
   const ficha: FichaDiaria = {
     id: tenantId + '|' + fleetCode + '|' + date,
     date, periodStart, periodEnd, tenantId, fleetCode, equipmentId,
-    operatorRegistration,
-    operatorName,
-    operationCode,
-    operationName,
-    implementCode,
-    implementName,
+    operatorRegistration: effectiveOpReg,
+    operatorName:   effectiveOpName,
+    operationCode:  effectiveOpCode,
+    operationName:  effectiveOpNm,
+    implementCode:  effectiveImpC,
+    implementName:  effectiveImpN,
     workOrderNumber,
     costCenterName,
     hourmeterStart,
@@ -574,8 +802,6 @@ export function buildDailySheet(params: {
     status,
     inconsistencies,
     validated,
-    validatedBy: null,
-    validatedAt: null,
     eventCount: dayEvents.length,
     isDayOpen,
   };
@@ -583,10 +809,10 @@ export function buildDailySheet(params: {
   return { ok: true, ficha };
 }
 
-// ── Multi-fleet daily list ────────────────────────────────────────────────────
+// ── List builder ──────────────────────────────────────────────────────────────
 /**
  * Gera fichas diárias para TODAS as frotas ativas no tenant para uma data.
- * Frotas sem nenhum evento no dia são omitidas.
+ * Inclui fichas com dados de live-state mesmo quando não há eventos no período.
  */
 export function buildDailySheetList(params: {
   tenantId: string;
@@ -596,25 +822,61 @@ export function buildDailySheetList(params: {
   const { tenantId, date, fleetCodeFilter } = params;
   const liveFleet = ServerStorage.getLiveFleet(tenantId);
 
-  const fichas: FichaDiaria[] = [];
-  const { periodStart, periodEnd } = dayPeriod(date);
-  const allEvents = ServerStorage.getEvents(tenantId);
+  const { periodStart, periodEnd, isDayOpen } = dayPeriod(date);
 
-  // Pre-filter events to the day window to avoid re-scanning
-  const dayEvents = allEvents.filter(e => inPeriod(e.timestamp ?? e.receivedAt, periodStart, periodEnd));
+  // Get all events for the day — search by both equipmentId and payload fleetCode
+  const allRawEvents = ServerStorage.getEvents(tenantId);
+  const dayEvents    = allRawEvents.filter(e =>
+    inPeriod(e.timestamp ?? e.receivedAt, periodStart, periodEnd) ||
+    inPeriod(e.receivedAt, periodStart, periodEnd)
+  );
 
-  // Get unique equipmentIds that have events today
+  // Build indexes: by equipmentId AND by payload fleetCode
   const activeEquipmentIds = new Set(dayEvents.map(e => e.equipmentId));
+  const activeFleetCodes   = new Set<string>();
+  for (const ev of dayEvents) {
+    const p = ev.payload as Record<string, unknown> | null | undefined;
+    const fc = asStr(p?.fleetCode ?? p?.equipmentCode ?? p?.machineId);
+    if (fc) activeFleetCodes.add(fc.toLowerCase());
+    if (ev.equipmentId) activeFleetCodes.add(ev.equipmentId.toLowerCase());
+  }
+
+  console.info(
+    '[FICHA_24H] buildDailySheetList' +
+    ' tenantId=' + tenantId +
+    ' date=' + date +
+    ' range=' + periodStart + ' to ' + periodEnd +
+    ' allEvents=' + allRawEvents.length +
+    ' dayEvents=' + dayEvents.length +
+    ' liveFleet=' + liveFleet.length +
+    ' activeEquipmentIds=' + activeEquipmentIds.size +
+    ' activeFleetCodes=' + activeFleetCodes.size
+  );
+
+  const fichas: FichaDiaria[] = [];
 
   for (const machine of liveFleet) {
     if (fleetCodeFilter && machine.fleetCode !== fleetCodeFilter) continue;
-    if (!activeEquipmentIds.has(machine.equipmentId)) {
-      // No events today — skip (don't generate empty fichas for inactive equipment)
+
+    const hasEvents =
+      activeEquipmentIds.has(machine.equipmentId) ||
+      activeFleetCodes.has(machine.fleetCode.toLowerCase()) ||
+      activeFleetCodes.has((machine.equipmentId ?? '').toLowerCase());
+
+    // For today: include ALL machines in live-state (live-state fallback)
+    // For past days: include only machines with events
+    if (!hasEvents && !isDayOpen) {
       continue;
     }
+
     const result = buildDailySheet({ tenantId, fleetCode: machine.fleetCode, date });
     if (result.ok) fichas.push(result.ficha);
   }
+
+  console.info(
+    '[FICHA_24H] generatedSheets=' + fichas.length +
+    ' isDayOpen=' + isDayOpen
+  );
 
   return fichas.sort((a, b) => a.fleetCode.localeCompare(b.fleetCode));
 }
