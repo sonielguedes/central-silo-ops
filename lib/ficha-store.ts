@@ -2,28 +2,22 @@
  * ficha-store.ts
  *
  * Persistência do estado overlay das Fichas Diárias.
- *
  * Armazena em data/{tenantId}/fichas-overlay.json os dados que NÃO são
  * deriváveis dos eventos: validação, exportação, correções manuais, histórico.
- *
- * O computed (eventos + tempos) vem de daily-sheet-builder.ts.
- * Este store complementa com o estado persistido.
  */
 
 import fs   from 'fs';
 import path from 'path';
 
-// ── Storage root (mesma lógica do server-storage.ts) ────────────────────────
+// ── Storage root — mesma lógica de server-storage.ts ────────────────────────
 function resolveStorageDir(): string {
-  const env = process.env.STORAGE_DIR;
-  if (env) return env;
-  const base = process.cwd();
-  const prod = path.join(base, 'data');
-  if (fs.existsSync(prod)) return prod;
-  const dev = path.join(base, '..', 'data');
-  if (fs.existsSync(dev)) return dev;
-  fs.mkdirSync(prod, { recursive: true });
-  return prod;
+  const dir =
+    process.env.SILO_STORAGE_DIR ||
+    process.env.SILO_DATA_DIR    ||
+    process.env.STORAGE_DIR      ||
+    (process.env.NODE_ENV === 'production' ? '/app/data' : './data');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 const DATA_ROOT = resolveStorageDir();
@@ -40,12 +34,32 @@ function overlayFile(tenantId: string): string {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export interface CorrectionEntry {
+  id: string;
+  sheetId: string;
   field: string;
   oldValue: unknown;
   newValue: unknown;
   reason: string;
-  changedBy: string;
-  changedAt: string;
+  correctedBy: string;
+  correctedAt: string;
+}
+
+/** Campos PIMS para futura integração */
+export interface PimsFields {
+  pimsInstance?:       string | null;
+  pimsBoletim?:        string | null;
+  pimsOperationDate?:  string | null;
+  pimsEquipmentCode?:  string | null;
+  pimsOperatorCode?:   string | null;
+  pimsOperationCode?:  string | null;
+  pimsCostCenterCode?: string | null;
+  pimsImplementCode?:  string | null;
+  pimsFarmCode?:       string | null;
+  pimsZoneCode?:       string | null;
+  pimsFieldCode?:      string | null;
+  pimsExportStatus?:   'PENDING' | 'EXPORTED' | 'ERROR' | null;
+  pimsExportedAt?:     string | null;
+  pimsLastError?:      string | null;
 }
 
 export interface FichaOverlay {
@@ -54,22 +68,56 @@ export interface FichaOverlay {
   tenantId: string;
   fleetCode: string;
   date: string;
-  /** Campos corrigidos manualmente (aplicados sobre os dados computados) */
+  /** Campos corrigidos manualmente — aplicados sobre os dados computados */
   correctedFields: Record<string, unknown>;
   corrections: CorrectionEntry[];
+
+  // ── Validação ─────────────────────────────────────────────────────────────
   validated: boolean;
   validatedBy: string | null;
   validatedAt: string | null;
+
+  // ── Exportação ────────────────────────────────────────────────────────────
   exported: boolean;
   exportedAt: string | null;
   exportedBy: string | null;
+  exportCount: number;
   /**
-   * Se a ficha foi exportada e depois sofreu correção,
-   * status deve ser ATUALIZADO até nova exportação.
+   * Ficha foi exportada e depois recebeu correção manual.
+   * Status derivado = ATUALIZADO. Requer nova exportação.
    */
   modifiedAfterExport: boolean;
+  needsReexport: boolean;
+
+  // ── Reabertura ────────────────────────────────────────────────────────────
+  reopenedBy: string | null;
+  reopenedAt: string | null;
+
+  // ── PIMS (integração futura) ───────────────────────────────────────────────
+  pims: PimsFields;
+
+  // ── Metadados ─────────────────────────────────────────────────────────────
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Inconsistência crítica: bloqueia validação e exportação ──────────────────
+export const BLOCKING_INCONSISTENCIES = new Set([
+  'FROTA_NAO_IDENTIFICADA',
+  'OPERADOR_NAO_IDENTIFICADO',
+  'MATRICULA_INVALIDA',
+  'OPERACAO_NAO_INFORMADA',
+  'OS_NAO_INFORMADA',
+  'CENTRO_CUSTO_NAO_INFORMADO',
+  'HORIMETRO_FINAL_MENOR_QUE_INICIAL',
+  'JOURNEY_END_SEM_HORIMETRO_FINAL',
+  'SEM_HORIMETRO_INICIAL',
+]);
+
+export function isBlockingInconsistency(inc: string): boolean {
+  // Strip " (alerta)" suffix before checking
+  const clean = inc.replace(/ \(alerta\)$/, '').trim();
+  return BLOCKING_INCONSISTENCIES.has(clean);
 }
 
 // ── Load / save helpers ───────────────────────────────────────────────────────
@@ -85,117 +133,177 @@ function loadOverlays(tenantId: string): FichaOverlay[] {
 }
 
 function saveOverlays(tenantId: string, overlays: FichaOverlay[]): void {
-  const file = overlayFile(tenantId);
-  fs.writeFileSync(file, JSON.stringify(overlays, null, 2), 'utf-8');
+  fs.writeFileSync(overlayFile(tenantId), JSON.stringify(overlays, null, 2), 'utf-8');
 }
 
 function makeId(tenantId: string, fleetCode: string, date: string): string {
   return tenantId + '|' + fleetCode + '|' + date;
 }
 
+function newOverlay(tenantId: string, fleetCode: string, date: string, now: string): FichaOverlay {
+  return {
+    id: makeId(tenantId, fleetCode, date),
+    tenantId, fleetCode, date,
+    correctedFields: {},
+    corrections: [],
+    validated: false,    validatedBy: null,   validatedAt: null,
+    exported: false,     exportedAt: null,    exportedBy: null,
+    exportCount: 0,
+    modifiedAfterExport: false, needsReexport: false,
+    reopenedBy: null,   reopenedAt: null,
+    pims: {},
+    createdAt: now, updatedAt: now,
+  };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export const FichaStore = {
-  /** Retorna overlay para uma ficha, ou null se não existir. */
   get(tenantId: string, fleetCode: string, date: string): FichaOverlay | null {
-    const overlays = loadOverlays(tenantId);
-    return overlays.find(o => o.id === makeId(tenantId, fleetCode, date)) ?? null;
+    return loadOverlays(tenantId).find(o => o.id === makeId(tenantId, fleetCode, date)) ?? null;
   },
 
-  /** Retorna todos os overlays de um tenant. */
   list(tenantId: string): FichaOverlay[] {
     return loadOverlays(tenantId);
   },
 
-  /** Cria ou atualiza um overlay. */
   upsert(overlay: FichaOverlay): FichaOverlay {
     const overlays = loadOverlays(overlay.tenantId);
-    const idx = overlays.findIndex(o => o.id === overlay.id);
-    const now = new Date().toISOString();
-    const updated = { ...overlay, updatedAt: now };
-    if (idx === -1) overlays.push({ ...updated, createdAt: now });
-    else overlays[idx] = { ...overlays[idx], ...updated };
+    const idx      = overlays.findIndex(o => o.id === overlay.id);
+    const now      = new Date().toISOString();
+    const updated  = { ...overlay, updatedAt: now };
+    if (idx === -1) overlays.push({ ...updated, createdAt: updated.createdAt || now });
+    else            overlays[idx] = { ...overlays[idx], ...updated };
     saveOverlays(overlay.tenantId, overlays);
     return updated;
   },
 
-  /** Inicializa overlay se não existir (chamado no primeiro acesso). */
   ensure(tenantId: string, fleetCode: string, date: string): FichaOverlay {
-    const existing = this.get(tenantId, fleetCode, date);
-    if (existing) return existing;
-    const now = new Date().toISOString();
-    const overlay: FichaOverlay = {
-      id: makeId(tenantId, fleetCode, date),
-      tenantId, fleetCode, date,
-      correctedFields: {},
-      corrections: [],
-      validated: false,
-      validatedBy: null,
-      validatedAt: null,
-      exported: false,
-      exportedAt: null,
-      exportedBy: null,
-      modifiedAfterExport: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-    return this.upsert(overlay);
+    return this.get(tenantId, fleetCode, date) ?? this.upsert(newOverlay(tenantId, fleetCode, date, new Date().toISOString()));
   },
 
-  /** Marca ficha como validada. */
   validate(tenantId: string, fleetCode: string, date: string, validatedBy: string): FichaOverlay {
+    const overlay = this.ensure(tenantId, fleetCode, date);
+    return this.upsert({ ...overlay, validated: true, validatedBy, validatedAt: new Date().toISOString() });
+  },
+
+  clearValidation(tenantId: string, fleetCode: string, date: string): FichaOverlay {
+    const overlay = this.ensure(tenantId, fleetCode, date);
+    return this.upsert({ ...overlay, validated: false, validatedBy: null, validatedAt: null });
+  },
+
+  reopen(tenantId: string, fleetCode: string, date: string, actor: string): FichaOverlay {
     const overlay = this.ensure(tenantId, fleetCode, date);
     return this.upsert({
       ...overlay,
-      validated: true,
-      validatedBy,
-      validatedAt: new Date().toISOString(),
+      validated: false, validatedBy: null, validatedAt: null,
+      reopenedBy: actor, reopenedAt: new Date().toISOString(),
     });
   },
 
-  /** Marca ficha como exportada. Limpa modifiedAfterExport. */
   markExported(tenantId: string, fleetCode: string, date: string, exportedBy: string): FichaOverlay {
     const overlay = this.ensure(tenantId, fleetCode, date);
     return this.upsert({
       ...overlay,
-      exported: true,
-      exportedAt: new Date().toISOString(),
+      exported:           true,
+      exportedAt:         new Date().toISOString(),
       exportedBy,
+      exportCount:        (overlay.exportCount ?? 0) + 1,
       modifiedAfterExport: false,
+      needsReexport:       false,
     });
   },
 
-  /** Aplica correção manual a um campo da ficha. */
+  updatePims(tenantId: string, fleetCode: string, date: string, pimsData: Partial<PimsFields>): FichaOverlay {
+    const overlay = this.ensure(tenantId, fleetCode, date);
+    return this.upsert({ ...overlay, pims: { ...overlay.pims, ...pimsData } });
+  },
+
+  /**
+   * Aplica correção manual a um ou mais campos.
+   * Cada campo gera um CorrectionEntry separado com o mesmo motivo.
+   * Se a ficha já foi exportada, seta modifiedAfterExport + needsReexport.
+   */
   applyCorrection(
     tenantId: string,
     fleetCode: string,
     date: string,
     correction: {
-      field: string;
-      oldValue: unknown;
-      newValue: unknown;
-      reason: string;
+      field:     string;
+      oldValue:  unknown;
+      newValue:  unknown;
+      reason:    string;
       changedBy: string;
     },
   ): FichaOverlay {
+    if (!correction.reason?.trim()) {
+      throw new Error('Motivo da correção é obrigatório');
+    }
     const overlay = this.ensure(tenantId, fleetCode, date);
     const entry: CorrectionEntry = {
-      ...correction,
-      changedAt: new Date().toISOString(),
+      id:          'corr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      sheetId:     overlay.id,
+      field:       correction.field,
+      oldValue:    correction.oldValue,
+      newValue:    correction.newValue,
+      reason:      correction.reason,
+      correctedBy: correction.changedBy,
+      correctedAt: new Date().toISOString(),
     };
     const correctedFields = { ...overlay.correctedFields, [correction.field]: correction.newValue };
-    // Se já foi exportada, marcar como ATUALIZADO
-    const modifiedAfterExport = overlay.exported ? true : overlay.modifiedAfterExport;
-
+    const wasExported     = overlay.exported;
     return this.upsert({
       ...overlay,
       correctedFields,
-      corrections: [...overlay.corrections, entry],
-      modifiedAfterExport,
+      corrections:         [...overlay.corrections, entry],
+      modifiedAfterExport: wasExported,
+      needsReexport:       wasExported,
+    });
+  },
+
+  /**
+   * Aplica múltiplos campos de uma vez (batch correction).
+   * Cada campo gera um CorrectionEntry com o mesmo motivo.
+   */
+  applyMultiCorrection(
+    tenantId: string,
+    fleetCode: string,
+    date: string,
+    updates: Record<string, unknown>,
+    oldValues: Record<string, unknown>,
+    reason: string,
+    changedBy: string,
+  ): FichaOverlay {
+    if (!reason?.trim()) {
+      throw new Error('Motivo da correção é obrigatório');
+    }
+    const overlay = this.ensure(tenantId, fleetCode, date);
+    const now = new Date().toISOString();
+    const newEntries: CorrectionEntry[] = Object.entries(updates)
+      .filter(([, v]) => v !== undefined)
+      .map(([field, newValue]) => ({
+        id:          'corr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        sheetId:     overlay.id,
+        field,
+        oldValue:    oldValues[field] ?? null,
+        newValue,
+        reason,
+        correctedBy: changedBy,
+        correctedAt: now,
+      }));
+
+    const correctedFields = { ...overlay.correctedFields, ...updates };
+    const wasExported     = overlay.exported;
+    return this.upsert({
+      ...overlay,
+      correctedFields,
+      corrections:         [...overlay.corrections, ...newEntries],
+      modifiedAfterExport: wasExported,
+      needsReexport:       wasExported,
     });
   },
 };
 
-// ── Status derivation from overlay + computed ─────────────────────────────────
+// ── Status derivation ────────────────────────────────────────────────────────
 export type FichaStatusFinal =
   | 'EM_ANDAMENTO'
   | 'PENDENTE'
@@ -212,8 +320,11 @@ export function deriveFichaStatus(params: {
 }): FichaStatusFinal {
   const { computedStatus, overlay, isDayOpen, hasBlockingInconsistency } = params;
 
-  // Ativo hoje → EM_ANDAMENTO
-  if (computedStatus === 'EM_ANDAMENTO' || isDayOpen) return 'EM_ANDAMENTO';
+  // Jornada ativa → EM_ANDAMENTO (não exportável, não validável como final)
+  if (computedStatus === 'EM_ANDAMENTO') return 'EM_ANDAMENTO';
+
+  // Dia ainda aberto mas sem jornada ativa → pode já ter overlay
+  if (isDayOpen && !overlay?.validated && !overlay?.exported) return 'EM_ANDAMENTO';
 
   if (!overlay) {
     return hasBlockingInconsistency ? 'INCONSISTENTE' : 'PENDENTE';
@@ -222,15 +333,14 @@ export function deriveFichaStatus(params: {
   // Exportada e depois corrigida → ATUALIZADO
   if (overlay.exported && overlay.modifiedAfterExport) return 'ATUALIZADO';
 
-  // Exportada sem modificação posterior → EXPORTADO
+  // Exportada → EXPORTADO
   if (overlay.exported) return 'EXPORTADO';
 
   // Validada → VALIDADO
   if (overlay.validated) return 'VALIDADO';
 
-  // Com inconsistência → INCONSISTENTE
+  // Com inconsistência crítica → INCONSISTENTE
   if (hasBlockingInconsistency) return 'INCONSISTENTE';
 
-  // Sem problemas → PENDENTE (aguardando exportação)
   return 'PENDENTE';
 }
