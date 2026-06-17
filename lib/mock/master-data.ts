@@ -334,7 +334,84 @@ export const INITIAL_EQUIPMENT_TYPES: EquipmentType[] = [
   mkType('et-23', 'MOTO', 'Moto', 'Motocicleta de apoio operacional', 'Apoio', 'MOTO', 'KM', true, false, true, true, 'APOIO'),
   mkType('et-24', 'PLUVIOMETRO', 'Pluviômetro', 'Dispositivo de medição de chuva', 'Infraestrutura', 'PLUVIOMETRO', 'UNIDADE', true, false, false, true, 'INFRAESTRUTURA'),
   mkType('et-25', 'PADRAO_GENERICO', 'Padrão / Genérico', 'Tipo genérico para equipamentos sem classificação', 'Outros', 'PADRAO_GENERICO', 'UNIDADE', false, false, false, true, 'OUTROS'),
+  // ── Implementos Agrícolas específicos ─────────────────────────────────
+  mkType('et-impl-01', 'SULCADOR',        'Sulcador',               'Implemento para abertura de sulcos no solo',             'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-02', 'GRADE_ARADORA',   'Grade Aradora',          'Implemento de preparo primário de solo com discos',      'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-03', 'GRADE_NIVELADORA','Grade Niveladora',       'Implemento de preparo secundário e nivelamento',         'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-04', 'SUBSOLADOR',      'Subsolador',             'Implemento para descompactação profunda do solo',        'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-05', 'DIST_CALCARIO',   'Distribuidor de Calcario','Equipamento para distribuição de calcário agrícola',   'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-06', 'DIST_ADUBO',      'Distribuidor de Adubo',  'Equipamento para distribuição de adubo e fertilizante', 'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-07', 'PLATAFORMA_CORTE','Plataforma de Corte',    'Implemento de corte acoplado à colhedora',              'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-08', 'CARRETA_AGRICOLA','Carreta Agricola',       'Implemento de transporte e apoio agrícola',             'Implemento', 'TRANSBORDO',       'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-09', 'ROCADEIRA',       'Rocadeira',              'Implemento para roçagem e limpeza de pastagem',         'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-10', 'ENLEIRADOR',      'Enleirador',             'Implemento para enleiramento de palha e forragem',      'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-11', 'PA_CONCHA',       'Pa Carregadora / Concha','Implemento de carregamento frontal acoplado ao trator', 'Implemento', 'PA_CARREGADEIRA',  'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
+  mkType('et-impl-12', 'OUTROS_IMPL',     'Outros',                 'Outros implementos agrícolas não classificados',        'Implemento', 'GRADE_IMPLEMENTO', 'HORIMETRO', false, false, false, true, 'IMPLEMENTO'),
 ];
+
+function mkImplModel(
+  id: string,
+  name: string,
+  typeId: string,
+): EquipmentModel {
+  return {
+    ...DEFAULT_AUDIT,
+    id,
+    brand:              '',
+    name,
+    typeId,
+    manufacturer:       '',
+    model:              name,
+    operationalType:    'IMPLEMENTO',
+    iconType:           'GRADE_IMPLEMENTO',
+    category:           'Implemento',
+    primaryMetric:      'HORIMETRO',
+    active:             true,
+    telemetryEnabled:   false,
+    canEnabled:         false,
+    mobileEnabled:      true,
+  };
+}
+
+// Implementos agrícolas com vínculo de typeId ──────────────────────────────
+const IMPLEMENT_MODELS: EquipmentModel[] = [
+  // Sulcador
+  mkImplModel('im-001', 'Sulcador 2 Linhas',     'et-impl-01'),
+  mkImplModel('im-002', 'Sulcador 3 Linhas',     'et-impl-01'),
+  mkImplModel('im-003', 'Sulcador 5 Linhas',     'et-impl-01'),
+  // Grade Aradora
+  mkImplModel('im-004', 'Grade 14 Discos',       'et-impl-02'),
+  mkImplModel('im-005', 'Grade 18 Discos',       'et-impl-02'),
+  mkImplModel('im-006', 'Grade 24 Discos',       'et-impl-02'),
+  // Grade Niveladora
+  mkImplModel('im-007', 'Niveladora 28 Discos',  'et-impl-03'),
+  mkImplModel('im-008', 'Niveladora 32 Discos',  'et-impl-03'),
+  mkImplModel('im-009', 'Niveladora 36 Discos',  'et-impl-03'),
+  // Subsolador
+  mkImplModel('im-010', 'Subsolador 5 Hastes',   'et-impl-04'),
+  mkImplModel('im-011', 'Subsolador 7 Hastes',   'et-impl-04'),
+  mkImplModel('im-012', 'Subsolador 9 Hastes',   'et-impl-04'),
+  // Plantadeira (et-5 existente)
+  mkImplModel('im-013', 'Plantadeira 9 Linhas',  'et-5'),
+  mkImplModel('im-014', 'Plantadeira 11 Linhas', 'et-5'),
+  mkImplModel('im-015', 'Plantadeira 13 Linhas', 'et-5'),
+  // Pulverizador (et-4 existente)
+  mkImplModel('im-016', 'Barra 18m',             'et-4'),
+  mkImplModel('im-017', 'Barra 24m',             'et-4'),
+  mkImplModel('im-018', 'Barra 30m',             'et-4'),
+  // Transbordo (et-3 existente)
+  mkImplModel('im-019', 'Transbordo 10T',        'et-3'),
+  mkImplModel('im-020', 'Transbordo 12T',        'et-3'),
+  mkImplModel('im-021', 'Transbordo 15T',        'et-3'),
+  // Plataforma de Corte
+  mkImplModel('im-022', 'Plataforma 20 pes',     'et-impl-07'),
+  mkImplModel('im-023', 'Plataforma 25 pes',     'et-impl-07'),
+  mkImplModel('im-024', 'Plataforma 30 pes',     'et-impl-07'),
+  // Grade Generica (et-6 existente)
+  mkImplModel('im-025', 'Grade Pesada 20 Discos','et-6'),
+  mkImplModel('im-026', 'Grade Leve 24 Discos',  'et-6'),
+];
+
 
 function mkModel(
   id: string,
@@ -440,7 +517,9 @@ export const INITIAL_EQUIPMENT_MODELS: EquipmentModel[] = [
   mkModel('em-1',   'John Deere','S770',             'COLHEDORA',   'COLHEDORA',           'Agrícola',    'HORIMETRO'),
   mkModel('em-2',   'Scania',    'R540',             'CAMINHAO',    'CAMINHAO',            'Rodoviário',  'KM'),
   mkModel('em-3',   'Case IH',   'Magnum 340 (Legado)','TRATOR',   'TRATOR',              'Agrícola',    'HORIMETRO'),
+  ...IMPLEMENT_MODELS,
 ];
+
 
 export const INITIAL_EQUIPMENT_GROUPS: EquipmentGroup[] = [
   { ...DEFAULT_AUDIT, id: 'eg-1', name: 'FRENTE 01 - COLHEITA', description: 'Equipamentos da Frente 01', color: '#10b981', status: 'ATIVO' },

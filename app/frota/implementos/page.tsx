@@ -45,9 +45,15 @@ export default function ImplementsPage() {
   const [selectedItem, setSelectedItem] = useState<Implement | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ImplementDrawerFormData>({
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<ImplementDrawerFormData>({
     resolver: zodResolver(implementDrawerSchema),
   });
+
+  // Tipo selecionado no drawer — usado para filtrar modelos compatíveis
+  const selectedTypeId = watch('typeId');
+  const filteredModels = selectedTypeId
+    ? models.filter(m => m.typeId === selectedTypeId)
+    : [];
 
   useEffect(() => { loadData(); }, []);
 
@@ -252,14 +258,18 @@ export default function ImplementsPage() {
                     className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none"
                   >
                     <option value="">Selecione...</option>
-                    {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {types.filter(t => (t as unknown as Record<string,unknown>)['operationalGroup'] === 'IMPLEMENTO').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </FormField>
 
                 <FormField label="Modelo (opcional)" error={errors.modelId?.message}>
-                  {models.length === 0 ? (
+                  {!selectedTypeId ? (
                     <div className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-xs text-muted-foreground italic">
-                      Nenhum modelo cadastrado
+                      Selecione um tipo primeiro
+                    </div>
+                  ) : filteredModels.length === 0 ? (
+                    <div className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-xs text-muted-foreground italic">
+                      Nenhum modelo cadastrado para este tipo
                     </div>
                   ) : (
                     <select
@@ -267,7 +277,7 @@ export default function ImplementsPage() {
                       className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none"
                     >
                       <option value="">Nenhum</option>
-                      {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      {filteredModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   )}
                 </FormField>
