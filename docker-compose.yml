@@ -28,7 +28,7 @@ services:
       MOBILE_INGEST_TOKEN: ${MOBILE_INGEST_TOKEN}
 
     volumes:
-      - ./data:/app/data
+      - /opt/siloops-data/piloto:/app/data
 
     ports:
       - "127.0.0.1:3000:3000"
@@ -75,7 +75,7 @@ services:
       MOBILE_INGEST_TOKEN: ${MOBILE_INGEST_TOKEN}
 
     volumes:
-      - ./data:/app/data
+      - /opt/siloops-data/cliente-02:/app/data
 
     expose:
       - "3000"
@@ -118,7 +118,7 @@ services:
       MOBILE_INGEST_TOKEN: ${MOBILE_INGEST_TOKEN}
 
     volumes:
-      - ./data:/app/data
+      - /opt/siloops-data/cliente-03:/app/data
 
     expose:
       - "3000"
