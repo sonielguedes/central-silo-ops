@@ -34,6 +34,7 @@ function OperacoesPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
   const [models, setModels] = useState<EquipmentModel[]>([]);
+  const [opCatalog, setOpCatalog] = useState<Array<{ id: string; code?: string; name?: string; type?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -55,13 +56,14 @@ function OperacoesPage() {
     try {
       setLoading(true);
       setError(null);
-      const [ops, eqs, oprs, fms, fds, mdls] = await Promise.all([
+      const [ops, eqs, oprs, fms, fds, mdls, rawOpsCat] = await Promise.all([
         OperationService.getAll().catch(() => [] as Operation[]),
         EquipmentService.getAll().catch(() => [] as Equipment[]),
         OperatorService.getAll().catch(() => [] as Operator[]),
         FarmService.getAll().catch(() => [] as Farm[]),
         FieldService.getAll().catch(() => [] as Field[]),
         EquipmentModelService.getAll().catch(() => [] as EquipmentModel[]),
+        OperationService.getAll().catch(() => []),
       ]);
       setData(Array.isArray(ops) ? ops : []);
       setEquipments(Array.isArray(eqs) ? eqs : []);
@@ -69,6 +71,12 @@ function OperacoesPage() {
       setFarms(Array.isArray(fms) ? fms : []);
       setFields(Array.isArray(fds) ? fds : []);
       setModels(Array.isArray(mdls) ? mdls : []);
+      const opsCatRaw = Array.isArray(rawOpsCat) ? (rawOpsCat as Array<Record<string, unknown>>) : [];
+      setOpCatalog(
+        opsCatRaw
+          .filter(r => r['isMasterCatalog'] === true || (!r['equipmentId'] && !r['operatorId'] && !r['start']))
+          .map(r => ({ id: String(r['id'] ?? ''), code: String(r['code'] ?? ''), name: String(r['name'] ?? ''), type: String(r['type'] ?? '') }))
+      );
     } catch (err) {
       console.error('[operacoes] loadData error', err);
       setError('Erro ao carregar dados. Tente novamente.');
@@ -170,7 +178,7 @@ function OperacoesPage() {
             <div className="relative w-full max-w-md bg-[#0a0e27] border-l border-[#2d3647] shadow-2xl p-8 flex flex-col h-full animate-in slide-in-from-right duration-300">
                <div className="flex items-center justify-between mb-8"><h2 className="text-xl font-black italic tracking-tighter uppercase text-white">Nova Operação</h2><button onClick={() => setIsDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button></div>
                <form className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar" onSubmit={handleSubmit(onSubmit)}>
-                  <FormField label="Tipo de Operação" error={errors.type?.message} required><select {...register('type')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none"><option value="">Selecione a Operação</option><option value="COLHEITA">Colheita</option><option value="PLANTIO">Plantio</option><option value="PREPARO">Preparo de Solo</option><option value="TRANSPORTE">Transporte</option><option value="PULVERIZACAO">Pulverização</option></select></FormField>
+                  <FormField label="Tipo de Operação" error={errors.type?.message} required><select {...register('type')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none"><option value="">Selecione a Operacao</option>{opCatalog.length>0?opCatalog.map(c=><option key={c.id} value={c.code??c.type??c.id}>{c.name??c.code??c.id}</option>):[<option key="col" value="COLHEITA">Colheita</option>,<option key="pla" value="PLANTIO">Plantio</option>,<option key="pre" value="PREPARO">Preparo de Solo</option>,<option key="tra" value="TRANSPORTE">Transporte</option>,<option key="pul" value="PULVERIZACAO">Pulverizacao</option>]}</select></FormField>
                   <FormField label="Equipamento" error={errors.equipmentId?.message} required><select {...register('equipmentId')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none"><option value="">Selecione o Equipamento</option>{equipments.map(e => {
                      const model = models.find(m => m.id === e.modelId);
                      return <option key={e.id} value={e.id}>{e.code} - {model?.name}</option>

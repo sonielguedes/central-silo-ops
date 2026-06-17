@@ -7,6 +7,7 @@ import { AuthStore } from '@/lib/auth/auth-store';
 import { resolveSessionFromRequest } from '@/lib/auth/session';
 import { requireCsrf } from '@/lib/auth/csrf';
 import { ensureImplementCatalogForTenant } from '@/lib/catalog/ensure-implement-catalog';
+import { ensureOperationsCatalogForTenant } from '@/lib/catalog/ensure-operations-catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,9 @@ export async function GET(
   // This is an active upsert — safe in production where shouldSeedDemoData() is false.
   if (entity === 'tipos' || entity === 'modelos') {
     ensureImplementCatalogForTenant(tenantId);
+  }
+  if (entity === 'operacoes') {
+    ensureOperationsCatalogForTenant(tenantId);
   }
 
   const data = CadastroStorage.getAll(tenantId, entity);

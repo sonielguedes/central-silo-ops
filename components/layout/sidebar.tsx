@@ -71,7 +71,7 @@ const menuItems: MenuGroup[] = [
     { icon: Factory, label: 'Fazendas / Talhoes', href: '/fazendas-talhoes' },
     { icon: Building2, label: 'Centros de Custo', href: '/centros-custo' },
     { icon: PauseCircle, label: 'Motivos de Parada', href: '/paradas' },
-    { icon: BookOpen, label: 'Catalogos Oper.', href: '/administracao/catalogs' },
+    { icon: BookOpen, label: 'Catalogos Oper.', href: '/catalogos-operacionais' },
   ]},
   { group: 'Operacional', items: [
     { icon: BarChart2, label: 'Painel Operacional', href: '/operacional/painel' },
