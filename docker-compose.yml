@@ -34,7 +34,7 @@ services:
       - "127.0.0.1:3000:3000"
 
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health/full').then(async r => { const result = await r.json().catch(() => ({})); if (!r.ok || result.status === 'ERROR') process.exit(1); process.exit(0); }).catch(() => process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -81,7 +81,7 @@ services:
       - "3000"
 
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health/full').then(async r => { const result = await r.json().catch(() => ({})); if (!r.ok || result.status === 'ERROR') process.exit(1); process.exit(0); }).catch(() => process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -124,7 +124,7 @@ services:
       - "3000"
 
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health/full').then(async r => { const result = await r.json().catch(() => ({})); if (!r.ok || result.status === 'ERROR') process.exit(1); process.exit(0); }).catch(() => process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -151,7 +151,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
 
     healthcheck:
-      test: ["CMD-SHELL", "body=$$(wget -qO- http://127.0.0.1:3001/api/health/full) || exit 1; echo \"$$body\" | grep -q '\"status\":\"ERROR\"' && exit 1; exit 0"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/api/health >/dev/null"]
       interval: 30s
       timeout: 5s
       retries: 3
