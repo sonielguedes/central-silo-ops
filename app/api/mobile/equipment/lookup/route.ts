@@ -53,10 +53,8 @@ export async function GET(req: NextRequest) {
   // ── 1. PRIMARY: cadastro-equipamentos.json ──────────────────────────────────
   // CadastroStorage.getAll already filters out entityStatus=ARQUIVADO and
   // deletedAt records, so all returned items are lifecycle-active.
-  const cadastroItems = CadastroStorage.getAll(
-    tenantId,
-    'equipamentos',
-  ) as Array<Record<string, unknown>>;
+  CadastroStorage.ensureEquipmentMobileTokens(tenantId);
+  const cadastroItems = CadastroStorage.getAll(tenantId, 'equipamentos') as Record<string, unknown>[];
 
   const cadastroMatch = cadastroItems.find(
     (item) => String(item.code ?? '').trim().toLowerCase() === normalizedCode,

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -168,6 +169,56 @@ export class CadastroStorage {
     this.writeAll(tenantId, entity, all);
     console.info('[storage-api] entity=' + entity + ' action=update tenantId=' + tenantId + ' id=' + id);
     return updated;
+  }
+
+
+  /**
+   * Garante mobileToken persistente para todo equipamento com mobileEnabled=true.
+   *
+   * Regras:
+   *  - Se o equipamento ja tem mobileToken: preserva (nunca regera).
+   *  - Se mobileEnabled=true e sem mobileToken: gera MTK-<hex> e persiste.
+   *  - mobileEnabled=false ou ausente: ignora.
+   *  - Idempotente -- pode ser chamado a cada request sem custo.
+   *
+   * Retorna o numero de tokens gerados (0 se todos ja tinham token).
+   */
+  static ensureEquipmentMobileTokens(tenantId: string): number {
+    const all = this.readAll(tenantId, 'equipamentos');
+    let generated = 0;
+    let changed = false;
+
+    for (const item of all) {
+      const mobileEnabled =
+        item.mobileEnabled === true  || item.mobileEnabled === 'true' ||
+        item.mobile === true          || item.mobile === 'true';
+
+      if (!mobileEnabled) continue;
+
+      const hasToken =
+        typeof item.mobileToken === 'string' && item.mobileToken.trim().length > 0;
+
+      if (hasToken) continue; // preservar token existente
+
+      // Gera MTK-<24 hex chars> usando crypto do Node
+      const hex = crypto.randomBytes(12).toString('hex').toUpperCase();
+      item.mobileToken = 'MTK-' + hex;
+      generated++;
+      changed = true;
+
+      console.info(
+        '[storage-api] entity=equipamentos action=ensure-mobile-token ' +
+        'tenantId=' + tenantId +
+        ' code=' + String(item.code ?? item.id ?? '?') +
+        ' token=' + String(item.mobileToken).slice(0, 12) + '...'
+      );
+    }
+
+    if (changed) {
+      this.writeAll(tenantId, 'equipamentos', all);
+    }
+
+    return generated;
   }
 
   static archive(tenantId: string, entity: string, id: string): boolean {

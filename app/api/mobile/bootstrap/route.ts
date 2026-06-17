@@ -54,7 +54,7 @@ function sha1(payload: unknown): string {
 
 /**
  * Extrai apenas os dígitos de um valor.
- * "OS-100" → "100", "100" → "100", "z31nbt2kz" → null (sem dígitos suficientes não conta)
+ * "OS-100" -> "100", "100" -> "100", "z31nbt2kz" -> null
  * Retorna null se o resultado for vazio.
  */
 function extractNumber(val: unknown): string | null {
@@ -83,8 +83,18 @@ export async function GET(req: NextRequest) {
     const operatorId = req.headers.get('x-operator-id')?.trim() || undefined;
 
     // ── 1. Equipamentos ──────────────────────────────────────────────────────
+    // Garante mobileToken persistente para cada equipamento mobileEnabled.
+    // Idempotente — só gera se ainda não existe.
+    CadastroStorage.ensureEquipmentMobileTokens(tenantId);
+
     const equipments = (CadastroStorage.getAll(tenantId, 'equipamentos') as StorageItem[])
-      .filter(e => isEntityActive(e) && isMobileEnabled(e));
+      .filter(e => isEntityActive(e) && isMobileEnabled(e))
+      .map(e => ({
+        ...e,
+        // Garantir que mobileToken seja sempre retornado (nunca undefined)
+        mobileToken: typeof e.mobileToken === 'string' ? e.mobileToken : null,
+        fleetCode:   String(e.code ?? ''),
+      }));
 
     // ── 2. Ordens de Servico (abertas) ───────────────────────────────────────
     const rawWorkOrders = (CadastroStorage.getAll(tenantId, 'ordens-servico') as StorageItem[])
