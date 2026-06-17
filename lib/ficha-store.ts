@@ -120,6 +120,28 @@ export function isBlockingInconsistency(inc: string): boolean {
   return BLOCKING_INCONSISTENCIES.has(clean);
 }
 
+export function hasManualCloseCorrection(overlay: FichaOverlay | null): boolean {
+  if (!overlay?.correctedFields) return false;
+  return (
+    overlay.correctedFields.hourmeterEnd != null ||
+    overlay.correctedFields.hourmeterFinal != null ||
+    overlay.correctedFields.endedAt != null
+  );
+}
+
+export function getEffectiveBlockingInconsistencies(
+  inconsistencies: string[],
+  overlay: FichaOverlay | null,
+): string[] {
+  const manualClose = hasManualCloseCorrection(overlay);
+  return inconsistencies.filter(inc => {
+    if (!isBlockingInconsistency(inc)) return false;
+    const clean = inc.replace(/ \(alerta\)$/, '').trim();
+    if (manualClose && clean === 'JOURNEY_END_SEM_HORIMETRO_FINAL') return false;
+    return true;
+  });
+}
+
 // ── Load / save helpers ───────────────────────────────────────────────────────
 function loadOverlays(tenantId: string): FichaOverlay[] {
   const file = overlayFile(tenantId);
@@ -320,24 +342,18 @@ export function deriveFichaStatus(params: {
 }): FichaStatusFinal {
   const { computedStatus, overlay, isDayOpen, hasBlockingInconsistency } = params;
 
-  // Jornada ativa → EM_ANDAMENTO (não exportável, não validável como final)
-  if (computedStatus === 'EM_ANDAMENTO') return 'EM_ANDAMENTO';
+  if (overlay?.exported && overlay.modifiedAfterExport) return 'ATUALIZADO';
+  if (overlay?.exported) return 'EXPORTADO';
+  if (overlay?.validated) return 'VALIDADO';
 
-  // Dia ainda aberto mas sem jornada ativa → pode já ter overlay
-  if (isDayOpen && !overlay?.validated && !overlay?.exported) return 'EM_ANDAMENTO';
+  // Jornada ativa só permanece EM_ANDAMENTO quando não houve fechamento manual.
+  if (computedStatus === 'EM_ANDAMENTO' && isDayOpen && !hasManualCloseCorrection(overlay)) {
+    return 'EM_ANDAMENTO';
+  }
 
   if (!overlay) {
     return hasBlockingInconsistency ? 'INCONSISTENTE' : 'PENDENTE';
   }
-
-  // Exportada e depois corrigida → ATUALIZADO
-  if (overlay.exported && overlay.modifiedAfterExport) return 'ATUALIZADO';
-
-  // Exportada → EXPORTADO
-  if (overlay.exported) return 'EXPORTADO';
-
-  // Validada → VALIDADO
-  if (overlay.validated) return 'VALIDADO';
 
   // Com inconsistência crítica → INCONSISTENTE
   if (hasBlockingInconsistency) return 'INCONSISTENTE';

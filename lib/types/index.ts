@@ -646,6 +646,10 @@ export interface EquipmentLiveState {
   operatorId?: string;
   /** Código da operação atual */
   operationCode?: string;
+  /** Código do centro de custo */
+  costCenterCode?: string;
+  /** Nome do centro de custo */
+  costCenterName?: string;
   /** Centro de custo */
   costCenter?: string;
   /** Ordem de serviço */

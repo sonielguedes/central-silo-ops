@@ -31,7 +31,7 @@ function fsmToStatus(state: string): EquipmentLiveStatus {
 const JORNADA_FINALIZADA_CLEAR_FIELDS = [
   'journeyId',
   'operatorRegistration', 'registration', 'operatorId', 'operatorName', 'currentOperator',
-  'operationCode', 'operationName', 'currentOperation', 'costCenter', 'workOrder',
+  'operationCode', 'operationName', 'currentOperation', 'costCenterCode', 'costCenterName', 'costCenter', 'workOrder',
   'implementCode', 'implementId', 'implementName',
   'stopCode', 'stopDescription', 'stopReason', 'stopStartedAt', 'stopDurationSeconds',
 ] satisfies (keyof EquipmentLiveState)[];
@@ -40,6 +40,13 @@ const hasValidValue = (value: unknown) => value !== undefined && value !== null 
 
 function putIfValid(target: Record<string, unknown>, key: string, value: unknown) {
   if (hasValidValue(value)) target[key] = value;
+}
+
+function shouldAcceptCostCenter(costCenter: unknown, operationName: unknown): boolean {
+  const cc = asString(costCenter)?.toUpperCase();
+  if (!cc) return false;
+  const op = asString(operationName)?.toUpperCase();
+  return !op || cc !== op;
 }
 
 const asNumber = (value: unknown): number | undefined => {
@@ -97,6 +104,9 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   const implementCode = data.implementCode;
   const implementId   = data.implementId;   // APK may send implementId instead of implementCode
   const implementName = data.implementName;
+  const rawCostCenter = data.costCenterName ?? data.costCenterCode ?? data.costCenter;
+  const costCenterCode = data.costCenterCode ?? data.costCenter ?? data.costCenterName;
+  const costCenterName = data.costCenterName ?? data.costCenter ?? data.costCenterCode;
   const hourmeterCurrent = asValidHourmeter(data.hourmeterCurrent ?? data.hourmeter);
 
   putIfValid(target, 'operatorRegistration', operatorRegistration);
@@ -107,7 +117,11 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   putIfValid(target, 'operationCode', operationCode);
   putIfValid(target, 'operationName', operationName);
   putIfValid(target, 'currentOperation', operationName);
-  putIfValid(target, 'costCenter', data.costCenter);
+  if (shouldAcceptCostCenter(rawCostCenter, operationName)) {
+    putIfValid(target, 'costCenterCode', costCenterCode);
+    putIfValid(target, 'costCenterName', costCenterName);
+    putIfValid(target, 'costCenter', costCenterName);
+  }
   putIfValid(target, 'workOrder', data.workOrder);
   putIfValid(target, 'implementCode', implementCode);
   putIfValid(target, 'implementId', implementId);

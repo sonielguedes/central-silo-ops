@@ -1,4 +1,8 @@
-import { FichaStore, deriveFichaStatus, isBlockingInconsistency } from '@/lib/ficha-store';
+import {
+  FichaStore,
+  deriveFichaStatus,
+  getEffectiveBlockingInconsistencies,
+} from '@/lib/ficha-store';
 import type { FichaDiaria } from '@/lib/daily-sheet-builder';
 import type { FichaOverlay } from '@/lib/ficha-store';
 
@@ -95,7 +99,7 @@ function fmtH(v: number | null | undefined): string {
 export function canExportFicha(ficha: FichaDiaria, overlay: FichaOverlay | null): CanExportResult {
   const blockingReasons: string[] = [];
   const warnings: string[] = [];
-  const blockingIncs = ficha.inconsistencies.filter(isBlockingInconsistency);
+  const blockingIncs = getEffectiveBlockingInconsistencies(ficha.inconsistencies, overlay);
   const hasBlockingInc = blockingIncs.length > 0;
   const finalStatus = deriveFichaStatus({
     computedStatus: ficha.status,
@@ -126,7 +130,7 @@ export function canExportFicha(ficha: FichaDiaria, overlay: FichaOverlay | null)
 export function buildFichaExportRow(ficha: FichaDiaria, overlay: FichaOverlay | null): string {
   const cf = overlay?.correctedFields ?? {};
   const get = (field: string, base: unknown): unknown => (field in cf ? cf[field] : base);
-  const hasBlockingInc = ficha.inconsistencies.some(isBlockingInconsistency);
+  const hasBlockingInc = getEffectiveBlockingInconsistencies(ficha.inconsistencies, overlay).length > 0;
   const finalStatus = deriveFichaStatus({
     computedStatus: ficha.status,
     overlay,

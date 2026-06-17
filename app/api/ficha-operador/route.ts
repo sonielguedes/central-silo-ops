@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
 import { requirePermission } from '@/lib/auth/rbac-server';
 import { buildDailySheet, buildDailySheetList } from '@/lib/daily-sheet-builder';
-import { FichaStore, deriveFichaStatus, isBlockingInconsistency } from '@/lib/ficha-store';
+import {
+  FichaStore,
+  deriveFichaStatus,
+  getEffectiveBlockingInconsistencies,
+} from '@/lib/ficha-store';
 import type { FichaDiaria } from '@/lib/daily-sheet-builder';
 import type { FichaStatusFinal, CorrectionEntry, PimsFields } from '@/lib/ficha-store';
 
@@ -45,7 +49,10 @@ function mergeFichaWithOverlay(ficha: FichaDiaria, tenantId: string): FichaMerge
     }
   }
 
-  const hasBlockingInc = (merged.inconsistencies as string[]).some(i => isBlockingInconsistency(i));
+  const hasBlockingInc = getEffectiveBlockingInconsistencies(
+    merged.inconsistencies as string[],
+    overlay,
+  ).length > 0;
 
   const finalStatus = deriveFichaStatus({
     computedStatus:          ficha.status,
@@ -128,14 +135,17 @@ export async function PATCH(req: NextRequest) {
     if (action === 'validate') {
       const sheetResult = buildDailySheet({ tenantId, fleetCode, date });
       if (sheetResult.ok) {
-        if (sheetResult.ficha.status === 'EM_ANDAMENTO') {
+        const overlay = FichaStore.get(tenantId, fleetCode, date);
+        const merged = mergeFichaWithOverlay(sheetResult.ficha, tenantId);
+        const blockingList = getEffectiveBlockingInconsistencies(merged.inconsistencies, overlay);
+
+        if (merged.finalStatus === 'EM_ANDAMENTO') {
           return NextResponse.json({
             ok:      false,
             warning: 'EM_ANDAMENTO',
             message: 'Jornada em andamento. Aguarde a conclusão para validar a ficha.',
           }, { status: 422 });
         }
-        const blockingList = sheetResult.ficha.inconsistencies.filter(i => isBlockingInconsistency(i));
         if (blockingList.length > 0) {
           return NextResponse.json({
             ok:         false,

@@ -220,6 +220,21 @@ function pick(...values: unknown[]): string | null {
   return null;
 }
 
+function normalizeComparable(value: string | null | undefined): string {
+  return asStr(value).toUpperCase();
+}
+
+function resolveCostCenter(
+  rawCostCenter: string | null | undefined,
+  operationValues: Array<string | null | undefined>,
+): string | null {
+  const costCenter = asStr(rawCostCenter);
+  if (!costCenter) return null;
+  const comparable = normalizeComparable(costCenter);
+  if (operationValues.some(op => normalizeComparable(op) === comparable)) return null;
+  return costCenter;
+}
+
 // ── Period helpers (BRT-aware) ───────────────────────────────────────────────
 /**
  * Returns the UTC range that covers the full BRT day (UTC-3).
@@ -338,7 +353,7 @@ function buildJourneySummary(group: JourneyGroup): JourneySummary {
     implCode  = pick(p.implementCode, implCode);
     implName  = pick(p.implementName, implName);
     wo        = pick(p.workOrderNumber, p.workOrder, wo);
-    cc        = pick(p.costCenterName, p.costCenter, cc);
+    cc        = pick(p.costCenterName, p.costCenterCode, p.costCenter, cc);
 
     const h = asNum(p.hourmeterStart ?? p.hourmeter);
     if (h !== null && hStart === null) hStart = h;
@@ -472,10 +487,12 @@ function buildFichaFromLiveState(
   const liveJourney: JourneySummary | null = machine.journeyId ? {
     journeyId: machine.journeyId,
     startedAt: machine.statusStartedAt ?? machine.updatedAt ?? null,
-    endedAt: null,
+    endedAt: machine.endedAt ?? null,
     hourmeterStart: machine.hourmeterStart ?? null,
-    hourmeterEnd: null,
-    totalHourmeter: null,
+    hourmeterEnd: machine.hourmeterEnd ?? machine.hourmeterFinal ?? null,
+    totalHourmeter: (machine.hourmeterEnd ?? machine.hourmeterFinal ?? null) !== null && (machine.hourmeterStart ?? machine.hourmeterInitial ?? null) !== null
+      ? Math.round((((machine.hourmeterEnd ?? machine.hourmeterFinal ?? null) as number) - ((machine.hourmeterStart ?? machine.hourmeterInitial ?? null) as number)) * 100) / 100
+      : null,
     operatorRegistration: machine.operatorRegistration ?? machine.registration ?? null,
     operatorName: machine.operatorName ?? machine.currentOperator ?? null,
     operationCode: machine.operationCode ?? null,
@@ -483,7 +500,10 @@ function buildFichaFromLiveState(
     implementCode: machine.implementCode ?? null,
     implementName: machine.implementName ?? null,
     workOrderNumber: machine.workOrder ?? null,
-    costCenterName: machine.costCenter ?? null,
+    costCenterName: resolveCostCenter(
+      machine.costCenterName ?? machine.costCenterCode ?? machine.costCenter,
+      [machine.operationName, machine.currentOperation],
+    ),
     stops: [],
     hasJourneyEnd: false,
   } : null;
@@ -507,6 +527,8 @@ function buildFichaFromLiveState(
 
   const hourmeterStart   = machine.hourmeterStart   ?? machine.hourmeterInitial   ?? null;
   const hourmeterCurrent = machine.hourmeterCurrent ?? machine.hourmeter          ?? null;
+  const hourmeterEnd     = machine.hourmeterEnd     ?? machine.hourmeterFinal     ?? null;
+  const endedAt          = machine.endedAt          ?? null;
 
   // Normalizar operador no live-state fallback também
   const lsRawReg  = machine.operatorRegistration ?? machine.registration ?? null;
@@ -523,7 +545,11 @@ function buildFichaFromLiveState(
 
   const liveStatus = machine.status ?? 'ONLINE';
   const fichaStatus: FichaDiariaStatus =
-    (liveStatus === 'OFFLINE' || liveStatus === 'FINALIZADO') ? 'PENDENTE' : 'EM_ANDAMENTO';
+    !hourmeterEnd && !endedAt && isDayOpen && liveStatus !== 'OFFLINE' && liveStatus !== 'FINALIZADO'
+      ? 'EM_ANDAMENTO'
+      : endedAt && !hourmeterEnd
+        ? 'INCONSISTENTE'
+        : 'PENDENTE';
 
   return {
     id,
@@ -538,18 +564,23 @@ function buildFichaFromLiveState(
     implementCode:  machine.implementCode ?? null,
     implementName:  machine.implementName ?? null,
     workOrderNumber: machine.workOrder ?? null,
-    costCenterName:  machine.costCenter ?? null,
+    costCenterName:  resolveCostCenter(
+      machine.costCenterName ?? machine.costCenterCode ?? machine.costCenter,
+      [machine.operationName, machine.currentOperation],
+    ),
     hourmeterStart,
     hourmeterCurrent,
-    hourmeterEnd: null,
-    totalHourmeter: null,
+    hourmeterEnd,
+    totalHourmeter: hourmeterEnd !== null && hourmeterStart !== null
+      ? Math.round((hourmeterEnd - hourmeterStart) * 100) / 100
+      : null,
     durationMinutes: null,
     minutesOperating: null,
     minutesStopped: null,
     minutesUndetermined: null,
     pctUndetermined: null,
     startedAt: liveJourney?.startedAt ?? null,
-    endedAt: null,
+    endedAt,
     journeys,
     stops: [],
     trailSummary,
@@ -674,7 +705,7 @@ export function buildDailySheet(params: {
   const implementCode  = journeys.reduce<string|null>((a, j) => a ?? j.implementCode, null);
   const implementName  = journeys.reduce<string|null>((a, j) => a ?? j.implementName, null);
   const workOrderNumber= journeys.reduce<string|null>((a, j) => a ?? j.workOrderNumber, null);
-  const costCenterName = journeys.reduce<string|null>((a, j) => a ?? j.costCenterName, null);
+  const costCenterRaw   = journeys.reduce<string|null>((a, j) => a ?? j.costCenterName, null);
 
   // Enrich missing fields from live-state (e.g., operatorName enriched by Central)
   const liveM = machine;
@@ -691,6 +722,10 @@ export function buildDailySheet(params: {
   const effectiveOpNm   = operationName         ?? pick(liveM.operationName, liveM.currentOperation);
   const effectiveImpC   = implementCode         ?? pick(liveM.implementCode);
   const effectiveImpN   = implementName         ?? pick(liveM.implementName);
+  const costCenterName  = resolveCostCenter(
+    costCenterRaw ?? pick(liveM.costCenterName, liveM.costCenterCode, liveM.costCenter),
+    [effectiveOpNm, liveM.operationName, liveM.currentOperation],
+  );
 
   // ── Horímetros ────────────────────────────────────────────────────────────
   const hourmeterStart   = journeys.reduce<number|null>((a, j) => a ?? j.hourmeterStart, null)
