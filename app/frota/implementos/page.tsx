@@ -55,6 +55,23 @@ export default function ImplementsPage() {
     ? models.filter(m => m.typeId === selectedTypeId)
     : [];
 
+  // Tipos de implemento: filtra pelo grupo/categoria/nome normalizado
+  const IMPL_NAMES = new Set([
+    'sulcador','grade aradora','grade niveladora','subsolador',
+    'plantadeira','pulverizador','distribuidor de calcario',
+    'distribuidor de adubo','transbordo','plataforma de corte',
+    'carreta agricola','rocadeira','enleirador','pa concha','outros',
+  ]);
+  const implTypes = types.filter(t => {
+    const r = t as unknown as Record<string, unknown>;
+    if (r['operationalGroup'] === 'IMPLEMENTO') return true;
+    if (r['group'] === 'IMPLEMENTO') return true;
+    if (String(r['category'] ?? '').toUpperCase() === 'IMPLEMENTO') return true;
+    const name = String(r['name'] ?? '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return IMPL_NAMES.has(name);
+  });
+
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
@@ -258,7 +275,10 @@ export default function ImplementsPage() {
                     className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none"
                   >
                     <option value="">Selecione...</option>
-                    {types.filter(t => (t as unknown as Record<string,unknown>)['operationalGroup'] === 'IMPLEMENTO').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {implTypes.length === 0
+                      ? <option disabled value="">Nenhum tipo de implemento cadastrado</option>
+                      : implTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)
+                    }
                   </select>
                 </FormField>
 

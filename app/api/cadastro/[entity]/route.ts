@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth/rbac-server';
 import { AuthStore } from '@/lib/auth/auth-store';
 import { resolveSessionFromRequest } from '@/lib/auth/session';
 import { requireCsrf } from '@/lib/auth/csrf';
+import { ensureImplementCatalogForTenant } from '@/lib/catalog/ensure-implement-catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,12 @@ export async function GET(
 
   const rbac = requirePermission(req, 'cadastros', 'visualizar', tenantId);
   if (rbac) return rbac;
+
+  // Ensure implement catalog exists for this tenant before returning tipos/modelos.
+  // This is an active upsert — safe in production where shouldSeedDemoData() is false.
+  if (entity === 'tipos' || entity === 'modelos') {
+    ensureImplementCatalogForTenant(tenantId);
+  }
 
   const data = CadastroStorage.getAll(tenantId, entity);
   return NextResponse.json(data);
