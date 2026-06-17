@@ -260,18 +260,10 @@ function dayPeriod(date: string): {
 /**
  * Returns true if the event timestamp falls within the BRT-day window
  * (or within a 4h tolerance on each side for edge cases).
- *
- * Accepts numeric epoch-ms from real APK data stored before timestamp
- * normalization was in place — typeof guard prevents "endsWith is not a function".
  */
 function inPeriod(ts: string | null | undefined, periodStart: string, periodEnd: string): boolean {
   if (!ts) return false;
-  // Runtime guard: numeric epoch-ms timestamps stored in JSON by older APK batches
-  if (typeof (ts as unknown) === 'number') {
-    const s = new Date(ts as unknown as number).toISOString();
-    return s >= periodStart && s <= periodEnd;
-  }
-  // Normalize string: if no timezone suffix treat as UTC
+  // Normalize: if no timezone, treat as UTC
   const t = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z';
   return t >= periodStart && t <= periodEnd;
 }

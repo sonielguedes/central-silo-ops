@@ -2,186 +2,139 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/auth/api-guard';
 import { requirePermission } from '@/lib/auth/rbac-server';
 import { buildDailySheet, buildDailySheetList } from '@/lib/daily-sheet-builder';
-import { FichaStore, deriveFichaStatus } from '@/lib/ficha-store';
+import { FichaStore } from '@/lib/ficha-store';
+import { buildFichaExportContent, canExportFicha, resolveFichaExportFilename, type ExportFormat } from '@/lib/ficha-export';
 import type { FichaDiaria } from '@/lib/daily-sheet-builder';
 
 export const dynamic = 'force-dynamic';
 
-// ── CSV helpers ───────────────────────────────────────────────────────────────
-function esc(v: unknown): string {
-  const s = v === null || v === undefined ? '' : String(v);
-  if (s.includes(';') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-    return '"' + s.replace(/"/g, '""') + '"';
+function parseFormat(value: string | null): ExportFormat {
+  return String(value ?? 'csv').toLowerCase() === 'txt' ? 'txt' : 'csv';
+}
+
+function parseBool(value: unknown): boolean {
+  return value === true || value === 'true' || value === 1 || value === '1';
+}
+
+function parseSheetIds(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  if (typeof raw === 'string' && raw.trim()) return raw.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
+function logBlocked(sheetId: string, reasons: string[]): void {
+  console.info('[ficha-export] blocked sheetId=' + sheetId + ' reasons=' + reasons.join('|'));
+}
+
+function logExported(count: number): void {
+  console.info('[ficha-export] exported count=' + count);
+}
+
+async function loadSheets(tenantId: string, date: string, sheetIds: string[], fleetCode?: string | null): Promise<FichaDiaria[]> {
+  if (fleetCode) {
+    const result = buildDailySheet({ tenantId, fleetCode, date });
+    if (!result.ok) throw new Error(result.error ?? 'Nenhuma ficha encontrada');
+    return [result.ficha];
   }
-  return s;
+  const fichas = buildDailySheetList({ tenantId, date });
+  return sheetIds.length > 0 ? fichas.filter(f => sheetIds.includes(f.id)) : fichas;
 }
 
-function fmtBR(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const t = new Date(iso);
-  return Number.isNaN(t.getTime())
-    ? ''
-    : t.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+function applyExportMark(tenantId: string, fichas: FichaDiaria[], format: ExportFormat): void {
+  const actor = 'export-' + format;
+  for (const ficha of fichas) {
+    const overlay = FichaStore.get(tenantId, ficha.fleetCode, ficha.date);
+    const shouldIncrement = !overlay?.exported || overlay?.needsReexport;
+    if (shouldIncrement) {
+      FichaStore.markExported(tenantId, ficha.fleetCode, ficha.date, actor);
+    }
+  }
 }
 
-function fmtMin(min: number | null | undefined): string {
-  if (min == null) return '';
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h + 'h' + (m > 0 ? String(m).padStart(2, '0') + 'min' : '');
-}
+async function handleExport(req: NextRequest, payload: Record<string, unknown>, markFromCaller: boolean) {
+  const tenant = requireTenant(req);
+  if (!tenant.ok) return tenant.response;
+  const { tenantId } = tenant;
 
-function fmtH(v: number | null | undefined): string {
-  if (v == null) return '';
-  return String(Math.round(v * 100) / 100).replace('.', ',');
-}
+  const permCheck = requirePermission(req, 'operadores', 'exportar', tenantId);
+  if (permCheck) return permCheck;
 
-// ── Build CSV rows ────────────────────────────────────────────────────────────
-const HEADER = [
-  'data', 'periodo_inicio', 'periodo_fim',
-  'regional', 'unidade', 'grupo_equipamento',
-  'frota', 'tipo_equipamento',
-  'operador', 'matricula',
-  'os', 'operacao_codigo', 'operacao_descricao',
-  'centro_custo', 'implemento_codigo', 'implemento_descricao',
-  'fazenda', 'zona', 'talhao',
-  'horimetro_inicio', 'horimetro_atual', 'horimetro_fim', 'total_horas',
-  'horas_produtivas', 'horas_paradas', 'horas_indeterminado', 'percentual_indeterminado',
-  'status', 'inconsistencias',
-  'validado', 'exportado',
-  'validado_por', 'validado_em', 'exportado_em',
-].join(';');
+  const date = String(payload.date ?? new Date().toISOString().slice(0, 10)).trim();
+  const format = parseFormat(String(payload.format ?? 'csv'));
+  const sheetIds = parseSheetIds(payload.sheetIds);
+  const fleetCode = String(payload.fleetCode ?? '').trim() || null;
+  const markAsExported = markFromCaller && parseBool(payload.markAsExported);
 
-function buildRow(ficha: FichaDiaria, tenantId: string): string {
-  const overlay = FichaStore.get(tenantId, ficha.fleetCode, ficha.date);
-  const hasBlocking = ficha.inconsistencies.some(i => !i.includes('(alerta)'));
-  const finalStatus = deriveFichaStatus({
-    computedStatus: ficha.status,
-    overlay,
-    isDayOpen: ficha.isDayOpen,
-    hasBlockingInconsistency: hasBlocking,
+  const fichas = await loadSheets(tenantId, date, sheetIds, fleetCode);
+  if (fichas.length === 0) {
+    return NextResponse.json({ ok: false, error: 'EXPORT_BLOCKED', blockingReasons: ['Nenhuma ficha encontrada'], warnings: [] }, { status: 404 });
+  }
+
+  const exportable: FichaDiaria[] = [];
+  const blocked: { sheetId: string; reasons: string[] }[] = [];
+  for (const ficha of fichas) {
+    const overlay = FichaStore.get(tenantId, ficha.fleetCode, ficha.date);
+    const check = canExportFicha(ficha, overlay);
+    if (check.ok) exportable.push(ficha);
+    else {
+      blocked.push({ sheetId: ficha.id, reasons: check.blockingReasons });
+      logBlocked(ficha.id, check.blockingReasons);
+    }
+  }
+
+  if (blocked.length > 0) {
+    return NextResponse.json({
+      ok: false,
+      error: 'EXPORT_BLOCKED',
+      blockingReasons: blocked.flatMap(item => item.reasons),
+      warnings: [],
+      blocked,
+    }, { status: 422 });
+  }
+
+  if (exportable.length === 0) {
+    return NextResponse.json({ ok: false, error: 'EXPORT_BLOCKED', blockingReasons: [], warnings: [], blocked }, { status: 422 });
+  }
+
+  const content = buildFichaExportContent(exportable, tenantId, format);
+  if (markAsExported) applyExportMark(tenantId, exportable, format);
+
+  const filename = resolveFichaExportFilename(date, format);
+  console.info('[ficha-export] date=' + date + ' format=' + format + ' selected=' + fichas.length);
+  logExported(exportable.length);
+
+  return new NextResponse(content, {
+    status: 200,
+    headers: {
+      'Content-Type': format === 'csv' ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="' + filename + '"',
+      'Cache-Control': 'no-store',
+    },
   });
-
-  // Apply corrections
-  const cf = overlay?.correctedFields ?? {};
-  const get = (field: string, base: unknown): unknown => field in cf ? cf[field] : base;
-
-  // Stops row expansion — one CSV row per stop, or one row if no stops
-  const stops = ficha.stops;
-
-  const baseFields = [
-    esc(ficha.date),
-    esc(fmtBR(ficha.periodStart)),
-    esc(fmtBR(ficha.periodEnd)),
-    '', // regional
-    '', // unidade
-    '', // grupo_equipamento
-    esc(ficha.fleetCode),
-    '', // tipo_equipamento
-    esc(get('operatorName',   ficha.operatorName)),
-    esc(get('operatorRegistration', ficha.operatorRegistration)),
-    esc(get('workOrderNumber', ficha.workOrderNumber)),
-    esc(get('operationCode',  ficha.operationCode)),
-    esc(get('operationName',  ficha.operationName)),
-    esc(get('costCenterName', ficha.costCenterName)),
-    esc(get('implementCode',  ficha.implementCode)),
-    esc(get('implementName',  ficha.implementName)),
-    '', // fazenda
-    '', // zona
-    '', // talhao
-    esc(fmtH(ficha.hourmeterStart)),
-    esc(fmtH(ficha.hourmeterCurrent)),
-    esc(fmtH(ficha.hourmeterEnd)),
-    esc(fmtH(ficha.totalHourmeter)),
-    esc(fmtMin(ficha.minutesOperating)),
-    esc(fmtMin(ficha.minutesStopped)),
-    esc(fmtMin(ficha.minutesUndetermined)),
-    esc(ficha.pctUndetermined != null ? ficha.pctUndetermined + '%' : ''),
-    esc(finalStatus),
-    esc(ficha.inconsistencies.join(' | ')),
-    esc(overlay?.validated ? 'SIM' : 'NAO'),
-    esc(overlay?.exported  ? 'SIM' : 'NAO'),
-    esc(overlay?.validatedBy ?? ''),
-    esc(fmtBR(overlay?.validatedAt)),
-    esc(fmtBR(overlay?.exportedAt)),
-  ];
-
-  if (stops.length === 0) {
-    return baseFields.join(';');
-  }
-
-  // One row per stop — repeat base fields
-  return stops.map(s =>
-    baseFields.join(';') +
-    '\n' +
-    // Add a second row with stop detail as a sub-row (no extra columns — keep same schema)
-    // Encode stop into inconsistencias column as annotation, or simply repeat base
-    // Per spec the CSV is flat — stops are shown as rows, so we annotate within
-    baseFields.map((_, i) => {
-      if (i === 18) return esc('PARADA ' + s.code + ': ' + s.description);
-      if (i === 17) return esc(fmtBR(s.startedAt));
-      if (i === 18) return esc(fmtBR(s.endedAt ?? ''));
-      return _;
-    }).join(';')
-  ).join('\n');
 }
 
-// ── GET /api/ficha-operador/export ────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const date      = searchParams.get('date')?.trim()      || new Date().toISOString().slice(0, 10);
-    const fleetCode = searchParams.get('fleetCode')?.trim() || null;
-
-    const tenant = requireTenant(req);
-    if (!tenant.ok) return tenant.response;
-    const { tenantId } = tenant;
-
-    const permCheck = requirePermission(req, 'operadores', 'exportar', tenantId);
-    if (permCheck) return permCheck;
-
-    let fichas: FichaDiaria[];
-    if (fleetCode) {
-      const result = buildDailySheet({ tenantId, fleetCode, date });
-      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-      fichas = [result.ficha];
-    } else {
-      fichas = buildDailySheetList({ tenantId, date });
-    }
-
-    if (fichas.length === 0) {
-      return NextResponse.json({ error: 'Nenhuma ficha encontrada para exportação' }, { status: 404 });
-    }
-
-    // Build CSV
-    const rows = fichas.map(f => buildRow(f, tenantId));
-    const csv  = '﻿' + [HEADER, ...rows].join('\n');
-
-    // Mark as exported
-    for (const f of fichas) {
-      FichaStore.markExported(tenantId, f.fleetCode, f.date, 'export-csv');
-    }
-
-    const safeDate = date.replace(/-/g, '');
-    const suffix   = fleetCode ? '-frota' + fleetCode : '-todas';
-    const filename = 'ficha-operador-' + safeDate + suffix + '.csv';
-
-    console.info(
-      '[ficha-operador/export] date=' + date +
-      ' fichas=' + fichas.length +
-      (fleetCode ? ' fleetCode=' + fleetCode : ''),
-    );
-
-    return new NextResponse(csv, {
-      status: 200,
-      headers: {
-        'Content-Type':        'text/csv; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="' + filename + '"',
-        'Cache-Control':       'no-store',
-      },
-    });
+    return await handleExport(req, {
+      date: searchParams.get('date'),
+      format: searchParams.get('format'),
+      sheetIds: searchParams.getAll('sheetIds'),
+      fleetCode: searchParams.get('fleetCode'),
+      markAsExported: searchParams.get('markAsExported'),
+    }, false);
   } catch (error) {
-    console.error('[ficha-operador/export] error', error);
+    console.error('[ficha-export] GET error', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json() as Record<string, unknown>;
+    return await handleExport(req, body, true);
+  } catch (error) {
+    console.error('[ficha-export] POST error', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

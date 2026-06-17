@@ -356,7 +356,7 @@ function DetailDrawer({ ficha, onClose, onValidate, onExport, onCorrect, loading
   ficha: FichaDiaria;
   onClose: () => void;
   onValidate: (f: FichaDiaria) => void;
-  onExport: (f: FichaDiaria) => void;
+  onExport: (f: FichaDiaria, format?: 'csv' | 'txt') => void;
   onCorrect: (f: FichaDiaria) => void;
   loading: boolean;
 }) {
@@ -472,10 +472,16 @@ function DetailDrawer({ ficha, onClose, onValidate, onExport, onCorrect, loading
           )}
 
           {(fs !== 'INCONSISTENTE' && fs !== 'EM_ANDAMENTO') && (
-            <button onClick={() => onExport(ficha)} disabled={loading}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-40">
-              <Download size={12} /> {ficha.needsReexport ? 'Re-exportar CSV' : 'Exportar CSV'}
-            </button>
+            <>
+              <button onClick={() => onExport(ficha, 'csv')} disabled={loading}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-40">
+                <Download size={12} /> {ficha.needsReexport ? 'Re-exportar CSV' : 'Exportar CSV'}
+              </button>
+              <button onClick={() => onExport(ficha, 'txt')} disabled={loading}
+                className="flex items-center gap-2 px-4 py-2.5 border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all disabled:opacity-40">
+                <Download size={12} /> TXT
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -642,56 +648,70 @@ function ValidacaoTab({ ficha }: { ficha: FichaDiaria }) {
   );
 }
 
-function ExportacaoTab({ ficha, onExport, loading }: { ficha: FichaDiaria; onExport: (f: FichaDiaria) => void; loading: boolean }) {
+function ExportacaoTab({ ficha, onExport, loading }: {
+  ficha: FichaDiaria;
+  onExport: (f: FichaDiaria, format?: 'csv' | 'txt') => void;
+  loading: boolean;
+}) {
   const fs = ficha.finalStatus ?? ficha.status;
   const canExport = fs !== 'INCONSISTENTE' && fs !== 'EM_ANDAMENTO';
   return (
     <div className="space-y-5">
+      {/* Status panel */}
       <div className={cn(
         'rounded-2xl border p-5',
-        fs === 'EXPORTADO'   ? 'border-emerald-500/30 bg-emerald-950/10' :
-        fs === 'ATUALIZADO'  ? 'border-violet-500/30 bg-violet-950/10' :
-        fs === 'INCONSISTENTE' ? 'border-red-500/30 bg-red-950/10' :
+        fs === 'EXPORTADO'     ? 'border-emerald-500/30 bg-emerald-950/10' :
+        fs === 'ATUALIZADO'    ? 'border-violet-500/30  bg-violet-950/10'  :
+        fs === 'INCONSISTENTE' ? 'border-red-500/30     bg-red-950/10'     :
         'border-[#2d3647] bg-[#0a0e27]/40',
       )}>
         <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-3">Status de Exportação</p>
         <div className="flex items-center gap-3 flex-wrap">
           <StatusBadge status={fs} />
-          {fs === 'ATUALIZADO' && (
-            <span className="text-[9px] text-violet-300">Ficha alterada após exportação — re-exportar</span>
-          )}
-          {fs === 'INCONSISTENTE' && (
-            <span className="text-[9px] text-red-300">Exportação bloqueada — inconsistências críticas</span>
-          )}
-          {fs === 'EM_ANDAMENTO' && (
-            <span className="text-[9px] text-cyan-300">Exportação disponível após encerramento da jornada</span>
-          )}
+          {fs === 'ATUALIZADO'    && <span className="text-[9px] text-violet-300">Ficha alterada após exportação — re-exportar</span>}
+          {fs === 'INCONSISTENTE' && <span className="text-[9px] text-red-300">Exportação bloqueada — inconsistências críticas</span>}
+          {fs === 'EM_ANDAMENTO'  && <span className="text-[9px] text-cyan-300">Exportação disponível após encerramento da jornada</span>}
+          {ficha.needsReexport    && <span className="text-[9px] text-violet-400 font-bold">Re-exportação recomendada</span>}
         </div>
         {ficha.exported && (
           <div className="mt-3 pt-3 border-t border-[#2d3647]/40 text-[9px] text-muted-foreground space-y-1">
             <p>Exportado por <span className="text-white">{ficha.exportedBy ?? 'sistema'}</span></p>
             <p>Em <span className="text-white">{fmtDT(ficha.exportedAt)}</span></p>
-            <p>Total de exportações: <span className="text-white font-bold">{ficha.exportCount}</span></p>
+            <p>Total de exportações: <span className="text-emerald-400 font-bold">{ficha.exportCount}</span></p>
           </div>
         )}
       </div>
+
+      {/* Ficha summary */}
       <div className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl p-5">
-        <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-3">Resumo da Ficha</p>
-        <FieldRow label="Frota"      value={ficha.fleetCode} />
-        <FieldRow label="Data"       value={ficha.date} />
-        <FieldRow label="Operador"   value={fv(ficha.operatorName)} />
-        <FieldRow label="H. Inicial" value={fmtH(ficha.hourmeterStart)} />
-        <FieldRow label="H. Final"   value={fmtH(ficha.hourmeterEnd)} />
-        <FieldRow label="Total Hrs"  value={fmtH(ficha.totalHourmeter)} />
-        <FieldRow label="Pontos GPS" value={String(ficha.trailSummary.points)} />
-        <FieldRow label="Paradas"    value={String(ficha.stops.length)} />
+        <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-3">Resumo da Ficha (47 colunas)</p>
+        <FieldRow label="Frota"        value={ficha.fleetCode} />
+        <FieldRow label="Data"         value={ficha.date} />
+        <FieldRow label="Operador"     value={fv(ficha.operatorName)} />
+        <FieldRow label="Matrícula"    value={fv(ficha.operatorRegistration)} />
+        <FieldRow label="O.S."         value={fv(ficha.workOrderNumber)} />
+        <FieldRow label="Operação"     value={fv(ficha.operationName || ficha.operationCode)} />
+        <FieldRow label="H. Inicial"   value={fmtH(ficha.hourmeterStart)} />
+        <FieldRow label="H. Final"     value={fmtH(ficha.hourmeterEnd)} />
+        <FieldRow label="Total Hrs"    value={fmtH(ficha.totalHourmeter)} />
+        <FieldRow label="Pontos GPS"   value={String(ficha.trailSummary.points)} />
+        <FieldRow label="Paradas"      value={String(ficha.stops.length)} />
+        <FieldRow label="Inconsistências" value={ficha.inconsistencies.length > 0 ? ficha.inconsistencies.join(', ') : 'Nenhuma'} />
       </div>
+
+      {/* Export buttons */}
       {canExport ? (
-        <button onClick={() => onExport(ficha)} disabled={loading}
-          className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-700/20 disabled:opacity-40">
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          {ficha.needsReexport ? 'Re-exportar CSV' : 'Exportar CSV desta Ficha'}
-        </button>
+        <div className="flex gap-3">
+          <button onClick={() => onExport(ficha, 'csv')} disabled={loading}
+            className="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-700/20 disabled:opacity-40">
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            {ficha.needsReexport ? 'Re-exportar CSV' : 'Exportar CSV'}
+          </button>
+          <button onClick={() => onExport(ficha, 'txt')} disabled={loading}
+            className="flex items-center justify-center gap-2 px-5 py-3 border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all disabled:opacity-40">
+            <Download size={14} /> TXT
+          </button>
+        </div>
       ) : (
         <div className="w-full flex items-center justify-center gap-2 px-5 py-3 border border-[#2d3647] rounded-2xl text-[10px] font-black uppercase text-muted-foreground cursor-not-allowed opacity-50">
           <Download size={14} /> Exportação bloqueada
@@ -856,18 +876,70 @@ function FichaOperadorPage() {
     }
   }, [date, fetchFichas, detail, showToast]);
 
-  const handleExport = useCallback((ficha: FichaDiaria) => {
+  const downloadExport = useCallback(async (
+    payload: { date: string; format: 'csv' | 'txt'; sheetIds: string[]; markAsExported: boolean; fleetCode?: string | null },
+  ) => {
+    setActionLoad(true);
+    try {
+      const res = await fetch('/api/ficha-operador/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 422) {
+        const data = await res.json() as Record<string, unknown>;
+        const blocked = Array.isArray(data.blocked) ? data.blocked as { reasons?: string[] }[] : [];
+        const reasons = [
+          ...(Array.isArray(data.blockingReasons) ? data.blockingReasons as string[] : []),
+          ...blocked.flatMap(b => Array.isArray(b.reasons) ? b.reasons : []),
+        ];
+        showToast(reasons.length > 0 ? reasons.join(' | ') : String(data.error ?? 'Exportação bloqueada'), 'error');
+        return false;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        showToast(String(data.error ?? 'Erro ao exportar ficha'), 'error');
+        return false;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? 'ficha-operador.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      await fetchFichas(date);
+      showToast('Ficha exportada com sucesso!', 'success');
+      return true;
+    } finally {
+      setActionLoad(false);
+    }
+  }, [date, fetchFichas, showToast]);
+
+  const handleExport = useCallback((ficha: FichaDiaria, format: 'csv' | 'txt' = 'csv') => {
     const fs = (ficha.finalStatus ?? ficha.status) as string;
     if (fs === 'INCONSISTENTE') {
-      showToast('Exportação bloqueada — corrija as inconsistências críticas primeiro.', 'error');
+      showToast('Exportação bloqueada: inconsistências críticas.', 'error');
       return;
     }
     if (fs === 'EM_ANDAMENTO') {
-      showToast('Exportação indisponível — jornada ainda em andamento.', 'warning');
+      showToast('Ficha ainda em andamento. Aguarde o fechamento da jornada ou do dia operacional.', 'warning');
       return;
     }
-    window.open('/api/ficha-operador/export?date=' + ficha.date + '&fleetCode=' + ficha.fleetCode, '_blank');
-  }, [showToast]);
+    const markAsExported = fs !== 'EXPORTADO' || ficha.needsReexport;
+    void downloadExport({
+      date: ficha.date,
+      format,
+      sheetIds: [ficha.id],
+      markAsExported,
+      fleetCode: ficha.fleetCode,
+    });
+  }, [downloadExport, showToast]);
 
   const handleCorrect = useCallback(async (
     ficha: FichaDiaria,
@@ -902,9 +974,18 @@ function FichaOperadorPage() {
     }
   }, [date, fetchFichas, detail, showToast]);
 
-  const handleExportSelected = () => {
+  const handleExportSelected = (format: 'csv' | 'txt' = 'csv') => {
     const selectedFichas = filtered.filter(f => selected.has(f.id));
-    for (const f of selectedFichas) handleExport(f);
+    if (selectedFichas.length === 0) {
+      showToast('Selecione ao menos uma ficha para exportar.', 'warning');
+      return;
+    }
+    void downloadExport({
+      date,
+      format,
+      sheetIds: selectedFichas.map(f => f.id),
+      markAsExported: selectedFichas.some(f => (f.finalStatus ?? f.status) !== 'EXPORTADO' || f.needsReexport),
+    });
   };
 
   const handleValidateSelected = async () => {
@@ -946,9 +1027,13 @@ function FichaOperadorPage() {
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-700 text-white text-[9px] font-black uppercase hover:bg-blue-600 transition-all disabled:opacity-40">
                     <CheckCircle2 size={11} /> Validar ({selected.size})
                   </button>
-                  <button onClick={handleExportSelected}
+                  <button onClick={() => handleExportSelected('csv')}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-700 text-white text-[9px] font-black uppercase hover:bg-emerald-600 transition-all">
-                    <Download size={11} /> Exportar ({selected.size})
+                    <Download size={11} /> CSV ({selected.size})
+                  </button>
+                  <button onClick={() => handleExportSelected('txt')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[9px] font-black uppercase hover:bg-emerald-500/20 transition-all">
+                    <Download size={11} /> TXT ({selected.size})
                   </button>
                 </>
               )}
