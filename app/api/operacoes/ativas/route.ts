@@ -18,6 +18,8 @@ import { CadastroStorage } from '@/lib/cadastro-storage';
 import { buildDailySheetList } from '@/lib/daily-sheet-builder';
 import { FichaStore, deriveFichaStatus, getEffectiveBlockingInconsistencies } from '@/lib/ficha-store';
 import { resolveStop } from '@/lib/stop-resolver';
+import { resolveStopFull } from '@/lib/operational/resolve-active-operations';
+import type { ResolvedStop } from '@/lib/operational/resolve-active-operations';
 import type { EquipmentLiveState } from '@/lib/types';
 import type { FichaDiaria } from '@/lib/daily-sheet-builder';
 
@@ -51,6 +53,8 @@ export interface ActiveOperationItem {
   fichaStatus: string;
   stopCode: string | null;
   stopDescription: string | null;
+  /** Objeto resolvido com estado semantico da parada (SEM_PARADA_ATIVA, AGUARDANDO_APONTAMENTO, PARADA_APONTADA, PARADA_INCONSISTENTE). */
+  stop: ResolvedStop;
   inconsistencies: string[];
   hasInconsistency: boolean;
   // GPS
@@ -167,6 +171,9 @@ function buildItem(
   const stopResolved    = live ? resolveStop(live, allEvents, catalog) : { code: null, description: null };
   const stopCode        = stopResolved.code;
   const stopDescription = stopResolved.description;
+  // Objeto resolvido com estado semantico — mesmo resolver aprovado no Mapa Operacional
+  const equipmentIdForStop = str(live?.equipmentId) ?? ficha.equipmentId;
+  const stop = resolveStopFull(equipmentIdForStop, liveStatus, live, allEvents, catalog);
 
   const inconsistencies = ficha.inconsistencies ?? [];
   const hasInconsistency = inconsistencies.length > 0;
@@ -194,6 +201,7 @@ function buildItem(
     fichaStatus,
     stopCode,
     stopDescription,
+    stop,
     inconsistencies,
     hasInconsistency,
     latitude,
@@ -261,6 +269,7 @@ export async function GET(req: NextRequest) {
     for (const live of liveFleet) {
       if (!fichaByFleet.has(live.fleetCode)) {
         const liveOnlyStop = resolveStop(live, allEvents, catalog);
+        const liveOnlyStopFull = resolveStopFull(str(live.equipmentId), live.status, live, allEvents, catalog);
         const item: ActiveOperationItem = {
           fleetCode:          live.fleetCode,
           equipmentId:        live.equipmentId,
@@ -281,6 +290,7 @@ export async function GET(req: NextRequest) {
           fichaStatus:        'SEM_JORNADA',
           stopCode:           liveOnlyStop.code,
           stopDescription:    liveOnlyStop.description,
+          stop:               liveOnlyStopFull,
           inconsistencies:    [],
           hasInconsistency:   false,
           latitude:           null,

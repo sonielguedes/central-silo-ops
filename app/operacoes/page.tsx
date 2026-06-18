@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ActiveOperationItem, ActiveOperationsResponse } from '@/app/api/operacoes/ativas/route';
+import type { ResolvedStop } from '@/lib/operational/resolve-active-operations';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -130,6 +131,66 @@ function Field({ label, icon, children, span }: {
         {label}
       </p>
       <p className="text-xs font-bold text-white/90 uppercase truncate">{children}</p>
+    </div>
+  );
+}
+
+// ── Stop block ─────────────────────────────────────────────────────────────────
+
+/**
+ * Bloco PARADA semantico — exibe estado resolvido da parada.
+ * Nunca exibe "NÃO INFORMADO". Sempre visivel (mesmo sem parada ativa).
+ */
+function StopBlock({ stop }: { stop?: ResolvedStop }) {
+  // Fallback seguro: sem stop object -> trata como SEM_PARADA_ATIVA
+  const state = stop?.state ?? 'SEM_PARADA_ATIVA';
+
+  let content: React.ReactNode;
+
+  if (state === 'PARADA_APONTADA') {
+    content = (
+      <div className="space-y-0.5">
+        {stop?.code && (
+          <p className="text-xs font-bold text-orange-300 uppercase">Código: {stop.code}</p>
+        )}
+        {stop?.reason && (
+          <p className="text-xs font-bold text-white/90 uppercase truncate">Motivo: {stop.reason}</p>
+        )}
+        {!stop?.code && !stop?.reason && (
+          <p className="text-xs font-bold text-white/90 uppercase">Parada apontada</p>
+        )}
+      </div>
+    );
+  } else if (state === 'AGUARDANDO_APONTAMENTO') {
+    content = (
+      <div className="space-y-0.5">
+        <p className="text-xs font-bold text-amber-300 uppercase">Aguardando apontamento de parada</p>
+        <p className="text-xs font-bold text-white/50 uppercase">Código: —</p>
+      </div>
+    );
+  } else if (state === 'PARADA_INCONSISTENTE') {
+    content = (
+      <div className="space-y-0.5">
+        <p className="text-xs font-bold text-red-400 uppercase">Parada inconsistente</p>
+        {stop?.inconsistency && (
+          <p className="text-[10px] text-red-300/70 uppercase">{stop.inconsistency}</p>
+        )}
+      </div>
+    );
+  } else {
+    // SEM_PARADA_ATIVA (default)
+    content = (
+      <p className="text-xs font-bold text-white/40 uppercase">Sem parada ativa</p>
+    );
+  }
+
+  return (
+    <div className="col-span-2 space-y-0.5">
+      <p className="text-[9px] text-muted-foreground font-black uppercase flex items-center gap-1">
+        <ZapOff size={9} />
+        PARADA
+      </p>
+      {content}
     </div>
   );
 }
@@ -240,11 +301,7 @@ function OpCard({ item, selectedDate }: { item: ActiveOperationItem; selectedDat
         <Field label="Data Operacional">
           {formatDateBR(item.date)}
         </Field>
-        {item.stopCode ? (
-          <Field label="Parada" span>
-            {item.stopCode}{item.stopDescription ? ` — ${item.stopDescription}` : ''}
-          </Field>
-        ) : null}
+        <StopBlock stop={item.stop} />
         <Field label="Jornada ID">
           {item.journeyId ?? '—'}
         </Field>

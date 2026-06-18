@@ -301,8 +301,10 @@ function lookupEquipment(code: string, catalog: EquipmentCatalogItem[]): Equipme
  *   - status PARADA_APONTADA sem codigo   -> PARADA_INCONSISTENTE
  *   - status em trabalho                  -> SEM_PARADA_ATIVA
  *   - codigo + (desc ou catalogo)         -> PARADA_APONTADA
+ *
+ * Exportada para reutilizacao em /api/operacoes/ativas e outros modulos.
  */
-function resolveStopFull(
+export function resolveStopFull(
   equipmentId: string | null,
   liveStatus: string,
   live: EquipmentLiveState | undefined,

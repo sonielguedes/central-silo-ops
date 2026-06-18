@@ -320,3 +320,176 @@ test('ADMIN_EMPRESA tem operacoes:visualizar e operacoes:editar', () => {
   expect(hasPermission('ADMIN_EMPRESA', 'operacoes', 'visualizar')).toBe(true);
   expect(hasPermission('ADMIN_EMPRESA', 'operacoes', 'editar')).toBe(false); // ADMIN_EMPRESA tem READ_EXPORT em operacoes, nao FULL
 });
+
+// ── Hotfix 6.7D.1 -- Parada resolvida em operacoes ativas ─────────────────────
+
+// H1: API retorna objeto `stop` para a frota 2026
+test('H1 -- API retorna objeto stop para a frota 2026', async () => {
+  MOCK_LIVE_FLEET.push(LIVE_2026);
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  expect(item).toBeDefined();
+  expect(item?.stop).toBeDefined();
+  expect(typeof (item?.stop as Record<string, unknown>)?.state).toBe('string');
+});
+
+// H3: stop.state = SEM_PARADA_ATIVA quando nao ha parada ativa (OFFLINE, sem eventos de parada)
+test('H3 -- stop.state e SEM_PARADA_ATIVA quando status e OFFLINE e nao ha eventos de parada', async () => {
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'OFFLINE' });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.state).toBe('SEM_PARADA_ATIVA');
+});
+
+// H4: stop.state = AGUARDANDO_APONTAMENTO quando status e PARADO e nao ha codigo de parada
+test('H4 -- stop.state e AGUARDANDO_APONTAMENTO quando status e PARADO sem codigo de parada', async () => {
+  MOCK_LIVE_FLEET.push({
+    ...LIVE_2026,
+    status:           'PARADO',
+    stopCode:         null,
+    stopDescription:  null,
+    stopReason:       null,
+  });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.state).toBe('AGUARDANDO_APONTAMENTO');
+});
+
+// H5: stop.state = PARADA_APONTADA com codigo e motivo quando ha evento STOP_REASON
+test('H5 -- stop.state e PARADA_APONTADA com codigo e motivo quando ha evento STOP_REASON', async () => {
+  const { ServerStorage } = jest.requireMock('@/lib/server-storage') as {
+    ServerStorage: { getLiveFleet: jest.Mock; getEvents: jest.Mock };
+  };
+  ServerStorage.getEvents.mockReturnValueOnce([
+    {
+      id:          'evt-stop-202',
+      tenantId:    'sg01-1781359594113',
+      equipmentId: 'eq-2026',
+      type:        'STOP_REASON',
+      timestamp:   '2026-06-17T22:00:00.000Z',
+      payload: {
+        stopReasonCode:        '202',
+        stopReason:            'Sem Atividade Noturna',
+        status:                'PARADA_APONTADA',
+        journeyId:             '5752f4a7-286d-4148-bf40-dd8c69d656a4',
+      },
+    },
+  ]);
+
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'PARADA_APONTADA' });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.state).toBe('PARADA_APONTADA');
+  expect(stop?.code).toBe('202');
+  expect(stop?.reason).toBe('Sem Atividade Noturna');
+});
+
+// H6: stop.state = PARADA_INCONSISTENTE quando status e PARADA_APONTADA mas sem codigo
+test('H6 -- stop.state e PARADA_INCONSISTENTE quando status e PARADA_APONTADA mas sem codigo', async () => {
+  MOCK_LIVE_FLEET.push({
+    ...LIVE_2026,
+    status:          'PARADA_APONTADA',
+    stopCode:        null,
+    stopDescription: null,
+    stopReason:      null,
+  });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.state).toBe('PARADA_INCONSISTENTE');
+});
+
+// H7: nao retorna stopCode = 'NAO INFORMADO' ou 'NÃO INFORMADO'
+test('H7 -- stopCode nunca retorna "NAO INFORMADO" ou "NÃO INFORMADO"', async () => {
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'OFFLINE', stopCode: null });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  expect(item?.stopCode).not.toBe('NÃO INFORMADO');
+  expect(item?.stopCode).not.toBe('NAO INFORMADO');
+  const stop = item?.stop as Record<string, unknown> | undefined;
+  expect(stop?.code).not.toBe('NÃO INFORMADO');
+  expect(stop?.code).not.toBe('NAO INFORMADO');
+});
+
+// H8: nao retorna stopDescription = 'NAO INFORMADO' ou 'NÃO INFORMADO'
+test('H8 -- stopDescription nunca retorna "NAO INFORMADO" ou "NÃO INFORMADO"', async () => {
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'OFFLINE', stopDescription: null });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  expect(item?.stopDescription).not.toBe('NÃO INFORMADO');
+  expect(item?.stopDescription).not.toBe('NAO INFORMADO');
+  const stop = item?.stop as Record<string, unknown> | undefined;
+  expect(stop?.reason).not.toBe('NÃO INFORMADO');
+  expect(stop?.reason).not.toBe('NAO INFORMADO');
+});
+
+// H9: frota 2026 continua aparecendo (operador SONIEL)
+test('H9+H10 -- frota 2026 aparece e operador SONIEL aparece', async () => {
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, operatorName: 'SONIEL' });
+  MOCK_FICHAS.push({ ...FICHA_2026, operatorName: 'SONIEL' });
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  expect(item).toBeDefined();
+  expect(item?.operatorName).toBe('SONIEL');
+});
+
+// H11: matricula '01' permanece string
+test('H11 -- matricula 01 permanece string', async () => {
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, operatorRegistration: '01' });
+  MOCK_FICHAS.push({ ...FICHA_2026, operatorRegistration: '01' });
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  expect(typeof item?.operatorRegistration).toBe('string');
+  expect(item?.operatorRegistration).toBe('01');
+});
+
+// H12: O.S. 100 continua aparecendo
+test('H12 -- O.S. 100 continua aparecendo', async () => {
+  MOCK_LIVE_FLEET.push(LIVE_2026);
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  expect(item?.workOrderNumber).toBe('100');
+});
+
+// H13: implemento SULCADOR continua aparecendo
+test('H13 -- implemento SULCADOR continua aparecendo', async () => {
+  MOCK_LIVE_FLEET.push(LIVE_2026);
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  expect(item?.implementName).toBe('SULCADOR');
+});
