@@ -16,6 +16,9 @@
  * 12. Estado vazio funciona sem erro (0 itens)
  * 13. ADMIN_EMPRESA acessa a rota -> 200
  * 14. CONSULTA tem visualizar mas nao tem editar em operacoes
+ *
+ * Hotfix 6.7D.1 -- Parada resolvida (H1-H13)
+ * Hotfix 6.7D.2 -- Motivo da parada (D2-H1 a D2-H8)
  */
 
 import { NextRequest } from 'next/server';
@@ -79,7 +82,7 @@ function makeGet(params: Record<string, string> = {}): NextRequest {
   return new NextRequest(`http://localhost/api/operacoes/ativas?${sp}`);
 }
 
-// ── Fixture ────────────────────────────────────────────────────────────────────
+// ── Fixtures ───────────────────────────────────────────────────────────────────
 
 const LIVE_2026 = {
   equipmentId:          'eq-2026',
@@ -492,4 +495,115 @@ test('H13 -- implemento SULCADOR continua aparecendo', async () => {
   const body = await res.json();
   const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
   expect(item?.implementName).toBe('SULCADOR');
+});
+
+// ── Hotfix 6.7D.2 -- Motivo da parada em operacoes ativas ─────────────────────
+
+// Helper: evento real com stopReasonDescription (campo canonico do APK SILO OPS)
+function makeStopReasonEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    id:          'evt-stop-real-202',
+    tenantId:    'sg01-1781359594113',
+    equipmentId: 'eq-2026',
+    type:        'STOP_REASON',
+    timestamp:   '2026-06-18T01:00:00.000Z',
+    payload: {
+      stopReasonCode:        '202',
+      stopReasonDescription: 'Sem Atividade Noturna',
+      status:                'PARADA_APONTADA',
+      journeyId:             '5752f4a7-286d-4148-bf40-dd8c69d656a4',
+      ...overrides,
+    },
+  };
+}
+
+// D2-H1: API retorna codigo 202 via stopReasonCode
+test('D2-H1 -- API retorna stop.code 202 a partir de evento com stopReasonCode', async () => {
+  const { ServerStorage } = jest.requireMock('@/lib/server-storage') as {
+    ServerStorage: { getLiveFleet: jest.Mock; getEvents: jest.Mock };
+  };
+  ServerStorage.getEvents.mockReturnValueOnce([makeStopReasonEvent()]);
+
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'PARADA_APONTADA' });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.code).toBe('202');
+});
+
+// D2-H2: API retorna motivo 'Sem Atividade Noturna' via stopReasonDescription
+test('D2-H2 -- API retorna stop.reason "Sem Atividade Noturna" a partir de evento com stopReasonDescription', async () => {
+  const { ServerStorage } = jest.requireMock('@/lib/server-storage') as {
+    ServerStorage: { getLiveFleet: jest.Mock; getEvents: jest.Mock };
+  };
+  ServerStorage.getEvents.mockReturnValueOnce([makeStopReasonEvent()]);
+
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'PARADA_APONTADA' });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.reason).toBe('Sem Atividade Noturna');
+});
+
+// D2-H5: stop.reason e stop.code nunca retornam 'NÃO INFORMADO'
+test('D2-H5 -- stop.reason e stop.code nunca retornam "NÃO INFORMADO"', async () => {
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'OFFLINE' });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown> | undefined;
+  expect(stop?.reason).not.toBe('NÃO INFORMADO');
+  expect(stop?.reason).not.toBe('NAO INFORMADO');
+  expect(stop?.code).not.toBe('NÃO INFORMADO');
+  expect(stop?.code).not.toBe('NAO INFORMADO');
+});
+
+// D2-H7: quando evento tem so stopReasonCode (sem descricao), stop.code preenchido e reason null
+test('D2-H7 -- quando evento tem so stopReasonCode (sem descricao), stop.code e preenchido e reason nao e "NÃO INFORMADO"', async () => {
+  const { ServerStorage } = jest.requireMock('@/lib/server-storage') as {
+    ServerStorage: { getLiveFleet: jest.Mock; getEvents: jest.Mock };
+  };
+  // Evento sem stopReasonDescription
+  ServerStorage.getEvents.mockReturnValueOnce([
+    makeStopReasonEvent({ stopReasonDescription: undefined }),
+  ]);
+
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'PARADA_APONTADA' });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.state).toBe('PARADA_APONTADA');
+  expect(stop?.code).toBe('202');
+  // Sem descricao no evento e sem catalogo -> null (nunca 'NÃO INFORMADO')
+  expect(stop?.reason).not.toBe('NÃO INFORMADO');
+  expect(stop?.reason).not.toBe('NAO INFORMADO');
+});
+
+// D2-H8: quando ha codigo e motivo, ambos estao preenchidos no stop object
+test('D2-H8 -- quando evento tem codigo e motivo, stop.code e stop.reason estao preenchidos', async () => {
+  const { ServerStorage } = jest.requireMock('@/lib/server-storage') as {
+    ServerStorage: { getLiveFleet: jest.Mock; getEvents: jest.Mock };
+  };
+  ServerStorage.getEvents.mockReturnValueOnce([makeStopReasonEvent()]);
+
+  MOCK_LIVE_FLEET.push({ ...LIVE_2026, status: 'PARADA_APONTADA' });
+  MOCK_FICHAS.push(FICHA_2026);
+
+  const res = await GET(makeGet({ date: '2026-06-17' }));
+  const body = await res.json();
+  const item = (body.items as Array<Record<string, unknown>>).find((i) => i.fleetCode === '2026');
+  const stop = item?.stop as Record<string, unknown>;
+  expect(stop?.code).toBeTruthy();
+  expect(stop?.reason).toBeTruthy();
 });

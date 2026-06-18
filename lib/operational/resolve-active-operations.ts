@@ -230,9 +230,11 @@ function eventStopCode(p: Record<string, unknown>): string | null {
 
 /**
  * Extrai a descricao de parada de um payload de evento mobile.
+ * stopReasonDescription e o campo canonico do APK SILO OPS.
  */
 function eventStopDesc(p: Record<string, unknown>): string | null {
   return (
+    asStr(p.stopReasonDescription) ??
     asStr(p.stopDescription) ??
     asStr(p.stopReason) ??
     asStr(p.reasonDescription) ??
@@ -368,7 +370,6 @@ export function resolveStopFull(
   const isStopped = STOPPED_STATUSES.has(liveStatus);
   const isStopAppointed = liveStatus === 'PARADA_APONTADA';
 
-  const inconsistencies: string[] = [];
   let state: StopState;
   let inconsistency: string | null = null;
 
@@ -383,7 +384,6 @@ export function resolveStopFull(
   } else if (isStopAppointed) {
     state = 'PARADA_INCONSISTENTE';
     inconsistency = 'Parada apontada sem codigo/motivo informado.';
-    inconsistencies.push(inconsistency);
   } else if (isStopped) {
     state = 'AGUARDANDO_APONTAMENTO';
   } else {

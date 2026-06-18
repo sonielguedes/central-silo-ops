@@ -49,6 +49,7 @@ function eventCode(payload: Record<string, unknown>): string | null {
 /** Extrai a descricao de parada do payload de um evento mobile. */
 function eventDesc(payload: Record<string, unknown>): string | null {
   return (
+    asStr(payload.stopReasonDescription) ??
     asStr(payload.stopDescription) ??
     asStr(payload.stopReason) ??
     asStr(payload.description) ??
