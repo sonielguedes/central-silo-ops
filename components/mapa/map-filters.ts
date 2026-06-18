@@ -23,6 +23,27 @@ export const EMPTY_FILTERS: MapFilters = {
   withOpenStop: false, withFinishedJourney: false, withInconsistency: false,
 };
 
+/** Estado semantico de parada retornado pela API /api/equipamentos/status. */
+export type StopState =
+  | 'SEM_PARADA_ATIVA'
+  | 'AGUARDANDO_APONTAMENTO'
+  | 'PARADA_APONTADA'
+  | 'PARADA_INCONSISTENTE';
+
+/** Objeto stop estruturado -- nunca exibe "NÃO INFORMADO". */
+export interface ResolvedStopForMap {
+  state: StopState;
+  /** Label legivel para o card/popup. */
+  label: string;
+  code: string | null;
+  reason: string | null;
+  hasActiveStop: boolean;
+  hasStopReason: boolean;
+  startedAt: string | null;
+  durationSeconds: number | null;
+  inconsistency: string | null;
+}
+
 export type LiveMapItem = EquipmentLiveState & {
   id: string;
   code: string;
@@ -31,6 +52,8 @@ export type LiveMapItem = EquipmentLiveState & {
   iconType: string;
   displayOperator: string;
   displayOperation: string;
+  /** Estado semantico de parada (presente quando a API /equipamentos/status for >= hotfix 6.7C.1). */
+  stop?: ResolvedStopForMap;
 };
 
 export type MapCounts = {
@@ -77,7 +100,13 @@ export function applyFilters(fleet: LiveMapItem[], filters: MapFilters): LiveMap
   }
 
   if (filters.withOpenStop) {
-    result = result.filter(m => m.stopCode || m.stopReason || m.stopDescription);
+    // Usa o estado semantico quando disponivel; cai nos campos flat para compatibilidade
+    result = result.filter(m =>
+      m.stop?.hasActiveStop ||
+      m.stopCode != null ||
+      m.stopReason != null ||
+      m.stopDescription != null
+    );
   }
 
   if (filters.withFinishedJourney) {
@@ -85,7 +114,10 @@ export function applyFilters(fleet: LiveMapItem[], filters: MapFilters): LiveMap
   }
 
   if (filters.withInconsistency) {
-    result = result.filter(m => m.hourmeterInconsistent);
+    result = result.filter(m =>
+      m.hourmeterInconsistent ||
+      m.stop?.state === 'PARADA_INCONSISTENTE'
+    );
   }
 
   return result;

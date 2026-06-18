@@ -1,9 +1,9 @@
 "use client";
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ───────────────────────────────────────────────────────────────────────────────
  * SILO OPS — Full Map Enterprise (C4.7)
  * Mapa operacional avançado com rastro por jornada, popup completo,
  * ficha operador, filtros e auto-refresh 30s.
- * ────────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────────────── */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
@@ -28,12 +28,13 @@ import {
   type LiveMapItem,
   type MapCounts,
   type MapFilters,
+  type ResolvedStopForMap,
 } from '@/components/mapa/map-filters';
 
 export type { LiveMapItem, MapCounts, MapFilters };
 export { EMPTY_FILTERS, applyFilters };
 
-/* ── Constants ─────────────────────────────────────────────────────────── */
+/* ── Constants ───────────────────────────────────────────────────────────────────── */
 
 const LEAFLET_CSS = (
   '.leaflet-container{background:#050812!important}' +
@@ -65,7 +66,7 @@ const STATUS_CONFIG: Record<
 
 type TrailState = { fleetCode: string; journeyId: string; points: TrailPoint[] } | null;
 
-/* ── Leaflet icons ─────────────────────────────────────────────────────── */
+/* ── Leaflet icons ─────────────────────────────────────────────────────────────────── */
 
 const DefaultIcon = L.icon({
   iconUrl:    'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -86,7 +87,7 @@ const trailEndIcon = L.divIcon({
   iconSize: [16, 16], iconAnchor: [8, 8],
 });
 
-/* ── Util helpers ──────────────────────────────────────────────────────── */
+/* ── Util helpers ──────────────────────────────────────────────────────────────────── */
 
 /**
  * Returns true only when the item contains geographically valid GPS coordinates.
@@ -172,7 +173,7 @@ export const buildLiveMapCounts = (items: EquipmentLiveState[]): MapCounts => ({
   staleHeartbeat: items.filter(i => !isRecent(i.lastHeartbeatAt, HEARTBEAT_RECENT_MS)).length,
 });
 
-/* ── Direction arrows for trail ────────────────────────────────────────── */
+/* ── Direction arrows for trail ───────────────────────────────────────────────────────────────── */
 
 function computeArrowPositions(
   positions: [number, number][],
@@ -188,7 +189,7 @@ function computeArrowPositions(
   return arrows;
 }
 
-/* ── Map sub-controllers ───────────────────────────────────────────────── */
+/* ── Map sub-controllers ─────────────────────────────────────────────────────────────────── */
 
 function MapController({
   selectedId,
@@ -238,7 +239,7 @@ function FlyToController({ target }: { target: [number, number] | null }) {
   return null;
 }
 
-/* ── Trail arrow markers (SVG rotated) ─────────────────────────────────── */
+/* ── Trail arrow markers (SVG rotated) ──────────────────────────────────────────────────────────── */
 
 function TrailArrows({ positions }: { positions: [number, number][] }) {
   const arrows = useMemo(() => computeArrowPositions(positions, 8), [positions]);
@@ -257,7 +258,7 @@ function TrailArrows({ positions }: { positions: [number, number][] }) {
   );
 }
 
-/* ── Trail waypoints (light dots every N points) ───────────────────────── */
+/* ── Trail waypoints (light dots every N points) ─────────────────────────────────────────────────────────── */
 
 function TrailWaypoints({ positions }: { positions: [number, number][] }) {
   const waypoints = useMemo(() => {
@@ -278,7 +279,7 @@ function TrailWaypoints({ positions }: { positions: [number, number][] }) {
   );
 }
 
-/* ── Ficha panel ───────────────────────────────────────────────────────── */
+/* ── Ficha panel ────────────────────────────────────────────────────────────────────────────────── */
 
 function FichaPanel({
   fleetCode,
@@ -469,7 +470,7 @@ function FichaBox({ label, value }: { label: string; value: string | null | unde
   );
 }
 
-/* ── Main component ────────────────────────────────────────────────────── */
+/* ── Main component ────────────────────────────────────────────────────────────────────────── */
 
 export default function FullMapEnterprise({
   onFleetUpdate,
@@ -642,7 +643,7 @@ export default function FullMapEnterprise({
   );
 }
 
-/* ── Operational Popup ─────────────────────────────────────────────────── */
+/* ── Operational Popup ───────────────────────────────────────────────────────────────────────── */
 
 type StatusCfg = { label: string; color: string };
 
@@ -740,10 +741,7 @@ function OperationalPopup({
         </PSection>
 
         <PSection label="Parada">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-            <PField icon={<PauseCircle size={11} />} label="Motivo" value={formatValue(stopDesc)} />
-            <PField icon={<Hash size={11} />} label="Codigo" value={formatValue(machine.stopCode)} />
-          </div>
+          <StopBlock stop={machine.stop} stopDesc={stopDesc} stopCode={machine.stopCode} />
         </PSection>
 
         <div className="pt-2 border-t border-[#2d3647]/40 flex flex-col gap-2">
@@ -780,6 +778,94 @@ function OperationalPopup({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── StopBlock ────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Renderiza o bloco de parada no popup do mapa usando o estado semantico da API.
+ * Nunca exibe "Nao informado" para motivo/codigo quando nao ha parada ativa.
+ *
+ * Estados:
+ *  SEM_PARADA_ATIVA        -> "Sem parada ativa"
+ *  AGUARDANDO_APONTAMENTO  -> "Aguardando apontamento de parada / Codigo: -"
+ *  PARADA_APONTADA         -> Motivo + Codigo reais
+ *  PARADA_INCONSISTENTE    -> alerta com mensagem de inconsistencia
+ */
+function StopBlock({
+  stop,
+  stopDesc,
+  stopCode,
+}: {
+  stop?: ResolvedStopForMap;
+  stopDesc: string | null | undefined;
+  stopCode: string | null | undefined;
+}) {
+  // Caminho novo: usa o objeto stop estruturado
+  if (stop) {
+    const { state, reason, code, inconsistency } = stop;
+
+    if (state === 'SEM_PARADA_ATIVA') {
+      return (
+        <p className="text-[11px] text-muted-foreground/60 italic font-bold uppercase">
+          Sem parada ativa
+        </p>
+      );
+    }
+
+    if (state === 'AGUARDANDO_APONTAMENTO') {
+      return (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] text-orange-300 font-bold uppercase">
+            Aguardando apontamento de parada
+          </p>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold">
+            <Hash size={9} />
+            <span>Codigo: -</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (state === 'PARADA_INCONSISTENTE') {
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 text-orange-400 text-[11px] font-bold">
+            <AlertTriangle size={11} />
+            <span>Parada inconsistente</span>
+          </div>
+          {inconsistency && (
+            <p className="text-[10px] text-muted-foreground font-bold">{inconsistency}</p>
+          )}
+        </div>
+      );
+    }
+
+    // PARADA_APONTADA -- exibe motivo e codigo reais
+    return (
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+        <PField icon={<PauseCircle size={11} />} label="Motivo" value={reason ?? code ?? '-'} />
+        <PField icon={<Hash size={11} />} label="Codigo" value={code ?? '-'} />
+      </div>
+    );
+  }
+
+  // Fallback legado: API anterior sem objeto stop
+  const desc = stopDesc;
+  const hasStop = desc != null || stopCode != null;
+  if (!hasStop) {
+    return (
+      <p className="text-[11px] text-muted-foreground/60 italic font-bold uppercase">
+        Sem parada ativa
+      </p>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+      <PField icon={<PauseCircle size={11} />} label="Motivo" value={desc ?? '-'} />
+      <PField icon={<Hash size={11} />} label="Codigo" value={stopCode ?? '-'} />
     </div>
   );
 }
