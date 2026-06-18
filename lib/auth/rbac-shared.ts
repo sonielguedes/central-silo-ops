@@ -131,7 +131,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'administracao', actions: ['visualizar', 'criar', 'editar'] },
     { module: 'audit-log', actions: ALL_READ },
     { module: 'configuracoes', actions: CRUD },
-    { module: 'sincronizacao', actions: ALL_READ },
+    { module: 'sincronizacao', actions: ['visualizar', 'editar'] },
   ],
   GESTOR: [
     { module: 'dashboard', actions: READ_EXPORT },
