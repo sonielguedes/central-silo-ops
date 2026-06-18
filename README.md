@@ -93,3 +93,26 @@ Cada empresa opera em seu próprio subdiretório. O `tenantId` é derivado exclu
 ## Responsável
 
 Soniel · sonieloficial@gmail.com
+
+---
+
+## Integração APK — Contrato de Paradas (Etapa 6.8A)
+
+A Central está aprovada para consumir os seguintes eventos e campos de parada enviados pelo APK Field:
+
+| Evento / Campo                | Suporte | Descrição                                        |
+|-------------------------------|---------|--------------------------------------------------|
+| `STOP_REASON`                 | ✅       | Evento canônico de apontamento de parada         |
+| `payload.stopReasonCode`      | ✅       | Código do motivo (string, ex: `"202"`)           |
+| `payload.stopReasonDescription` | ✅     | Descrição legível (ex: `"Sem Atividade Noturna"`) |
+| `PARADA_APONTADA`             | ✅       | Alias legado aceito                              |
+| `STOP_DETECTED`               | ✅       | Detectado via live-state                         |
+| `STOP_ENDED`                  | ✅       | Inferido via live-state                          |
+| `STATUS_CHANGED`              | ✅       | Processado via live-state                        |
+
+O resolver `resolveStopFull()` em `lib/operational/resolve-active-operations.ts` produz um `ResolvedStop` com estado semântico (`SEM_PARADA_ATIVA`, `AGUARDANDO_APONTAMENTO`, `PARADA_APONTADA`, `PARADA_INCONSISTENTE`) consumido pelas telas `/operacoes` e `/mapa-operacional`.
+
+Documentação detalhada:
+- Plano: `docs/superpowers/plans/2026-06-18-contrato-paradas-apk.md`
+- Spec técnica: `docs/superpowers/specs/2026-06-18-contrato-paradas-apk-design.md`
+- Changelog: `docs/CHANGELOG.md`
