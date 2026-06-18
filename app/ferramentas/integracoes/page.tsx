@@ -1,168 +1,320 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
-import { IntegrationService } from '@/services/master.service';
-import { IntegrationConfig } from '@/lib/types';
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Loader2,
-  X,
-  Save,
-  Search,
-  Database,
-  Globe,
-  Activity,
-  CheckCircle2,
-  AlertCircle,
-  Wifi,
-  Terminal
-} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { integrationConfigSchema, IntegrationConfigFormData } from '@/lib/validations/master-schemas';
-import { FormField } from '@/components/shared/form-field';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  Loader2,
+  RefreshCw,
+  Search,
+  X,
+  FileJson2,
+  Ban,
+  TimerReset,
+} from 'lucide-react';
 
-export default function IntegrationsPage() {
-  const [data, setData] = useState<IntegrationConfig[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<IntegrationConfig | null>(null);
+type JobStatus = 'PENDING' | 'PROCESSING' | 'EXPORTED' | 'ACKNOWLEDGED' | 'FAILED' | 'CANCELLED' | 'REPROCESS_REQUIRED';
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<IntegrationConfigFormData>({
-    resolver: zodResolver(integrationConfigSchema),
-  });
+type IntegrationJob = {
+  id: string;
+  tenantId: string;
+  sourceModule: string;
+  sourceType: string;
+  sourceId: string;
+  targetSystem: string;
+  targetAdapter: string;
+  operationType: string;
+  payload: Record<string, unknown>;
+  payloadHash: string;
+  status: JobStatus;
+  attemptCount: number;
+  maxAttempts: number;
+  lastAttemptAt: string | null;
+  exportedAt: string | null;
+  acknowledgedAt: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  fileName?: string | null;
+  externalId?: string | null;
+  protocol?: string | null;
+};
 
-  useEffect(() => { loadData(); }, []);
+type JobsResponse = { items: IntegrationJob[]; total: number };
 
-  useEffect(() => {
-    if (isDrawerOpen) {
-      if (selectedItem) reset(selectedItem);
-      else reset({ name: '', type: 'REST', endpoint: '', status: 'ATIVO' });
-    }
-  }, [selectedItem, isDrawerOpen, reset]);
+const STATUS_LABEL: Record<JobStatus, string> = {
+  PENDING: 'Pendente',
+  PROCESSING: 'Processando',
+  EXPORTED: 'Exportado',
+  ACKNOWLEDGED: 'Confirmado',
+  FAILED: 'Falhou',
+  CANCELLED: 'Cancelado',
+  REPROCESS_REQUIRED: 'Reprocessar',
+};
 
-  const loadData = async () => {
+const STATUS_CLASS: Record<JobStatus, string> = {
+  PENDING: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+  PROCESSING: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/20',
+  EXPORTED: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+  ACKNOWLEDGED: 'text-blue-300 bg-blue-500/10 border-blue-500/20',
+  FAILED: 'text-red-300 bg-red-500/10 border-red-500/20',
+  CANCELLED: 'text-slate-300 bg-slate-500/10 border-slate-500/20',
+  REPROCESS_REQUIRED: 'text-violet-300 bg-violet-500/10 border-violet-500/20',
+};
+
+function fmtDT(value: string | null | undefined): string {
+  if (!value) return '—';
+  const dt = new Date(value);
+  return Number.isNaN(dt.getTime())
+    ? '—'
+    : dt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-[#2d3647] bg-[#0a0e27]/60 p-4">
+      <p className="text-[8px] font-black uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-black text-white">{value}</p>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: JobStatus }) {
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black uppercase', STATUS_CLASS[status])}>
+      {status === 'EXPORTED' ? <CheckCircle2 size={10} /> : status === 'FAILED' ? <AlertCircle size={10} /> : <FileJson2 size={10} />}
+      {STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+export default function IntegracoesPage() {
+  const [jobs, setJobs] = useState<IntegrationJob[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
+  const [targetSystem, setTargetSystem] = useState('');
+  const [fleet, setFleet] = useState('');
+  const [selected, setSelected] = useState<IntegrationJob | null>(null);
+
+  const load = useCallback(async () => {
     setLoading(true);
-    const result = await IntegrationService.getAll();
-    setData(result);
-    setLoading(false);
-  };
-
-  const onSubmit = async (formData: IntegrationConfigFormData) => {
     try {
-      if (selectedItem) await IntegrationService.update(selectedItem.id, formData);
-      else await IntegrationService.create(formData);
-      setIsDrawerOpen(false);
-      loadData();
-    } catch (error: any) { alert(error.message); }
-  };
+      const sp = new URLSearchParams();
+      if (status) sp.set('status', status);
+      if (targetSystem) sp.set('targetSystem', targetSystem);
+      const res = await fetch('/api/integrations/export-jobs?' + sp.toString(), { cache: 'no-store' });
+      const data = (await res.json().catch(() => ({}))) as JobsResponse;
+      setJobs(Array.isArray(data.items) ? data.items : []);
+    } finally {
+      setLoading(false);
+    }
+  }, [status, targetSystem]);
 
-  const filteredData = data.filter(item => item.name.toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => { void load(); }, [load]);
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'REST': return <Globe size={24} />;
-      case 'MQTT': return <Wifi size={24} />;
-      case 'SQL': return <Database size={24} />;
-      case 'SAP': return <Terminal size={24} />;
-      default: return <Activity size={24} />;
+  const filtered = useMemo(() => {
+    return jobs.filter((job) => {
+      if (fleet && !String(job.sourceId).toLowerCase().includes(fleet.toLowerCase())) return false;
+      if (!query) return true;
+      const hay = [
+        job.id,
+        job.sourceId,
+        job.sourceModule,
+        job.targetSystem,
+        job.targetAdapter,
+        job.status,
+        job.errorMessage ?? '',
+      ].join(' ').toLowerCase();
+      return hay.includes(query.toLowerCase());
+    });
+  }, [jobs, query, fleet]);
+
+  const metrics = useMemo(() => {
+    const count = (s: JobStatus) => jobs.filter((j) => j.status === s).length;
+    return {
+      total: jobs.length,
+      exported: count('EXPORTED'),
+      pending: count('PENDING') + count('PROCESSING') + count('REPROCESS_REQUIRED'),
+      failed: count('FAILED'),
+    };
+  }, [jobs]);
+
+  const runAction = async (job: IntegrationJob, action: 'retry' | 'cancel' | 'download') => {
+    setActionLoading(`${job.id}:${action}`);
+    try {
+      if (action === 'download') {
+        window.location.href = `/api/integrations/export-jobs/${job.id}/download`;
+        return;
+      }
+      const res = await fetch(`/api/integrations/export-jobs/${job.id}/${action}`, { method: 'POST' });
+      if (!res.ok) return;
+      await load();
+      if (selected?.id === job.id) {
+        const fresh = jobs.find((item) => item.id === job.id);
+        setSelected(fresh ?? null);
+      }
+    } finally {
+      setActionLoading(null);
     }
   };
 
   return (
-    <div className="flex h-screen bg-[#050812] text-white overflow-hidden font-sans">
-      <Sidebar className="hidden lg:flex shrink-0" />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+    <div className="flex h-screen overflow-hidden bg-[#050812] text-white">
+      <Sidebar className="hidden shrink-0 lg:flex" />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <PageHeader title="Integrações" description="Gestão de Conectores e Fluxos de Dados Externos">
-            <button onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"><Plus size={16} strokeWidth={3} /> Nova Integração</button>
+        <main className="flex-1 overflow-y-auto p-6">
+          <PageHeader
+            title="Integrações"
+            description="Base de jobs local para PIMS/TOTVS. Sem gambiarra, sem endpoint real."
+          >
+            <button onClick={() => void load()} className="flex items-center gap-2 rounded-xl border border-[#2d3647] px-4 py-2 text-[10px] font-black uppercase text-white hover:bg-[#1a1f3a]">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
+            </button>
           </PageHeader>
 
-          <div className="mb-6 relative w-full max-w-md">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input type="text" placeholder="Filtrar integrações..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-primary/50" />
+          <div className="grid gap-4 md:grid-cols-4">
+            <Metric label="Jobs" value={metrics.total} />
+            <Metric label="Exportados" value={metrics.exported} />
+            <Metric label="Pendentes" value={metrics.pending} />
+            <Metric label="Falhas" value={metrics.failed} />
           </div>
 
-          {loading ? (
-             <div className="flex justify-center p-12"><Loader2 size={40} className="text-primary animate-spin" /></div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredData.map(item => (
-                <div key={item.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-6 group hover:border-primary/40 transition-all flex flex-col">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-[#1a1f3a] border border-[#2d3647] flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                       {getIcon(item.type)}
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => { setSelectedItem(item); setIsDrawerOpen(true); }} className="p-2 text-muted-foreground hover:text-white transition-colors hover:bg-[#1a1f3a] rounded-lg"><Edit size={16} /></button>
-                      <button onClick={async () => { if(confirm('Remover integração?')) { await IntegrationService.archive(item.id); loadData(); } }} className="p-2 text-muted-foreground hover:text-red-500 transition-colors hover:bg-red-500/10 rounded-lg"><Trash2 size={16} /></button>
-                    </div>
-                  </div>
-                  <h3 className="text-lg font-black italic tracking-tighter uppercase text-white group-hover:text-primary transition-colors">{item.name}</h3>
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Conector {item.type}</p>
-
-                  <div className="mt-4 bg-[#050812] border border-[#2d3647] rounded-xl p-3">
-                     <span className="text-[8px] text-muted-foreground uppercase font-black">Endpoint</span>
-                     <p className="text-[10px] font-mono text-white truncate mt-1">{item.endpoint}</p>
-                  </div>
-
-                  <div className="mt-6 pt-4 border-t border-[#2d3647] flex items-center justify-between">
-                     <div className={cn(
-                        "flex items-center gap-1.5 text-[9px] font-black uppercase",
-                        item.status === 'ATIVO' ? "text-emerald-500" : "text-red-400"
-                     )}>
-                        {item.status === 'ATIVO' ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                        {item.status}
-                     </div>
-                     <span className="text-[8px] text-muted-foreground font-bold uppercase">Último Sinal: {item.lastSync || 'Nunca'}</span>
-                  </div>
-                </div>
-              ))}
+          <div className="mt-6 grid gap-3 rounded-3xl border border-[#2d3647] bg-[#0a0e27]/60 p-4 lg:grid-cols-4">
+            <div className="relative lg:col-span-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por job, frota, adapter, status..." className="w-full rounded-2xl border border-[#2d3647] bg-[#050812] py-2 pl-10 pr-3 text-sm outline-none focus:border-primary/50" />
             </div>
-          )}
+            <input value={fleet} onChange={(e) => setFleet(e.target.value)} placeholder="Filtrar por frota" className="rounded-2xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm outline-none focus:border-primary/50" />
+            <div className="grid grid-cols-2 gap-3">
+              <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-2xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm outline-none focus:border-primary/50">
+                <option value="">Todos status</option>
+                {Object.keys(STATUS_LABEL).map((s) => <option key={s} value={s}>{STATUS_LABEL[s as JobStatus]}</option>)}
+              </select>
+              <select value={targetSystem} onChange={(e) => setTargetSystem(e.target.value)} className="rounded-2xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm outline-none focus:border-primary/50">
+                <option value="">Todos destinos</option>
+                <option value="PIMS">PIMS</option>
+                <option value="TOTVS">TOTVS</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-6 overflow-hidden rounded-3xl border border-[#2d3647] bg-[#0a0e27]/60">
+            <div className="border-b border-[#2d3647] px-4 py-3 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">
+              Jobs sincronizados
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-[9px] uppercase tracking-widest text-muted-foreground">
+                  <tr className="border-b border-[#2d3647]">
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Fonte</th>
+                    <th className="px-4 py-3">Destino</th>
+                    <th className="px-4 py-3">Payload</th>
+                    <th className="px-4 py-3">Tentativas</th>
+                    <th className="px-4 py-3">Criado</th>
+                    <th className="px-4 py-3">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr><td className="px-4 py-8" colSpan={7}><Loader2 className="animate-spin text-primary" size={18} /></td></tr>
+                  )}
+                  {!loading && filtered.map((job) => (
+                    <tr key={job.id} className="border-b border-[#2d3647]/50 last:border-0">
+                      <td className="px-4 py-3"><StatusPill status={job.status} /></td>
+                      <td className="px-4 py-3">
+                        <div className="font-black text-white">{job.sourceModule}</div>
+                        <div className="text-[10px] text-muted-foreground">{job.sourceId}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-black text-white">{job.targetSystem}</div>
+                        <div className="text-[10px] text-muted-foreground">{job.targetAdapter}</div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[10px] text-muted-foreground">{job.payloadHash.slice(0, 12)}...</td>
+                      <td className="px-4 py-3 text-[10px] text-muted-foreground">{job.attemptCount}/{job.maxAttempts}</td>
+                      <td className="px-4 py-3 text-[10px] text-muted-foreground">{fmtDT(job.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => setSelected(job)} className="rounded-lg border border-[#2d3647] px-3 py-1.5 text-[9px] font-black uppercase hover:bg-[#1a1f3a]">Detalhes</button>
+                          <button onClick={() => void runAction(job, 'retry')} disabled={!['FAILED', 'REPROCESS_REQUIRED'].includes(job.status) || actionLoading === `${job.id}:retry`} className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-[9px] font-black uppercase text-violet-300 disabled:opacity-40">
+                            {actionLoading === `${job.id}:retry` ? <Loader2 size={12} className="animate-spin" /> : <TimerReset size={12} />} Reprocessar
+                          </button>
+                          <button onClick={() => void runAction(job, 'cancel')} disabled={job.status === 'EXPORTED' || job.status === 'CANCELLED' || actionLoading === `${job.id}:cancel`} className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[9px] font-black uppercase text-red-300 disabled:opacity-40">
+                            <Ban size={12} /> Cancelar
+                          </button>
+                          <button onClick={() => void runAction(job, 'download')} disabled={!job.fileName} className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[9px] font-black uppercase text-emerald-300 disabled:opacity-40">
+                            <Download size={12} /> Baixar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </main>
       </div>
 
-      {isDrawerOpen && (
+      {selected && (
         <div className="fixed inset-0 z-[2000] flex justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsDrawerOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-[#0a0e27] border-l border-[#2d3647] shadow-2xl p-8 flex flex-col h-full animate-in slide-in-from-right duration-300">
-             <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">{selectedItem ? 'Editar Conector' : 'Novo Conector'}</h2>
-                <button onClick={() => setIsDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
-             </div>
-             <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-                <FormField label="Nome da Integração" error={errors.name?.message} required><input {...register('name')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" placeholder="Ex: SAP Records" /></FormField>
-                <FormField label="Tipo de Protocolo" error={errors.type?.message} required>
-                  <select {...register('type')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none">
-                    <option value="REST">REST API</option>
-                    <option value="MQTT">MQTT Broker</option>
-                    <option value="SQL">SQL Database</option>
-                    <option value="SAP">SAP RFC/RFC</option>
-                  </select>
-                </FormField>
-                <FormField label="Endpoint / Connection String" error={errors.endpoint?.message} required><input {...register('endpoint')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm font-mono focus:border-primary outline-none" placeholder="https://api..." /></FormField>
-                <FormField label="Status" error={errors.status?.message} required>
-                  <select {...register('status')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none">
-                    <option value="ATIVO">Ativo</option>
-                    <option value="INATIVO">Inativo</option>
-                  </select>
-                </FormField>
-                <div className="pt-6 flex gap-3">
-                  <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg">{isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar Conector</button>
+          <button className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelected(null)} />
+          <div className="relative flex h-full w-full max-w-xl flex-col border-l border-[#2d3647] bg-[#050812] p-6">
+            <div className="flex items-center justify-between border-b border-[#2d3647] pb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Detalhe do Job</p>
+                <h2 className="mt-1 text-xl font-black text-white">{selected.id}</h2>
+              </div>
+              <button onClick={() => setSelected(null)} className="rounded-xl border border-[#2d3647] p-2 text-muted-foreground hover:bg-[#1a1f3a]"><X size={16} /></button>
+            </div>
+            <div className="mt-6 space-y-4 overflow-y-auto">
+              <div className="rounded-2xl border border-[#2d3647] bg-[#0a0e27]/60 p-4">
+                <div className="flex items-center justify-between"><span className="text-[9px] font-black uppercase text-muted-foreground">Status</span><StatusPill status={selected.status} /></div>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <Info label="Fonte" value={selected.sourceModule} />
+                  <Info label="Destino" value={selected.targetSystem} />
+                  <Info label="Adapter" value={selected.targetAdapter} />
+                  <Info label="Operação" value={selected.operationType} />
+                  <Info label="Criado" value={fmtDT(selected.createdAt)} />
+                  <Info label="Atualizado" value={fmtDT(selected.updatedAt)} />
                 </div>
-             </form>
+              </div>
+              <div className="rounded-2xl border border-[#2d3647] bg-[#0a0e27]/60 p-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground">Payload</p>
+                <pre className="mt-3 max-h-80 overflow-auto rounded-2xl bg-[#050812] p-4 text-[11px] text-slate-300">{JSON.stringify(selected.payload, null, 2)}</pre>
+              </div>
+              {selected.errorMessage && (
+                <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-300">
+                  {selected.errorMessage}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-3">
+                <button onClick={() => void runAction(selected, 'retry')} className="rounded-xl bg-violet-700 px-4 py-2 text-[10px] font-black uppercase text-white">Reprocessar</button>
+                <button onClick={() => void runAction(selected, 'cancel')} className="rounded-xl border border-red-500/30 px-4 py-2 text-[10px] font-black uppercase text-red-300">Cancelar</button>
+                <button onClick={() => void runAction(selected, 'download')} className="rounded-xl border border-emerald-500/30 px-4 py-2 text-[10px] font-black uppercase text-emerald-300">Baixar arquivo gerado</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[#2d3647] bg-[#050812] p-3">
+      <p className="text-[8px] font-black uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-bold text-white">{value}</p>
     </div>
   );
 }

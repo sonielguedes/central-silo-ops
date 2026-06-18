@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import {
-  AlertTriangle, CheckCircle2, Clock, Edit3,
+  AlertTriangle, ArrowRight, CheckCircle2, Clock, Edit3,
   Download, Filter, Loader2,
   RefreshCw, Search, Square, User, X,
   Clipboard,
@@ -352,11 +352,12 @@ const DRAWER_TABS: { id: DrawerTab; label: string }[] = [
 ];
 
 // ── Detail drawer ─────────────────────────────────────────────────────────────
-function DetailDrawer({ ficha, onClose, onValidate, onExport, onCorrect, loading }: {
+function DetailDrawer({ ficha, onClose, onValidate, onExport, onCreateIntegrationJob, onCorrect, loading }: {
   ficha: FichaDiaria;
   onClose: () => void;
   onValidate: (f: FichaDiaria) => void;
   onExport: (f: FichaDiaria, format?: 'csv' | 'txt') => void;
+  onCreateIntegrationJob: (f: FichaDiaria) => void;
   onCorrect: (f: FichaDiaria) => void;
   loading: boolean;
 }) {
@@ -482,6 +483,13 @@ function DetailDrawer({ ficha, onClose, onValidate, onExport, onCorrect, loading
                 <Download size={12} /> TXT
               </button>
             </>
+          )}
+
+          {(fs === 'VALIDADO' || fs === 'EXPORTADO') && (
+            <button onClick={() => onCreateIntegrationJob(ficha)} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2.5 border border-violet-500/30 bg-violet-500/10 text-violet-300 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-violet-500/20 transition-all disabled:opacity-40">
+              <ArrowRight size={12} /> Gerar job PIMS
+            </button>
           )}
         </div>
       </div>
@@ -941,6 +949,37 @@ function FichaOperadorPage() {
     });
   }, [downloadExport, showToast]);
 
+  const handleCreateIntegrationJob = useCallback(async (ficha: FichaDiaria) => {
+    const fs = (ficha.finalStatus ?? ficha.status) as string;
+    if (fs !== 'VALIDADO' && fs !== 'EXPORTADO') {
+      showToast('Job bloqueado: somente fichas VALIDADO ou EXPORTADO podem integrar.', 'warning');
+      return;
+    }
+
+    setActionLoad(true);
+    try {
+      const res = await fetch('/api/integrations/export-jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fleetCode: ficha.fleetCode,
+          date: ficha.date,
+          targetSystem: 'PIMS',
+          targetAdapter: 'PIMS_FILE',
+          createdBy: 'usuario',
+        }),
+      });
+      const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) {
+        showToast(String(data.error ?? 'Falha ao gerar job de integração'), 'error');
+        return;
+      }
+      showToast(String(data.duplicated ? 'Job duplicado reaproveitado.' : 'Job de integração gerado com sucesso!'), 'success');
+    } finally {
+      setActionLoad(false);
+    }
+  }, [showToast]);
+
   const handleCorrect = useCallback(async (
     ficha: FichaDiaria,
     updates: Record<string, unknown>,
@@ -1213,6 +1252,7 @@ function FichaOperadorPage() {
           onClose={() => setDetail(null)}
           onValidate={handleValidate}
           onExport={handleExport}
+          onCreateIntegrationJob={handleCreateIntegrationJob}
           onCorrect={(f) => { setDetail(null); setCorrectionTarget(f); }}
           loading={actionLoad}
         />
