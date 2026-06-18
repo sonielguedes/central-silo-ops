@@ -46,7 +46,7 @@ export function buildFichaIntegrationPayload(input: PlainObject): PlainObject {
     tenantId: input.tenantId,
     sheetId: input.sheetId,
     dataOperacional: input.dataOperacional ?? input.date,
-    frota: input.frota,
+    frota: input.frota ?? input.fleetCode,
     operador: input.operador ?? input.operatorName,
     matricula: input.matricula ?? input.operatorRegistration,
     os: input.os ?? input.workOrderNumber,

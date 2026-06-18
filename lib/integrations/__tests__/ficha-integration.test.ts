@@ -80,6 +80,34 @@ test('gera payload validado e limpa centro de custo quando vem da operacao', () 
   expect(built.payloadHash).toEqual(expect.any(String));
 });
 
+// Caso 1: buildFichaIntegrationPayload gera frota: "2026"
+test('buildFichaIntegrationJobInput gera payload com frota correta (fleetCode → frota)', () => {
+  const built = buildFichaIntegrationJobInput({
+    tenantId: 'tenant-a',
+    fleetCode: '2026',
+    date: '2026-06-17',
+    targetSystem: 'PIMS',
+    targetAdapter: 'PIMS_FILE',
+  });
+
+  expect(built.ok).toBe(true);
+  expect(built.payload?.frota).toBe('2026');
+});
+
+// Caso 2: buildFichaIntegrationPayload gera dataOperacional: "2026-06-17"
+test('buildFichaIntegrationJobInput gera payload com dataOperacional correta (date → dataOperacional)', () => {
+  const built = buildFichaIntegrationJobInput({
+    tenantId: 'tenant-a',
+    fleetCode: '2026',
+    date: '2026-06-17',
+    targetSystem: 'PIMS',
+    targetAdapter: 'PIMS_FILE',
+  });
+
+  expect(built.ok).toBe(true);
+  expect(built.payload?.dataOperacional).toBe('2026-06-17');
+});
+
 test('bloqueia ficha em andamento', () => {
   mockOverlay = { validated: false, exported: false, correctedFields: {} };
   mockSheetResult.ficha.status = 'EM_ANDAMENTO';

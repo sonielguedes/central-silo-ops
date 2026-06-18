@@ -31,7 +31,21 @@ export class PimsFileAdapter extends BaseIntegrationAdapter {
   readonly adapterName = 'PIMS_FILE' as const;
 
   async export(job: IntegrationExportJob): Promise<IntegrationExportResult> {
-    const fileName = sanitizeName(`pims-ficha-operador-${job.createdAt.slice(0, 10)}-frota-${job.payload.frota ?? 'unknown'}-job-${job.id}.json`);
+    const frota = job.payload.frota as string | undefined;
+    const dataOperacional = job.payload.dataOperacional as string | undefined;
+
+    if (!frota) {
+      throw new Error(
+        `PIMS export aborted: payload.frota ausente para o job ${job.id}. Verifique se a ficha possui fleetCode preenchido.`,
+      );
+    }
+    if (!dataOperacional) {
+      throw new Error(
+        `PIMS export aborted: payload.dataOperacional ausente para o job ${job.id}. Verifique se a ficha possui data operacional preenchida.`,
+      );
+    }
+
+    const fileName = sanitizeName(`pims-ficha-operador-${dataOperacional}-frota-${frota}-job-${job.id}.json`);
     const dir = path.join(DATA_ROOT, job.tenantId, 'exports', 'pims');
     const filePath = path.join(dir, fileName);
     const content = JSON.stringify({
