@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
+import { CadastroStorage } from '@/lib/cadastro-storage';
 import { requireTenant } from '@/lib/auth/api-guard';
+import { resolveStop } from '@/lib/stop-resolver';
 import type { EquipmentLiveState } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -11,17 +13,30 @@ export const dynamic = 'force-dynamic';
  * - horimetro: canonical alias for hourmeterCurrent for the Operational Map
  * - rpm: passed through directly (when available via CAN/APK)
  * - Invalid GPS (0,0 or out of range) is discarded before reaching the map
+ * - stopCode / stopDescription: resolved via full priority chain (event -> live-state -> catalog)
  */
-function normalizeForMap(s: EquipmentLiveState) {
+function normalizeForMap(
+  s: EquipmentLiveState,
+  allEvents: ReturnType<typeof ServerStorage.getEvents>,
+  catalog: { code: string; description: string }[],
+) {
   // Calculate speedKmh if APK sent speed in m/s and did not send speedKmh
-  const speedKmh = s.speedKmh ?? (s.speed != null ? Math.round(s.speed * 3.6 * 10) / 10 : undefined);
+  const speedKmh =
+    s.speedKmh ??
+    (s.speed != null ? Math.round(s.speed * 3.6 * 10) / 10 : undefined);
 
   // Ensure invalid coordinates do not reach the map
   const hasValidGps =
-    s.latitude  != null && s.longitude != null &&
+    s.latitude != null &&
+    s.longitude != null &&
     !(s.latitude === 0 && s.longitude === 0) &&
-    s.latitude  > -90  && s.latitude  < 90 &&
-    s.longitude > -180 && s.longitude < 180;
+    s.latitude > -90 &&
+    s.latitude < 90 &&
+    s.longitude > -180 &&
+    s.longitude < 180;
+
+  // Resolve stop via full priority chain
+  const stop = resolveStop(s, allEvents, catalog);
 
   return {
     ...s,
@@ -29,10 +44,15 @@ function normalizeForMap(s: EquipmentLiveState) {
     equipmentCode: s.fleetCode,
     speedKmh,
     horimetro: s.hourmeterCurrent,
-    rpm:       s.rpm,
+    rpm: s.rpm,
     // GPS: clear if invalid so the map shows the alert instead of pinning at 0,0
-    latitude:  hasValidGps ? s.latitude  : undefined,
+    latitude: hasValidGps ? s.latitude : undefined,
     longitude: hasValidGps ? s.longitude : undefined,
+    // Stop fields resolved via priority chain
+    stopCode: stop.code,
+    stopDescription: stop.description,
+    stopReason: stop.description,
+    stopSource: stop.source,
   };
 }
 
@@ -41,8 +61,18 @@ export async function GET(req: NextRequest) {
     const tenant = requireTenant(req);
     if (!tenant.ok) return tenant.response;
 
-    const liveFleet = ServerStorage.getLiveFleet(tenant.tenantId);
-    return NextResponse.json(liveFleet.map(normalizeForMap));
+    const { tenantId } = tenant;
+    const liveFleet = ServerStorage.getLiveFleet(tenantId);
+
+    // Load events and catalog once per request (not per machine)
+    const allEvents = ServerStorage.getEvents(tenantId);
+    const catalog = (
+      CadastroStorage.getAll(tenantId, 'paradas') as { code?: string; description?: string }[]
+    )
+      .filter((p) => p.code && p.description)
+      .map((p) => ({ code: p.code as string, description: p.description as string }));
+
+    return NextResponse.json(liveFleet.map((s) => normalizeForMap(s, allEvents, catalog)));
   } catch (error) {
     console.error('[api/equipamentos/status] failed to fetch live state', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
