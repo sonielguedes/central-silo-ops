@@ -148,7 +148,20 @@ export const ChecklistModelService   = makeService<ChecklistModel>('checklist-mo
 export const UserService             = makeService<User>('users');
 export const AccessGroupService      = makeService<AccessGroup>('access-groups');
 export const UnitService             = makeService<Unit>('units');
-export const TimelineService         = makeService<TimelineEvent>('timeline');
+export const TimelineService         = {
+  async getAll(params?: Record<string, string>): Promise<TimelineEvent[]> {
+    try {
+      const query = params ? '?' + new URLSearchParams(params).toString() : '';
+      const res = await fetch('/api/timeline' + query, { cache: 'no-store', credentials: 'include', headers: getHeaders() });
+      return res.ok ? res.json() : [];
+    } catch { return []; }
+  },
+  async getById(id: string): Promise<TimelineEvent | undefined> {
+    // Timeline typically doesn't need getById, but keeping signature compatible if needed
+    const all = await this.getAll();
+    return all.find(e => e.id === id);
+  }
+};
 export const FleetActivityService    = makeService<FleetActivity>('fleet-activities');
 
 // CostCenterService usa rotas dedicadas /api/centros-custo (valida unicidade de código)
