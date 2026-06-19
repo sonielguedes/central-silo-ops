@@ -42,8 +42,24 @@ export function requireCsrf(req: NextRequest): NextResponse | null {
 
   const cookie = getCsrfCookie(req);
   const header = getCsrfHeader(req);
-  if (!cookie || !header || cookie !== header) {
+
+  if (!cookie || !header) {
     return NextResponse.json({ error: 'CSRF invalido' }, { status: 403 });
   }
+
+  // timingSafeEqual previne timing attacks na comparação do token CSRF
+  try {
+    const cookieBuf = Buffer.from(cookie, 'utf-8');
+    const headerBuf = Buffer.from(header, 'utf-8');
+    if (
+      cookieBuf.length !== headerBuf.length ||
+      !crypto.timingSafeEqual(cookieBuf, headerBuf)
+    ) {
+      return NextResponse.json({ error: 'CSRF invalido' }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: 'CSRF invalido' }, { status: 403 });
+  }
+
   return null;
 }

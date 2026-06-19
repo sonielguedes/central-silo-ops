@@ -82,10 +82,35 @@ export function requireMobileAuth(req: NextRequest): MobileAuthResult | GuardErr
       token: maskToken(companyToken),
       ip: getClientIp(req),
     });
+    // 401: token desconhecido — equivalente a "não autenticado"
     return {
       ok: false,
       response: NextResponse.json(
         { error: 'Token invalido ou instancia inativa' },
+        { status: 401 },
+      ),
+    };
+  }
+
+  // ── Bloqueio de injeção cross-tenant via header ──────────────────────────
+  // O APK pode enviar X-Tenant-Id como hint de depuração, mas se divergir
+  // do tenant resolvido pelo token, a requisição é rejeitada com 403.
+  const requestedTenantHeader =
+    req.headers.get('x-tenant-id')?.trim() ||
+    req.headers.get('x-silo-tenant')?.trim() ||
+    null;
+  if (requestedTenantHeader && requestedTenantHeader !== rawCompany.tenantId) {
+    console.warn('[api-guard] mobile: cross-tenant header injection rejected', {
+      path: req.nextUrl.pathname,
+      tokenTenantId: rawCompany.tenantId,
+      requestedTenantId: requestedTenantHeader,
+      token: maskToken(companyToken),
+      ip: getClientIp(req),
+    });
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Tenant divergente do token informado. Acesso negado.' },
         { status: 403 },
       ),
     };
