@@ -14,9 +14,7 @@ const COOKIE_NAME = 'silo_session';
  */
 const PUBLIC_PREFIXES = [
   '/login',
-  '/api/auth/',
-  '/api/mobile/',
-  '/api/health/',
+  '/api/',       // todas as rotas API gerem auth pelos guards internos
   '/_next/',
   '/fonts/',
   '/favicon',
