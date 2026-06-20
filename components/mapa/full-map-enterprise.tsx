@@ -499,14 +499,38 @@ export default function FullMapEnterprise({
   }, [allFleet, filters]);
 
   const fetchTrail = useCallback(async (fleetCode: string, journeyId: string) => {
-    if (!journeyId) { setTrail({ fleetCode, journeyId: '', points: [] }); return; }
     setTrailLoading(true);
     try {
-      const url = '/api/equipamentos/trail?fleetCode=' + encodeURIComponent(fleetCode) + '&journeyId=' + encodeURIComponent(journeyId);
+      // Sem journeyId → busca pelo fleetCode na data atual (jornada ativa ou mais recente)
+      let url = '/api/equipamentos/trail?fleetCode=' + encodeURIComponent(fleetCode);
+      if (journeyId) {
+        url += '&journeyId=' + encodeURIComponent(journeyId);
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        url += '&date=' + today;
+      }
       const res = await fetch(url, { cache: 'no-store' });
       const data = res.ok ? await res.json() : { points: [] };
-      const pts: TrailPoint[] = Array.isArray(data.points) ? data.points : [];
-      setTrail({ fleetCode, journeyId, points: pts });
+      // API retorna formato compacto {lat, lng} — mapear para TrailPoint {latitude, longitude}
+      const rawPts: { lat?: number; lng?: number; latitude?: number; longitude?: number; speedKmh?: number; rpm?: number; accuracy?: number; hourmeter?: number; timestamp?: string; qualityStatus?: string; eventId?: string }[] =
+        Array.isArray(data.points) ? data.points : [];
+      const pts: TrailPoint[] = rawPts.map(p => ({
+        tenantId: '',
+        fleetCode,
+        equipmentId: '',
+        journeyId: journeyId || (data.journeyId as string) || '',
+        latitude: p.latitude ?? p.lat ?? 0,
+        longitude: p.longitude ?? p.lng ?? 0,
+        timestamp: (p.timestamp as string) ?? '',
+        speedKmh: p.speedKmh,
+        rpm: p.rpm,
+        accuracy: p.accuracy,
+        hourmeterCurrent: p.hourmeter,
+        qualityStatus: p.qualityStatus as TrailPoint['qualityStatus'],
+        eventId: p.eventId,
+      }));
+      const resolvedJourneyId = journeyId || (data.journeyId as string) || '';
+      setTrail({ fleetCode, journeyId: resolvedJourneyId, points: pts });
     } catch {
       setTrail({ fleetCode, journeyId, points: [] });
     } finally {
@@ -594,7 +618,7 @@ export default function FullMapEnterprise({
           <LayersControl.BaseLayer name="OSM">
             <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} maxNativeZoom={19} />
           </LayersControl.BaseLayer>
-          <LayersControl.Overlay checked name="Talhoes">
+          <LayersControl.Overlay name="Talhoes">
             {fieldsPolygons.map(f => (
               <Polygon key={f.name} positions={f.coords} pathOptions={{ color: '#10b981', weight: 1.5, fillOpacity: 0.08, dashArray: '10, 10' }} />
             ))}
@@ -761,8 +785,8 @@ function OperationalPopup({
           )}
 
           {!isMyTrail && (
-            <button onClick={() => onRequestTrail(machine.code, machine.journeyId ?? '')} disabled={trailLoading || !machine.journeyId} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase hover:bg-blue-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-              <Route size={11} /> {trailLoading ? 'Carregando rastro...' : (machine.journeyId ? 'Ver rastro' : 'Sem jornada ativa')}
+            <button onClick={() => onRequestTrail(machine.code, machine.journeyId ?? '')} disabled={trailLoading} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase hover:bg-blue-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+              <Route size={11} /> {trailLoading ? 'Carregando rastro...' : 'Ver rastro'}
             </button>
           )}
           {isMyTrail && trailHasPoints && (
