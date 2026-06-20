@@ -96,6 +96,19 @@ export const EquipmentIconPicker = memo<EquipmentIconPickerProps>(({
           )}
         </div>
 
+        {/* Preview do ícone selecionado */}
+        {!compact && value && EQUIPMENT_ICON_LABELS[value as EquipmentIconType] && (
+          <div className="flex items-center gap-3 mb-3 p-2.5 rounded-xl bg-primary/5 border border-primary/20">
+            <div className="w-10 h-10 rounded-lg bg-[#050812] border border-primary/30 flex items-center justify-center shrink-0">
+              <EquipmentIcon type={value} size={26} color="var(--color-primary, #22c55e)" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Selecionado</p>
+              <p className="text-xs font-black text-primary">{EQUIPMENT_ICON_LABELS[value as EquipmentIconType]}</p>
+            </div>
+          </div>
+        )}
+
         {/* Search */}
         <div className="relative mb-3">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />

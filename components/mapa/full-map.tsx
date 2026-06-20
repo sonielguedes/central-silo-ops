@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Tractor, Truck, Navigation, MapPin, Clock, User, Zap } from 'lucide-react';
@@ -51,10 +51,6 @@ const MACHINE_DATA = [
 export default function FullMap() {
   const farmCenter: [number, number] = [-12.5568, -55.7229];
 
-  const field1: [number, number][] = [
-    [-12.5510, -55.7300], [-12.5510, -55.7150], [-12.5650, -55.7150], [-12.5650, -55.7300]
-  ];
-
   return (
     <div className="w-full h-full">
       <MapContainer
@@ -73,11 +69,6 @@ export default function FullMap() {
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/only_labels/{z}/{y}/{x}.png"
           opacity={0.7}
-        />
-
-        <Polygon
-          positions={field1}
-          pathOptions={{ color: '#10b981', weight: 2, fillOpacity: 0.1, dashArray: '5, 10' }}
         />
 
         {MACHINE_DATA.map((m) => (

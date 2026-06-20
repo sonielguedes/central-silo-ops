@@ -334,6 +334,49 @@ const IconPadraoGenerico: SvgIconFC = memo(({ size = 32, className, color = 'cur
 ));
 IconPadraoGenerico.displayName = 'IconPadraoGenerico';
 
+/* ── 25. SULCADOR ────────────────────────────────────────────────────────── */
+const IconSulcador: SvgIconFC = memo(({ size = 32, className, color = 'currentColor' }) => (
+  <svg {...svgBase(size, className)}>
+    {/* Barra transversal do sulcador */}
+    <rect x="3" y="11" width="26" height="4" rx="1.5" fill={color} opacity="0.75"/>
+    {/* Sulcos: hastes verticais */}
+    <line x1="7"  y1="15" x2="7"  y2="24" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="11" y1="15" x2="11" y2="24" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="16" y1="15" x2="16" y2="24" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="21" y1="15" x2="21" y2="24" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="25" y1="15" x2="25" y2="24" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+    {/* Pontas dos sulcos */}
+    <path d="M5 24l2 4 2-4" fill={color} opacity="0.6"/>
+    <path d="M9 24l2 4 2-4"  fill={color} opacity="0.6"/>
+    <path d="M14 24l2 4 2-4" fill={color} opacity="0.6"/>
+    <path d="M19 24l2 4 2-4" fill={color} opacity="0.6"/>
+    <path d="M23 24l2 4 2-4" fill={color} opacity="0.6"/>
+    {/* Barra de engate */}
+    <rect x="13" y="7" width="6" height="4" rx="1" fill={color} opacity="0.5"/>
+  </svg>
+));
+IconSulcador.displayName = 'IconSulcador';
+
+/* ── 26. IMPLEMENTO ──────────────────────────────────────────────────────── */
+const IconImplemento: SvgIconFC = memo(({ size = 32, className, color = 'currentColor' }) => (
+  <svg {...svgBase(size, className)}>
+    {/* Chassi principal */}
+    <rect x="8" y="12" width="16" height="8" rx="2" fill={color} opacity="0.75"/>
+    {/* Engate traseiro */}
+    <rect x="4"  y="14" width="5"  height="4" rx="1" fill={color} opacity="0.5"/>
+    {/* Engate dianteiro */}
+    <rect x="23" y="14" width="5"  height="4" rx="1" fill={color} opacity="0.5"/>
+    {/* Rodas */}
+    <circle cx="11" cy="23" r="3" stroke={color} strokeWidth="2" fill="none"/>
+    <circle cx="21" cy="23" r="3" stroke={color} strokeWidth="2" fill="none"/>
+    {/* Detalhe estrutural */}
+    <line x1="12" y1="12" x2="12" y2="8" stroke={color} strokeWidth="1.5" opacity="0.4"/>
+    <line x1="20" y1="12" x2="20" y2="8" stroke={color} strokeWidth="1.5" opacity="0.4"/>
+    <line x1="12" y1="8"  x2="20" y2="8"  stroke={color} strokeWidth="1.5" opacity="0.4"/>
+  </svg>
+));
+IconImplemento.displayName = 'IconImplemento';
+
 /* ── Registry ────────────────────────────────────────────────────────────── */
 const ICON_MAP: Record<EquipmentIconType, SvgIconFC> = {
   TRATOR:              IconTrator,
@@ -360,6 +403,8 @@ const ICON_MAP: Record<EquipmentIconType, SvgIconFC> = {
   MOTO:                IconMoto,
   PLUVIOMETRO:         IconPluviometro,
   PADRAO_GENERICO:     IconPadraoGenerico,
+  SULCADOR:            IconSulcador,
+  IMPLEMENTO:          IconImplemento,
 };
 
 /* ── Componente principal ────────────────────────────────────────────────── */

@@ -20,6 +20,8 @@ export const EQUIPMENT_ICON_TYPES = [
   'BOMBA_COMBUSTIVEL',
   'CARRETA_PRANCHA',
   'GRADE_IMPLEMENTO',
+  'SULCADOR',
+  'IMPLEMENTO',
   'SILO',
   'TORRE',
   'LEITOR_RFID',
@@ -49,6 +51,8 @@ export const EQUIPMENT_ICON_LABELS: Record<EquipmentIconType, string> = {
   BOMBA_COMBUSTIVEL:   'Bomba Combustível',
   CARRETA_PRANCHA:     'Carreta / Prancha',
   GRADE_IMPLEMENTO:    'Grade / Implemento',
+  SULCADOR:            'Sulcador',
+  IMPLEMENTO:          'Implemento',
   SILO:                'Silo',
   TORRE:               'Torre',
   LEITOR_RFID:         'Leitor RFID',
@@ -61,11 +65,12 @@ export const EQUIPMENT_ICON_LABELS: Record<EquipmentIconType, string> = {
 
 /* Categorias para filtro no picker */
 export const EQUIPMENT_ICON_CATEGORIES: Record<string, EquipmentIconType[]> = {
-  'Agrícola': ['TRATOR', 'COLHEDORA', 'TRANSBORDO', 'PLANTADEIRA', 'PULVERIZADOR', 'GRADE_IMPLEMENTO'],
-  'Transporte': ['CAMINHAO', 'CAMINHAO_BASCULANTE', 'CAMINHAO_PIPA', 'COMBOIO', 'CARRETA_PRANCHA', 'VEICULO', 'MOTO'],
-  'Construção': ['PA_CARREGADEIRA', 'MOTONIVELADORA', 'ESCAVADEIRA', 'TRATOR_ESTEIRA'],
-  'Infraestrutura': ['BOMBA_COMBUSTIVEL', 'SILO', 'TORRE', 'LEITOR_RFID', 'PLUVIOMETRO'],
-  'Outros': ['MOBILE', 'PADRAO_GENERICO'],
+  'Agrícola':      ['TRATOR', 'COLHEDORA', 'TRANSBORDO', 'PLANTADEIRA', 'PULVERIZADOR',
+                    'IMPLEMENTO', 'GRADE_IMPLEMENTO', 'SULCADOR', 'COMBOIO', 'BOMBA_COMBUSTIVEL'],
+  'Transporte':    ['CAMINHAO', 'CAMINHAO_BASCULANTE', 'CAMINHAO_PIPA', 'CARRETA_PRANCHA', 'VEICULO', 'MOTO'],
+  'Construção':    ['PA_CARREGADEIRA', 'MOTONIVELADORA', 'ESCAVADEIRA', 'TRATOR_ESTEIRA'],
+  'Infraestrutura':['SILO', 'TORRE', 'LEITOR_RFID', 'MOBILE', 'PLUVIOMETRO', 'PADRAO_GENERICO'],
+  'Outros':        [],
 };
 
 /* ── Status operacional no mapa ─────────────────────────────────────────── */

@@ -7,7 +7,6 @@ import {
   Filter,
   Map as MapIcon,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
   ssr: false,
@@ -54,25 +53,42 @@ export function OperationalMap() {
       </div>
 
       {/* Status Legend Overlay */}
-      <div className="absolute bottom-6 left-6 bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] p-4 rounded-xl space-y-2.5 z-[40] shadow-2xl">
-        <StatusItem color="bg-emerald-500" label="Trabalhando" count={12} />
-        <StatusItem color="bg-amber-500" label="Deslocando" count={5} />
-        <StatusItem color="bg-orange-500" label="Parada" count={3} />
-        <StatusItem color="bg-red-500" label="Alerta" count={2} />
-        <StatusItem color="bg-gray-500" label="Offline" count={15} />
+      <div
+        className="absolute bottom-5 left-5 z-[40] w-[220px] rounded-2xl border border-slate-600/30 p-4 shadow-2xl backdrop-blur-xl"
+        style={{ background: 'rgba(8, 13, 30, 0.88)', boxShadow: '0 16px 40px rgba(0,0,0,0.35)' }}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+            Legenda
+          </span>
+          <span className="rounded-full border border-slate-600/40 bg-slate-900/70 px-2 py-0.5 text-[10px] font-black text-slate-200">
+            37 equipamentos
+          </span>
+        </div>
+        <div className="space-y-2">
+          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Status</p>
+          <StatusItem color="#10b981" label="Trabalhando" count={12} />
+          <StatusItem color="#fbbf24" label="Deslocando" count={5} />
+          <StatusItem color="#f97316" label="Parada" count={3} />
+          <StatusItem color="#ef4444" label="Alerta" count={2} />
+          <StatusItem color="#6b7280" label="Offline" count={15} />
+        </div>
       </div>
     </div>
   );
 }
 
-function StatusItem({ color, label, count }: { color: string, label: string, count: number }) {
+function StatusItem({ color, label, count }: { color: string; label: string; count: number }) {
   return (
-    <div className="flex items-center justify-between gap-8">
-      <div className="flex items-center gap-3">
-        <div className={cn("w-2 h-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]", color)}></div>
-        <span className="text-[10px] text-muted-foreground font-black uppercase tracking-tighter">{label}</span>
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}70` }}
+        />
+        <span className="truncate text-xs font-bold text-slate-200">{label}</span>
       </div>
-      <span className="text-[10px] font-black text-white/40">{count}</span>
+      <span className="text-xs font-black text-white">{count}</span>
     </div>
   );
 }

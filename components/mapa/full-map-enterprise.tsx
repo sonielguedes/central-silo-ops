@@ -20,6 +20,7 @@ import {
 
 import { EquipmentLiveState, EquipmentOperationalStatus, TrailPoint } from '@/lib/types';
 import type { TrailQualitySummary } from '@/lib/trail-quality';
+import { TrailTimelinePanel } from '@/components/mapa/trail-timeline-panel';
 import { createEquipmentMarkerIcon } from '@/components/map/equipment-map-marker';
 import { resolveIconType } from '@/lib/equipment-icon-types';
 import type { FichaOperador } from '@/lib/operator-sheet-builder';
@@ -489,6 +490,7 @@ export default function FullMapEnterprise({
   const [fichaTarget, setFichaTarget]   = useState<{ fleetCode: string; journeyId: string | null } | null>(null);
   const [flyTarget, setFlyTarget]       = useState<[number, number] | null>(null);
   const [copiedId, setCopiedId]         = useState<string | null>(null);
+  const [rawMode, setRawMode]           = useState(false);
 
   const farmCenter: [number, number]    = [-12.5568, -55.7229];
   const markerRefs = useRef<Record<string, L.Marker>>({});
@@ -498,6 +500,12 @@ export default function FullMapEnterprise({
     if (!filters) return allFleet;
     return applyFilters(allFleet, filters);
   }, [allFleet, filters]);
+
+  // Equipamento ativo com rastro (para o painel inferior)
+  const activeMachine = useMemo(
+    () => trail ? fleet.find(m => String(m.fleetCode) === String(trail.fleetCode)) ?? null : null,
+    [trail, fleet],
+  );
 
   const fetchTrail = useCallback(async (fleetCode: string, journeyId: string, rawMode = false) => {
     setTrailLoading(true);
@@ -541,7 +549,14 @@ export default function FullMapEnterprise({
     }
   }, []);
 
-  const clearTrail = useCallback(() => { setTrail(null); }, []);
+  const clearTrail = useCallback(() => { setTrail(null); setRawMode(false); }, []);
+
+  const onToggleRaw = useCallback(() => {
+    if (!trail) return;
+    const next = !rawMode;
+    setRawMode(next);
+    fetchTrail(trail.fleetCode, trail.journeyId, next);
+  }, [rawMode, trail, fetchTrail]);
 
   const handleCenterOn = useCallback((pos: [number, number] | null) => {
     if (pos) setFlyTarget([...pos]);
@@ -648,7 +663,7 @@ export default function FullMapEnterprise({
                 remove: ()  => { delete markerRefs.current[machine.id]; },
               }}>
               <Popup className="silo-enterprise-popup" minWidth={320} maxWidth={340}>
-                <OperationalPopup machine={machine} statusCfg={sCfg} onRequestTrail={fetchTrail} onClearTrail={clearTrail} trailLoading={trailLoading} activeTrail={trail} onCenterOn={handleCenterOn} onCopyJourney={handleCopyJourney} copiedId={copiedId} onOpenFicha={handleOpenFicha} />
+                <OperationalPopup machine={machine} statusCfg={sCfg} onRequestTrail={fetchTrail} onClearTrail={clearTrail} trailLoading={trailLoading} activeTrail={trail} onCenterOn={handleCenterOn} onCopyJourney={handleCopyJourney} copiedId={copiedId} onOpenFicha={handleOpenFicha} rawMode={rawMode} onToggleRaw={onToggleRaw} />
               </Popup>
             </Marker>
           );
@@ -657,11 +672,17 @@ export default function FullMapEnterprise({
       </MapContainer>
 
       {trail && (
-        <div className="absolute top-20 right-4 z-[1400]">
-          <button onClick={clearTrail} className="flex items-center gap-2 px-3 py-2 bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] rounded-xl text-[10px] font-black uppercase text-blue-300 hover:bg-blue-500/10 transition-all shadow-lg">
-            <XIcon size={12} /> Limpar rastro ({trail.fleetCode})
-          </button>
-        </div>
+        <TrailTimelinePanel
+          trail={trail}
+          machine={activeMachine}
+          rawMode={rawMode}
+          trailLoading={trailLoading}
+          copiedId={copiedId}
+          onClear={clearTrail}
+          onCenter={handleCenterOn}
+          onCopyJourney={handleCopyJourney}
+          onToggleRaw={onToggleRaw}
+        />
       )}
 
       {fichaTarget && <FichaPanel fleetCode={fichaTarget.fleetCode} journeyId={fichaTarget.journeyId} onClose={() => setFichaTarget(null)} />}
@@ -673,15 +694,15 @@ export default function FullMapEnterprise({
 /* ── Trail Quality Panel ─────────────────────────────────────────────────────────────────────── */
 
 function TrailQualityPanel({
-  activeTrail, trailLoading, onClearTrail, onRequestTrail, machine,
+  activeTrail, trailLoading, onClearTrail, rawMode, onToggleRaw,
 }: {
   activeTrail: TrailState;
   trailLoading: boolean;
   onClearTrail: () => void;
-  onRequestTrail: (fleetCode: string, journeyId: string, rawMode?: boolean) => void;
-  machine: LiveMapItem;
+  rawMode: boolean;
+  onToggleRaw: () => void;
 }) {
-  const [isRawMode, setIsRawMode] = React.useState(false);
+  const isRawMode = rawMode;
   const summary = activeTrail?.summary ?? null;
   const pts = activeTrail?.points ?? [];
   const trailEmpty = pts.length === 0;
@@ -693,11 +714,7 @@ function TrailQualityPanel({
   const qualityLabel = qualityPct == null ? null : qualityPct >= 85 ? 'Boa' : qualityPct >= 60 ? 'Média' : 'Baixa';
   const qualityColor = qualityLabel === 'Boa' ? 'text-emerald-400' : qualityLabel === 'Média' ? 'text-amber-400' : 'text-red-400';
 
-  function toggleRaw() {
-    const next = !isRawMode;
-    setIsRawMode(next);
-    onRequestTrail(machine.code, machine.journeyId ?? '', next);
-  }
+  const toggleRaw = onToggleRaw;
 
   if (trailEmpty) {
     return (
@@ -771,7 +788,7 @@ type StatusCfg = { label: string; color: string };
 
 function OperationalPopup({
   machine, statusCfg, onRequestTrail, onClearTrail, trailLoading, activeTrail,
-  onCenterOn, onCopyJourney, copiedId, onOpenFicha,
+  onCenterOn, onCopyJourney, copiedId, onOpenFicha, rawMode, onToggleRaw,
 }: {
   machine: LiveMapItem;
   statusCfg: StatusCfg;
@@ -783,6 +800,8 @@ function OperationalPopup({
   onCopyJourney: (id: string) => void;
   copiedId: string | null;
   onOpenFicha: (fleetCode: string, journeyId: string | null) => void;
+  rawMode: boolean;
+  onToggleRaw: () => void;
 }) {
   const gpsAge   = ageMs(machine.lastGpsAt);
   const hbAge    = ageMs(machine.lastHeartbeatAt);
@@ -885,7 +904,7 @@ function OperationalPopup({
               <Route size={11} /> {trailLoading ? 'Carregando rastro...' : 'Ver rastro'}
             </button>
           )}
-          {isMyTrail && <TrailQualityPanel activeTrail={activeTrail} trailLoading={trailLoading} onClearTrail={onClearTrail} onRequestTrail={onRequestTrail} machine={machine} />}
+          {isMyTrail && <TrailQualityPanel activeTrail={activeTrail} trailLoading={trailLoading} onClearTrail={onClearTrail} rawMode={rawMode} onToggleRaw={onToggleRaw} />}
         </div>
       </div>
     </div>
