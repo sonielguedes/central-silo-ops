@@ -595,6 +595,13 @@ export interface OperationalMessage extends BaseEntity {
 }
 
 // --- Trail ---
+export type TrailPointQualityStatus =
+  | 'VALID'
+  | 'LOW_ACCURACY'
+  | 'DUPLICATE'
+  | 'OUTLIER'
+  | 'INVALID_COORDINATE';
+
 export interface TrailPoint {
   tenantId: string;
   fleetCode: string;
@@ -603,6 +610,10 @@ export interface TrailPoint {
   latitude: number;
   longitude: number;
   speed?: number;
+  /** Velocidade em km/h */
+  speedKmh?: number;
+  /** Rotações por minuto do motor */
+  rpm?: number;
   accuracy?: number;
   timestamp: string;
   status?: string;
@@ -610,6 +621,10 @@ export interface TrailPoint {
   operationCode?: string;
   /** Horímetro no instante do ponto (quando disponível) */
   hourmeterCurrent?: number;
+  /** ID único do evento (offlineId do APK) para deduplicação */
+  eventId?: string;
+  /** Qualidade do ponto GPS */
+  qualityStatus?: TrailPointQualityStatus;
 }
 
 // --- Live Fleet State ---

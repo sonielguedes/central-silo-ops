@@ -515,6 +515,10 @@ export async function POST(req: NextRequest) {
           const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
           const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
           if (jId && isValidGps(latitude, longitude)) {
+            // qualityStatus: mark low accuracy but still save the point
+            const gpsQuality = (accuracy != null && accuracy > 20)
+              ? 'LOW_ACCURACY' as const
+              : 'VALID' as const;
             const trailPoint: TrailPoint = {
               tenantId,
               fleetCode:            validation.equipment.code,
@@ -523,12 +527,16 @@ export async function POST(req: NextRequest) {
               latitude:             latitude!,
               longitude:            longitude!,
               speed,
+              speedKmh:             speedKmh ?? undefined,
+              rpm:                  rpm ?? undefined,
               accuracy,
               timestamp:            ts,
               status:               (liveUpdates.status as string) || 'ONLINE',
               operatorRegistration: (liveUpdates.operatorRegistration as string | undefined),
               operationCode:        (liveUpdates.operationCode as string | undefined),
               hourmeterCurrent:     hCurrGps,
+              eventId:              asString(d.offlineId) || asString(d.eventId) || undefined,
+              qualityStatus:        gpsQuality,
             };
             ServerStorage.saveTrailPoint(tenantId, trailPoint);
           }

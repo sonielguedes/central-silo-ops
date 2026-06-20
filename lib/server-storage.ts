@@ -615,12 +615,15 @@ export class ServerStorage {
       }
     }
 
-    // Deduplicate by journeyId (implicit via file) + timestamp + lat + lng
-    const isDup = pts.some((p: TrailPoint) =>
-      p.timestamp === point.timestamp &&
-      p.latitude  === point.latitude  &&
-      p.longitude === point.longitude
-    );
+    // Deduplicate by eventId (if present) OR timestamp+lat+lng
+    const isDup = pts.some((p: TrailPoint) => {
+      if (point.eventId && p.eventId) return p.eventId === point.eventId;
+      return (
+        p.timestamp === point.timestamp &&
+        p.latitude  === point.latitude  &&
+        p.longitude === point.longitude
+      );
+    });
     if (isDup) return false;
 
     pts.push(point);
@@ -640,6 +643,46 @@ export class ServerStorage {
       console.warn('[trail] getTrail: corrupted trail file, returning []', file);
       return [];
     }
+  }
+
+  /**
+   * Lista todos os arquivos de trail do tenant e filtra pelos que contêm
+   * o fleetCode informado. Permite busca histórica sem jornada ativa.
+   */
+  static getTrailsByFleetCode(
+    tenantId: string,
+    fleetCode: string,
+    date?: string,          // filtro opcional 'YYYY-MM-DD' (compara timestamp)
+  ): { journeyId: string; points: TrailPoint[] }[] {
+    const dir = this.getTrailDir(tenantId);
+    if (!fs.existsSync(dir)) return [];
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+    const results: { journeyId: string; points: TrailPoint[] }[] = [];
+    for (const file of files) {
+      try {
+        const raw = fs.readFileSync(path.join(dir, file), 'utf-8');
+        const pts: TrailPoint[] = JSON.parse(raw);
+        if (!Array.isArray(pts) || pts.length === 0) continue;
+        // fleetCode sempre String — comparação direta
+        if (pts[0].fleetCode !== fleetCode) continue;
+        let filtered = pts;
+        if (date) {
+          filtered = pts.filter(p => p.timestamp && p.timestamp.startsWith(date));
+        }
+        if (filtered.length === 0) continue;
+        const journeyId = pts[0].journeyId;
+        results.push({ journeyId, points: filtered });
+      } catch {
+        // corrupted file — skip
+      }
+    }
+    // Sort results by earliest timestamp
+    results.sort((a, b) => {
+      const ta = a.points[0]?.timestamp ?? '';
+      const tb = b.points[0]?.timestamp ?? '';
+      return ta.localeCompare(tb);
+    });
+    return results;
   }
 
   static getEvents(tenantId: string, equipmentId?: string): MobileEvent[] {
