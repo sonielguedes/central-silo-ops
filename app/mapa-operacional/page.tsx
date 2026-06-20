@@ -378,11 +378,8 @@ function MapaOperacionalPage() {
           </div>
         )}
 
-        {allFleetData.length > 0 && (
-          <div className={cn(
-            "absolute left-4 z-[1400] transition-all duration-300",
-            trailPanelOpen ? "bottom-[168px]" : "bottom-8",
-          )}>
+        {allFleetData.length > 0 && !trailPanelOpen && (
+          <div className="absolute bottom-8 left-4 z-[1400]">
             <MapLegend items={filteredFleetData.map(m => ({ iconType: m.iconType, status: m.status }))} />
             {filteredFleetData.length !== allFleetData.length && (
               <div className="mt-1 text-[9px] font-bold text-muted-foreground text-center">
@@ -394,7 +391,7 @@ function MapaOperacionalPage() {
 
         <div className={cn(
           "absolute right-4 flex flex-col gap-2 z-[1400] transition-all duration-300",
-          trailPanelOpen ? "bottom-[168px]" : "bottom-8",
+          trailPanelOpen ? "top-24" : "bottom-8",
         )}>
           <div className="bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] rounded-xl p-1.5 flex flex-col gap-1.5 shadow-2xl">
             <button className="w-10 h-7 rounded-lg bg-primary text-[#0a0e27] flex items-center justify-center font-black text-[9px] shadow-md shadow-primary/20 hover:scale-105 transition-transform">SAT</button>
