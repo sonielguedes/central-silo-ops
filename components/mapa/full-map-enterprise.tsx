@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { EquipmentLiveState, EquipmentOperationalStatus, TrailPoint } from '@/lib/types';
+import type { TrailQualitySummary } from '@/lib/trail-quality';
 import { createEquipmentMarkerIcon } from '@/components/map/equipment-map-marker';
 import { resolveIconType } from '@/lib/equipment-icon-types';
 import type { FichaOperador } from '@/lib/operator-sheet-builder';
@@ -64,7 +65,7 @@ const STATUS_CONFIG: Record<
   offline:    { label: 'Offline',    color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
 };
 
-type TrailState = { fleetCode: string; journeyId: string; points: TrailPoint[] } | null;
+type TrailState = { fleetCode: string; journeyId: string; points: TrailPoint[]; summary: TrailQualitySummary | null } | null;
 
 /* ── Leaflet icons ─────────────────────────────────────────────────────────────────── */
 
@@ -498,11 +499,12 @@ export default function FullMapEnterprise({
     return applyFilters(allFleet, filters);
   }, [allFleet, filters]);
 
-  const fetchTrail = useCallback(async (fleetCode: string, journeyId: string) => {
+  const fetchTrail = useCallback(async (fleetCode: string, journeyId: string, rawMode = false) => {
     setTrailLoading(true);
     try {
       // Sem journeyId → busca pelo fleetCode na data atual (jornada ativa ou mais recente)
-      let url = '/api/equipamentos/trail?fleetCode=' + encodeURIComponent(fleetCode);
+      const qualityParam = rawMode ? 'raw' : 'visual';
+      let url = '/api/equipamentos/trail?fleetCode=' + encodeURIComponent(fleetCode) + '&quality=' + qualityParam;
       if (journeyId) {
         url += '&journeyId=' + encodeURIComponent(journeyId);
       } else {
@@ -510,7 +512,7 @@ export default function FullMapEnterprise({
         url += '&date=' + today;
       }
       const res = await fetch(url, { cache: 'no-store' });
-      const data = res.ok ? await res.json() : { points: [] };
+      const data = res.ok ? await res.json() : { points: [], summary: null };
       // API retorna formato compacto {lat, lng} — mapear para TrailPoint {latitude, longitude}
       const rawPts: { lat?: number; lng?: number; latitude?: number; longitude?: number; speedKmh?: number; rpm?: number; accuracy?: number; hourmeter?: number; timestamp?: string; qualityStatus?: string; eventId?: string }[] =
         Array.isArray(data.points) ? data.points : [];
@@ -530,15 +532,16 @@ export default function FullMapEnterprise({
         eventId: p.eventId,
       }));
       const resolvedJourneyId = journeyId || (data.journeyId as string) || '';
-      setTrail({ fleetCode, journeyId: resolvedJourneyId, points: pts });
+      const summary = (data.summary as TrailQualitySummary) ?? null;
+      setTrail({ fleetCode, journeyId: resolvedJourneyId, points: pts, summary });
     } catch {
-      setTrail({ fleetCode, journeyId, points: [] });
+      setTrail({ fleetCode, journeyId, points: [], summary: null });
     } finally {
       setTrailLoading(false);
     }
   }, []);
 
-  const clearTrail = useCallback(() => setTrail(null), []);
+  const clearTrail = useCallback(() => { setTrail(null); }, []);
 
   const handleCenterOn = useCallback((pos: [number, number] | null) => {
     if (pos) setFlyTarget([...pos]);
@@ -667,6 +670,101 @@ export default function FullMapEnterprise({
   );
 }
 
+/* ── Trail Quality Panel ─────────────────────────────────────────────────────────────────────── */
+
+function TrailQualityPanel({
+  activeTrail, trailLoading, onClearTrail, onRequestTrail, machine,
+}: {
+  activeTrail: TrailState;
+  trailLoading: boolean;
+  onClearTrail: () => void;
+  onRequestTrail: (fleetCode: string, journeyId: string, rawMode?: boolean) => void;
+  machine: LiveMapItem;
+}) {
+  const [isRawMode, setIsRawMode] = React.useState(false);
+  const summary = activeTrail?.summary ?? null;
+  const pts = activeTrail?.points ?? [];
+  const trailEmpty = pts.length === 0;
+
+  // Qualidade geral
+  const rawCount = summary?.rawPointsCount ?? 0;
+  const validCount = (summary?.quality.valid ?? 0) + (summary?.quality.lowAccuracy ?? 0);
+  const qualityPct = rawCount > 0 ? (validCount / rawCount) * 100 : null;
+  const qualityLabel = qualityPct == null ? null : qualityPct >= 85 ? 'Boa' : qualityPct >= 60 ? 'Média' : 'Baixa';
+  const qualityColor = qualityLabel === 'Boa' ? 'text-emerald-400' : qualityLabel === 'Média' ? 'text-amber-400' : 'text-red-400';
+
+  function toggleRaw() {
+    const next = !isRawMode;
+    setIsRawMode(next);
+    onRequestTrail(machine.code, machine.journeyId ?? '', next);
+  }
+
+  if (trailEmpty) {
+    return (
+      <p className="text-[10px] font-bold text-muted-foreground/60 italic text-center py-1">
+        {trailLoading ? 'Carregando rastro...' : 'Rastro indisponível para esta jornada.'}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Header + Limpar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-blue-300 text-[10px] font-bold">
+          <Route size={11} /> Rastro {isRawMode ? 'bruto' : 'limpo'}
+        </div>
+        <button onClick={onClearTrail} className="text-[9px] font-black uppercase text-muted-foreground hover:text-white transition-colors">
+          Limpar
+        </button>
+      </div>
+
+      {/* Quality summary card */}
+      {summary && (
+        <div className="rounded-lg bg-[#0d1232] border border-[#2d3647]/60 p-2 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Qualidade do Rastro</span>
+            {qualityLabel && (
+              <span className={`text-[9px] font-black uppercase ${qualityColor}`}>{qualityLabel}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-x-2 gap-y-1">
+            <div className="flex flex-col">
+              <span className="text-[8px] text-muted-foreground uppercase">Recebidos</span>
+              <span className="text-[11px] font-black text-white">{summary.rawPointsCount}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[8px] text-muted-foreground uppercase">No mapa</span>
+              <span className="text-[11px] font-black text-emerald-400">{summary.visualPointsCount}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[8px] text-muted-foreground uppercase">Filtrados</span>
+              <span className="text-[11px] font-black text-amber-400">{summary.filteredPointsCount}</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-0.5 border-t border-[#2d3647]/40">
+            <span className="text-[8px] text-muted-foreground uppercase">Distância</span>
+            <span className="text-[10px] font-black text-white">{summary.distanceKm.toFixed(2)} km</span>
+          </div>
+          {qualityLabel === 'Baixa' && (
+            <p className="text-[8px] text-amber-400/80 italic leading-tight mt-0.5">
+              Rastro com baixa qualidade de GPS. Exibindo pontos disponíveis.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Toggle raw / clean */}
+      <button
+        onClick={toggleRaw}
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 text-[9px] font-bold uppercase hover:bg-white/10 transition-all"
+      >
+        {isRawMode ? '⬛ Mostrar rastro limpo' : '⬜ Mostrar rastro bruto'}
+      </button>
+    </div>
+  );
+}
+
 /* ── Operational Popup ───────────────────────────────────────────────────────────────────────── */
 
 type StatusCfg = { label: string; color: string };
@@ -677,7 +775,7 @@ function OperationalPopup({
 }: {
   machine: LiveMapItem;
   statusCfg: StatusCfg;
-  onRequestTrail: (fleetCode: string, journeyId: string) => void;
+  onRequestTrail: (fleetCode: string, journeyId: string, rawMode?: boolean) => void;
   onClearTrail: () => void;
   trailLoading: boolean;
   activeTrail: TrailState;
@@ -700,8 +798,6 @@ function OperationalPopup({
   const stopDesc = machine.stopDescription  ?? machine.stopReason;
 
   const isMyTrail = activeTrail?.fleetCode === machine.code;
-  const trailHasPoints = isMyTrail && (activeTrail?.points.length ?? 0) > 0;
-  const trailEmpty = isMyTrail && (activeTrail?.points.length ?? 0) === 0;
 
   return (
     <div className="bg-[#0a0e27] text-white rounded-xl border border-[#2d3647] font-sans shadow-2xl overflow-hidden" style={{ width: 320 }}>
@@ -789,17 +885,7 @@ function OperationalPopup({
               <Route size={11} /> {trailLoading ? 'Carregando rastro...' : 'Ver rastro'}
             </button>
           )}
-          {isMyTrail && trailHasPoints && (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] font-bold"><Route size={11} /> {(activeTrail?.points.length ?? 0) + ' pontos no rastro'}</div>
-                <button onClick={onClearTrail} className="text-[9px] font-black uppercase text-muted-foreground hover:text-white transition-colors">Limpar</button>
-              </div>
-            </div>
-          )}
-          {isMyTrail && trailEmpty && (
-            <p className="text-[10px] font-bold text-muted-foreground/60 italic text-center py-1">Sem rastro disponivel para esta jornada</p>
-          )}
+          {isMyTrail && <TrailQualityPanel activeTrail={activeTrail} trailLoading={trailLoading} onClearTrail={onClearTrail} onRequestTrail={onRequestTrail} machine={machine} />}
         </div>
       </div>
     </div>

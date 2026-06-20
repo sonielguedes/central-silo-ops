@@ -2,47 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { requireTenant } from '@/lib/auth/api-guard';
 import { TrailPoint } from '@/lib/types';
+import {
+  classifyAllPoints,
+  filterVisualTrailPoints,
+  buildTrailQualitySummary,
+  ClassifiedTrailPoint,
+} from '@/lib/trail-quality';
 
 export const dynamic = 'force-dynamic';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Formato compacto para o cliente ──────────────────────────────────────────
 
-/** Distância haversine em km entre dois pontos. */
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function buildSummary(points: TrailPoint[], journeyEnded?: boolean) {
-  const valid = points.filter(
-    p => Number.isFinite(p.latitude) && Number.isFinite(p.longitude),
-  );
-  let distanceKm = 0;
-  for (let i = 1; i < valid.length; i++) {
-    distanceKm += haversineKm(
-      valid[i - 1].latitude,
-      valid[i - 1].longitude,
-      valid[i].latitude,
-      valid[i].longitude,
-    );
-  }
-  return {
-    totalPoints: valid.length,
-    distanceKm: Math.round(distanceKm * 1000) / 1000,
-    startedAt: valid[0]?.timestamp ?? null,
-    endedAt: journeyEnded ? (valid[valid.length - 1]?.timestamp ?? null) : null,
-  };
-}
-
-/** Converte para o formato compacto esperado pelo cliente. */
-function toClientPoints(points: TrailPoint[]) {
+function toClientPoints(points: ClassifiedTrailPoint[]) {
   return points
     .filter(p => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
     .map(p => ({
@@ -53,9 +24,24 @@ function toClientPoints(points: TrailPoint[]) {
       rpm:           p.rpm,
       hourmeter:     p.hourmeterCurrent,
       timestamp:     p.timestamp,
-      qualityStatus: p.qualityStatus ?? 'VALID',
+      qualityStatus: p.qualityStatus,
       eventId:       p.eventId,
     }));
+}
+
+// ── Pipeline de qualidade ────────────────────────────────────────────────────
+
+interface TrailQualityResult {
+  raw:     TrailPoint[];
+  classified: ClassifiedTrailPoint[];
+  visual:  ClassifiedTrailPoint[];
+}
+
+function applyQualityPipeline(raw: TrailPoint[]): TrailQualityResult {
+  const sorted     = [...raw].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const classified = classifyAllPoints(sorted);
+  const visual     = filterVisualTrailPoints(classified);
+  return { raw: sorted, classified, visual };
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -68,24 +54,32 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     // fleetCode e journeyId sempre String
-    const fleetCode  = searchParams.get('fleetCode')?.trim()  || undefined;
-    const journeyId  = searchParams.get('journeyId')?.trim()  || undefined;
-    const date       = searchParams.get('date')?.trim()       || undefined; // YYYY-MM-DD
+    const fleetCode = searchParams.get('fleetCode')?.trim() || undefined;
+    const journeyId = searchParams.get('journeyId')?.trim() || undefined;
+    const date      = searchParams.get('date')?.trim()      || undefined; // YYYY-MM-DD
+    const quality   = searchParams.get('quality')           || 'visual';  // visual | raw
+    const debug     = searchParams.get('debug') === 'true';
+
+    const showRaw   = quality === 'raw';
 
     // ── 1. Por journeyId direto ─────────────────────────────────────────────
     if (journeyId) {
-      const points = ServerStorage.getTrail(tenantId, journeyId);
-      const sorted = [...points].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const raw = ServerStorage.getTrail(tenantId, journeyId);
+      const { raw: sorted, classified, visual } = applyQualityPipeline(raw);
+      const displayPoints = showRaw ? classified : visual;
+      const summary = buildTrailQualitySummary(sorted, classified, visual);
+
       return NextResponse.json({
         success:   true,
         fleetCode: sorted[0]?.fleetCode ?? fleetCode ?? null,
         journeyId,
-        points:    toClientPoints(sorted),
-        summary:   buildSummary(sorted),
+        points:    toClientPoints(displayPoints),
+        summary,
+        ...(debug ? { debug: { classifiedPoints: toClientPoints(classified) } } : {}),
       });
     }
 
-    // ── 2. Por fleetCode + date (histórico) ou jornada ativa ───────────────
+    // ── 2. Por fleetCode (obrigatório a partir daqui) ───────────────────────
     if (!fleetCode) {
       return NextResponse.json(
         { success: false, error: 'Informe fleetCode ou journeyId' },
@@ -93,65 +87,88 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Se date fornecida, busca histórico em todos os arquivos de trail
+    // ── 3. Por fleetCode + date (histórico) ─────────────────────────────────
     if (date) {
       const all = ServerStorage.getTrailsByFleetCode(tenantId, fleetCode, date);
       if (all.length === 0) {
         return NextResponse.json({
           success: true, fleetCode, journeyId: null, date,
-          points: [], summary: { totalPoints: 0, distanceKm: 0, startedAt: null, endedAt: null },
+          points: [],
+          summary: {
+            totalPoints: 0, rawPointsCount: 0, visualPointsCount: 0, filteredPointsCount: 0,
+            distanceKm: 0, startedAt: null, endedAt: null,
+            quality: { valid: 0, lowAccuracy: 0, duplicate: 0, outlier: 0, invalidCoordinate: 0 },
+          },
         });
       }
-      // Retorna o primeiro resultado (jornada mais antiga do dia)
-      const { journeyId: jId, points } = all[0];
-      const sorted = [...points].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+      const { journeyId: jId, points: rawPts } = all[0];
+      const { raw: sorted, classified, visual } = applyQualityPipeline(rawPts);
+      const displayPoints = showRaw ? classified : visual;
+      const summary = buildTrailQualitySummary(sorted, classified, visual);
+
       return NextResponse.json({
         success: true, fleetCode, journeyId: jId, date,
-        points:  toClientPoints(sorted),
-        summary: buildSummary(sorted),
+        points:  toClientPoints(displayPoints),
+        summary,
         journeys: all.map(j => ({
-          journeyId: j.journeyId,
+          journeyId:   j.journeyId,
           totalPoints: j.points.length,
-          startedAt: j.points[0]?.timestamp ?? null,
+          startedAt:   j.points[0]?.timestamp ?? null,
         })),
+        ...(debug ? { debug: { classifiedPoints: toClientPoints(classified) } } : {}),
       });
     }
 
-    // Jornada ativa no live state
+    // ── 4. Jornada ativa no live state ──────────────────────────────────────
     const liveFleet = ServerStorage.getLiveFleet(tenantId);
-    const machine = liveFleet.find(m => String(m.fleetCode) === String(fleetCode));
+    const machine   = liveFleet.find(m => String(m.fleetCode) === String(fleetCode));
 
     if (!machine?.journeyId) {
       // Sem jornada ativa — tenta buscar trail histórico mais recente
       const all = ServerStorage.getTrailsByFleetCode(tenantId, fleetCode);
       if (all.length > 0) {
         const last = all[all.length - 1];
-        const sorted = [...last.points].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        const { raw: sorted, classified, visual } = applyQualityPipeline(last.points);
+        const displayPoints = showRaw ? classified : visual;
+        const summary = buildTrailQualitySummary(sorted, classified, visual, true);
+
         return NextResponse.json({
           success: true, fleetCode,
           journeyId: last.journeyId,
-          points:    toClientPoints(sorted),
-          summary:   buildSummary(sorted, true),
+          points:    toClientPoints(displayPoints),
+          summary,
           note:      'Jornada finalizada — rastro histórico',
+          ...(debug ? { debug: { classifiedPoints: toClientPoints(classified) } } : {}),
         });
       }
       return NextResponse.json({
         success: true, fleetCode, journeyId: null,
-        points: [], summary: { totalPoints: 0, distanceKm: 0, startedAt: null, endedAt: null },
+        points: [],
+        summary: {
+          totalPoints: 0, rawPointsCount: 0, visualPointsCount: 0, filteredPointsCount: 0,
+          distanceKm: 0, startedAt: null, endedAt: null,
+          quality: { valid: 0, lowAccuracy: 0, duplicate: 0, outlier: 0, invalidCoordinate: 0 },
+        },
       });
     }
 
-    const jId = machine.journeyId;
-    const points = ServerStorage.getTrail(tenantId, jId);
-    const sorted = [...points].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    // ── 5. Jornada ativa com trail ───────────────────────────────────────────
+    const jId    = machine.journeyId;
+    const rawPts = ServerStorage.getTrail(tenantId, jId);
+    const { raw: sorted, classified, visual } = applyQualityPipeline(rawPts);
+    const displayPoints = showRaw ? classified : visual;
+    const summary = buildTrailQualitySummary(sorted, classified, visual);
 
     return NextResponse.json({
       success:   true,
       fleetCode: String(fleetCode),
       journeyId: jId,
-      points:    toClientPoints(sorted),
-      summary:   buildSummary(sorted),
+      points:    toClientPoints(displayPoints),
+      summary,
+      ...(debug ? { debug: { classifiedPoints: toClientPoints(classified) } } : {}),
     });
+
   } catch (error) {
     console.error('[trail-api] error', error);
     return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
