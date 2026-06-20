@@ -6,6 +6,7 @@ import { requireMobileAuth } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { auditFromRequest } from '@/lib/audit/audit-log';
 import { FuelingStorage } from '@/lib/fueling-storage';
+import { checkOperationAllowed } from '@/lib/operational-profiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -470,6 +471,27 @@ export async function POST(req: NextRequest) {
 
       switch (event.type) {
         case 'JOURNEY_START': {
+          // ── Guard: verificar operação permitida para o perfil da frota ──
+          const jsOpCode = asString(d.operationCode);
+          if (jsOpCode) {
+            const jsGuard = checkOperationAllowed(
+              { operationalProfileCode: (validation.equipment as Record<string,unknown>).operationalProfileCode as string | null | undefined, code: validation.equipment.code },
+              jsOpCode,
+            );
+            if (!jsGuard.allowed) {
+              console.warn(
+                '[batch/JOURNEY_START] OPERATION_NOT_ALLOWED fleetCode=' + validation.equipment.code +
+                ' operationCode=' + jsOpCode + ' profile=' + jsGuard.profile.code +
+                ' reason=' + (jsGuard.reason ?? 'profile restriction'),
+              );
+              results.push({
+                offlineId: event.uuid,
+                status:    'REJECTED' as const,
+                reason:    'OPERATION_NOT_ALLOWED_FOR_EQUIPMENT_PROFILE:' + jsOpCode + ':' + jsGuard.profile.code,
+              });
+              break;
+            }
+          }
           applyOperationalFields(liveUpdates, d);
           const hStart = asValidHourmeter(d.hourmeterStart ?? d.hourmeter);
           if (hStart != null) { liveUpdates.hourmeterStart = hStart; liveUpdates.hourmeterCurrent = hStart; }
@@ -605,6 +627,26 @@ export async function POST(req: NextRequest) {
           }
 
           // Normal FSM transition
+          // ── Guard: verificar operação permitida para o perfil da frota ──
+          const fsmOpCode = asString(d.operationCode);
+          if (fsmOpCode) {
+            const fsmGuard = checkOperationAllowed(
+              { operationalProfileCode: (validation.equipment as Record<string,unknown>).operationalProfileCode as string | null | undefined, code: validation.equipment.code },
+              fsmOpCode,
+            );
+            if (!fsmGuard.allowed) {
+              console.warn(
+                '[batch/FSM_TRANSITION] OPERATION_NOT_ALLOWED fleetCode=' + validation.equipment.code +
+                ' operationCode=' + fsmOpCode + ' profile=' + fsmGuard.profile.code,
+              );
+              results.push({
+                offlineId: event.uuid,
+                status:    'REJECTED' as const,
+                reason:    'OPERATION_NOT_ALLOWED_FOR_EQUIPMENT_PROFILE:' + fsmOpCode + ':' + fsmGuard.profile.code,
+              });
+              break;
+            }
+          }
           applyOperationalFields(liveUpdates, d);
           liveUpdates.status = fsmToStatus(toState);
           if (d.operationCode) liveUpdates.operationCode = d.operationCode;
@@ -618,6 +660,26 @@ export async function POST(req: NextRequest) {
         case 'WORK_STATUS':
         case 'WORK_STARTED':
         case 'FSM_TRABALHO': {
+          // ── Guard: verificar operação permitida para o perfil da frota ──
+          const wsOpCode = asString(d.operationCode);
+          if (wsOpCode) {
+            const wsGuard = checkOperationAllowed(
+              { operationalProfileCode: (validation.equipment as Record<string,unknown>).operationalProfileCode as string | null | undefined, code: validation.equipment.code },
+              wsOpCode,
+            );
+            if (!wsGuard.allowed) {
+              console.warn(
+                '[batch/WORK_STARTED] OPERATION_NOT_ALLOWED fleetCode=' + validation.equipment.code +
+                ' operationCode=' + wsOpCode + ' profile=' + wsGuard.profile.code,
+              );
+              results.push({
+                offlineId: event.uuid,
+                status:    'REJECTED' as const,
+                reason:    'OPERATION_NOT_ALLOWED_FOR_EQUIPMENT_PROFILE:' + wsOpCode + ':' + wsGuard.profile.code,
+              });
+              break;
+            }
+          }
           applyOperationalFields(liveUpdates, d);
           liveUpdates.status = 'OPERANDO';
           if (d.operationCode) liveUpdates.operationCode = d.operationCode;

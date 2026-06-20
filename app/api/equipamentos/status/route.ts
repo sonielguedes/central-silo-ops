@@ -187,7 +187,11 @@ export async function GET(req: NextRequest) {
       .filter((p) => p.code && p.description)
       .map((p) => ({ code: p.code as string, description: p.description as string }));
 
-    return NextResponse.json(liveFleet.map((s) => normalizeForMap(s, allEvents, catalog)));
+    const response = NextResponse.json(liveFleet.map((s) => normalizeForMap(s, allEvents, catalog)));
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    return response;
   } catch (error) {
     console.error('[api/equipamentos/status] failed to fetch live state', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

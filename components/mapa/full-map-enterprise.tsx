@@ -52,7 +52,7 @@ const HEARTBEAT_RECENT_MS =  3 * 60 * 1000;
 const GPS_ALERT_MS        =      120 * 1000;
 const HB_ALERT_MS         =      120 * 1000;
 const GPS_FRESH_MS        =       60 * 1000;
-const REFRESH_INTERVAL_MS =  30 * 1000;
+const REFRESH_INTERVAL_MS = 5 * 1000; // 5s — atualização em tempo real
 const NOT_INFORMED        = 'Nao informado';
 
 const STATUS_CONFIG: Record<

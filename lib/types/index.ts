@@ -218,6 +218,9 @@ export interface Equipment extends BaseEntity {
     longitude: number;
   };
   activeShiftId?: string;
+  // Perfil Operacional — define operações/implementos/paradas permitidos no APK
+  operationalProfileCode?: string | null;
+  measurementMode?: 'HORIMETRO' | 'KM' | 'AMBOS' | null;
 }
 
 // --- Fleet Module Masters ---

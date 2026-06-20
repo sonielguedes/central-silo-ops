@@ -26,6 +26,11 @@ import crypto from 'crypto';
 import { CadastroStorage } from '@/lib/cadastro-storage';
 import { requireMobileAuth } from '@/lib/auth/api-guard';
 import { ensureOperationsCatalogForTenant } from '@/lib/catalog/ensure-operations-catalog';
+import {
+  getProfileForEquipment,
+  filterOperationsForEquipment,
+  OPERATIONAL_PROFILES,
+} from '@/lib/operational-profiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,12 +94,29 @@ export async function GET(req: NextRequest) {
 
     const equipments = (CadastroStorage.getAll(tenantId, 'equipamentos') as StorageItem[])
       .filter(e => isEntityActive(e) && isMobileEnabled(e))
-      .map(e => ({
-        ...e,
-        // Garantir que mobileToken seja sempre retornado (nunca undefined)
-        mobileToken: typeof e.mobileToken === 'string' ? e.mobileToken : null,
-        fleetCode:   String(e.code ?? ''),
-      }));
+      .map(e => {
+        const profileCode = (e.operationalProfileCode as string | null | undefined) ?? 'GENERICO';
+        const profile = getProfileForEquipment({ operationalProfileCode: profileCode });
+        return {
+          ...e,
+          // Garantir que mobileToken seja sempre retornado (nunca undefined)
+          mobileToken:            typeof e.mobileToken === 'string' ? e.mobileToken : null,
+          fleetCode:              String(e.code ?? ''),
+          // Perfil operacional — APK usa para filtrar opções de seleção
+          operationalProfileCode: profileCode,
+          measurementMode:        (e.measurementMode as string | null | undefined) ?? profile.measurementMode,
+          operationalProfile: {
+            code:                       profile.code,
+            name:                       profile.name,
+            description:                profile.description,
+            measurementMode:            profile.measurementMode,
+            allowedOperationCodes:      profile.allowedOperationCodes,
+            requiresImplement:          profile.requiresImplement,
+            requiresWorkOrder:          profile.requiresWorkOrder,
+            requiresCostCenter:         profile.requiresCostCenter,
+          },
+        };
+      });
 
     // ── 2. Ordens de Servico (abertas) ───────────────────────────────────────
     const rawWorkOrders = (CadastroStorage.getAll(tenantId, 'ordens-servico') as StorageItem[])
@@ -181,7 +203,39 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // ── 9. Montar pacote ──────────────────────────────────────────────────────
+    // ── 9. Regras por frota (allowedOperations filtradas por perfil) ─────────
+    // O APK usa este mapa para filtrar a tela de seleção operacional offline-first.
+    const allowedOperationsByFleet: Record<string, {
+      profileCode: string;
+      allowedOperationCodes: string[] | null;
+      measurementMode: string;
+      requiresImplement: boolean;
+      requiresWorkOrder: boolean;
+      requiresCostCenter: boolean;
+      filteredOperationIds: string[];
+    }> = {};
+
+    for (const eq of equipments) {
+      const fc = String(eq.fleetCode ?? '');
+      if (!fc) continue;
+      const profileCode = String((eq as Record<string,unknown>).operationalProfileCode ?? 'GENERICO');
+      const profile = getProfileForEquipment({ operationalProfileCode: profileCode });
+      const filteredOps = filterOperationsForEquipment(
+        { operationalProfileCode: profileCode },
+        operations as Array<Record<string, unknown>>,
+      );
+      allowedOperationsByFleet[fc] = {
+        profileCode,
+        allowedOperationCodes: profile.allowedOperationCodes,
+        measurementMode:       profile.measurementMode,
+        requiresImplement:     profile.requiresImplement,
+        requiresWorkOrder:     profile.requiresWorkOrder,
+        requiresCostCenter:    profile.requiresCostCenter,
+        filteredOperationIds:  filteredOps.map(o => String((o as Record<string,unknown>).id ?? '')).filter(Boolean),
+      };
+    }
+
+    // ── 10. Montar pacote ──────────────────────────────────────────────────────
     const updatedAt = new Date().toISOString();
     const payload = {
       tenantId,
@@ -193,6 +247,16 @@ export async function GET(req: NextRequest) {
       operations,
       operators,
       stopReasons,
+      allowedOperationsByFleet,
+      operationalProfiles: Object.values(OPERATIONAL_PROFILES).map(p => ({
+        code:                  p.code,
+        name:                  p.name,
+        allowedOperationCodes: p.allowedOperationCodes,
+        measurementMode:       p.measurementMode,
+        requiresImplement:     p.requiresImplement,
+        requiresWorkOrder:     p.requiresWorkOrder,
+        requiresCostCenter:    p.requiresCostCenter,
+      })),
       updatedAt,
     };
 
@@ -200,15 +264,16 @@ export async function GET(req: NextRequest) {
 
     console.info('[mobile/bootstrap] synced', {
       tenantId,
-      operatorId: operatorId ?? '-',
-      equipments:  equipments.length,
-      workOrders:  workOrders.length,
-      costCenters: costCenters.length,
-      implements:  implements_.length,
-      operations:  operations.length,
-      operators:   operators.length,
-      stopReasons: stopReasons.length,
-      hasOperator: !!operator,
+      operatorId:           operatorId ?? '-',
+      equipments:           equipments.length,
+      workOrders:           workOrders.length,
+      costCenters:          costCenters.length,
+      implements:           implements_.length,
+      operations:           operations.length,
+      operators:            operators.length,
+      stopReasons:          stopReasons.length,
+      hasOperator:          !!operator,
+      profilesInPayload:    Object.keys(allowedOperationsByFleet).length,
       version,
     });
 
@@ -217,4 +282,23 @@ export async function GET(req: NextRequest) {
     console.error('[mobile/bootstrap] unhandled error', err);
     return NextResponse.json({ error: 'Erro interno ao gerar pacote de bootstrap' }, { status: 500 });
   }
+}
+
+export async function POST() { return handleMethodNotAllowed(); }
+export async function PUT() { return handleMethodNotAllowed(); }
+export async function DELETE() { return handleMethodNotAllowed(); }
+export async function PATCH() { return handleMethodNotAllowed(); }
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Company-Token, X-Tenant-Id, X-Operator-Id',
+    },
+  });
+}
+
+function handleMethodNotAllowed() {
+  return NextResponse.json({ error: 'Metodo nao permitido para este endpoint mobile.' }, { status: 405 });
 }
