@@ -14,6 +14,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
+import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 
@@ -87,32 +88,29 @@ function CombustivelPainelPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#060c1a] text-white">
-      {/* Header */}
-      <div className="px-8 pt-8 pb-4 border-b border-[#2d3647] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Fuel size={24} className="text-orange-400" />
-          <div>
-            <h1 className="text-xl font-black tracking-tight">Gestão de Combustível</h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Painel geral — abastecimentos, comboios e estoque</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d1426] border border-[#2d3647] text-xs font-bold text-muted-foreground hover:text-white hover:border-[#3d4a5f] transition-all"
-          >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-            Atualizar
-          </button>
-          <a
-            href="/combustivel/abastecimentos"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all"
-          >
-            <Plus size={13} />
-            Novo Abastecimento
-          </a>
-        </div>
-      </div>
+      <CombustivelPageHeader
+        title="Gestão de Combustível"
+        subtitle="Painel geral — abastecimentos, comboios e estoque"
+        currentPage="Painel"
+        actions={
+          <>
+            <button
+              onClick={handleRefresh}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d1426] border border-[#2d3647] text-xs font-bold text-muted-foreground hover:text-white hover:border-[#3d4a5f] transition-all"
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+              Atualizar
+            </button>
+            <a
+              href="/combustivel/abastecimentos"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all"
+            >
+              <Plus size={13} />
+              Novo Abastecimento
+            </a>
+          </>
+        }
+      />
 
       <div className="px-8 py-6 space-y-8">
         {/* KPIs */}

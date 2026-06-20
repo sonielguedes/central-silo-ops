@@ -1,8 +1,9 @@
 "use client";
 
 import React from 'react';
-import { BarChart2, Calendar, Truck, Users, Package, Clock, AlertTriangle, Download } from 'lucide-react';
+import { Calendar, Truck, Users, Package, Clock, AlertTriangle, Download } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
+import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 
 interface ReportCardProps {
   icon: React.ReactNode;
@@ -48,15 +49,11 @@ function ReportCard({ icon, title, description, badge, disabled }: ReportCardPro
 function CombustivelRelatoriosPage() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#060c1a] text-white">
-      <div className="px-8 pt-8 pb-4 border-b border-[#2d3647]">
-        <div className="flex items-center gap-3">
-          <BarChart2 size={24} className="text-orange-400" />
-          <div>
-            <h1 className="text-xl font-black tracking-tight">Relatórios de Combustível</h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Análises de consumo, abastecimentos e divergências por período</p>
-          </div>
-        </div>
-      </div>
+      <CombustivelPageHeader
+        title="Relatórios de Combustível"
+        subtitle="Análises de consumo, abastecimentos e divergências por período"
+        currentPage="Relatórios"
+      />
 
       <div className="px-8 py-6 space-y-8">
         {/* Período */}

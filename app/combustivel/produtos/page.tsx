@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Package, Plus, Search } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
+import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 
 const COLUMNS = ['Código', 'Nome', 'Tipo', 'Unidade', 'Status'];
 
@@ -25,33 +26,31 @@ function CombustivelProdutosPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#060c1a] text-white">
-      <div className="px-8 pt-8 pb-4 border-b border-[#2d3647] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Package size={24} className="text-orange-400" />
-          <div>
-            <h1 className="text-xl font-black tracking-tight">Produtos</h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Combustíveis, lubrificantes e aditivos cadastrados</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar produto..."
-              className="pl-9 pr-4 py-2 bg-[#0d1426] border border-[#2d3647] rounded-xl text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-orange-500/50 w-48"
-            />
-          </div>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all"
-          >
-            <Plus size={13} />
-            Novo Produto
-          </button>
-        </div>
-      </div>
+      <CombustivelPageHeader
+        title="Produtos"
+        subtitle="Combustíveis, lubrificantes e aditivos cadastrados"
+        currentPage="Produtos"
+        actions={
+          <>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar produto..."
+                className="pl-9 pr-4 py-2 bg-[#0d1426] border border-[#2d3647] rounded-xl text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-orange-500/50 w-48"
+              />
+            </div>
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all"
+            >
+              <Plus size={13} />
+              Novo Produto
+            </button>
+          </>
+        }
+      />
 
       <div className="px-8 py-6 space-y-4">
         {/* Form */}
