@@ -4,26 +4,25 @@ import React from 'react';
 import {
   LayoutDashboard,
   Map as MapIcon,
+  Activity,
   Truck,
+  Settings,
+  FileText,
   Users,
-  Factory,
-  Play,
-  PauseCircle,
-  Building2,
   ShieldCheck,
+  ClipboardList,
+  PauseCircle,
+  Wrench,
+  History as HistoryIcon,
   UserCog,
+  Factory,
+  Building2,
+  Play,
+  Clock,
   Fuel,
   Droplets,
   Package,
-  RefreshCw,
-  Bell,
-  FileText,
-  ClipboardList,
-  Settings,
-  Activity,
   BarChart2,
-  History as HistoryIcon,
-  Clock,
   Gauge,
   BookOpen,
 } from 'lucide-react';
@@ -53,67 +52,60 @@ interface MenuGroup {
 
 const menuItems: MenuGroup[] = [
   { group: 'Monitoramento', items: [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-    { icon: MapIcon, label: 'Mapa Operacional', href: '/mapa-operacional' },
-    { icon: Activity, label: 'Conectividade', href: '/monitoramento/conectividade' },
+    { icon: LayoutDashboard, label: 'Dashboard',         href: '/dashboard' },
+    { icon: MapIcon,         label: 'Mapa Operacional',  href: '/mapa-operacional' },
+    { icon: Activity,        label: 'Conectividade',     href: '/monitoramento/conectividade' },
   ]},
   { group: 'Frota Operacional', items: [
-    { icon: Truck, label: 'Equipamentos', href: '/frota' },
-    { icon: Settings, label: 'Tipos', href: '/frota/tipos' },
-    { icon: FileText, label: 'Modelos', href: '/frota/modelos' },
-    { icon: Users, label: 'Grupos', href: '/frota/grupos' },
-    { icon: ShieldCheck, label: 'Perfis Config.', href: '/frota/perfis' },
-    { icon: FileText, label: 'Checklists', href: '/frota/checklists' },
-    { icon: PauseCircle, label: 'Estados Oper.', href: '/frota/estados-operacionais' },
-    { icon: Truck, label: 'Implementos', href: '/frota/implementos' },
-    { icon: RefreshCw, label: 'Atividades', href: '/frota/historico-atividade' },
+    { icon: Truck,         label: 'Equipamentos',          href: '/frota' },
+    { icon: Settings,      label: 'Tipos',                 href: '/frota/tipos' },
+    { icon: FileText,      label: 'Modelos',               href: '/frota/modelos' },
+    { icon: Users,         label: 'Grupos',                href: '/frota/grupos' },
+    { icon: ShieldCheck,   label: 'Perfis Config.',        href: '/frota/perfis' },
+    { icon: ClipboardList, label: 'Checklists',            href: '/frota/checklists' },
+    { icon: PauseCircle,   label: 'Estados Oper.',         href: '/frota/estados-operacionais' },
+    { icon: Wrench,        label: 'Implementos',           href: '/frota/implementos' },
+    { icon: HistoryIcon,   label: 'Atividades',            href: '/frota/historico-atividade' },
   ]},
   { group: 'Mestres / Frota', items: [
-    { icon: Users, label: 'Operadores', href: '/operadores' },
-    { icon: Factory, label: 'Fazendas / Talhoes', href: '/fazendas-talhoes' },
-    { icon: Building2, label: 'Centros de Custo', href: '/centros-custo' },
-    { icon: PauseCircle, label: 'Motivos de Parada', href: '/paradas' },
-    { icon: BookOpen, label: 'Catalogos Oper.', href: '/catalogos-operacionais' },
+    { icon: UserCog,     label: 'Operadores',         href: '/operadores' },
+    { icon: Factory,     label: 'Fazendas / Talhões', href: '/fazendas-talhoes' },
+    { icon: Building2,   label: 'Centros de Custo',   href: '/centros-custo' },
+    { icon: PauseCircle, label: 'Motivos de Parada',  href: '/paradas' },
   ]},
-  { group: 'Operacional', items: [
-    { icon: BarChart2, label: 'Painel Operacional', href: '/operacional/painel' },
-    { icon: Play, label: 'Operacoes', href: '/operacoes' },
-    { icon: HistoryIcon, label: 'Timeline', href: '/timeline' },
-    { icon: Fuel, label: 'Abastecimentos', href: '/abastecimentos' },
-    { icon: RefreshCw, label: 'Sincronizacao', href: '/sincronizacao' },
-    { icon: Bell, label: 'Alertas', href: '/alertas' },
-    { icon: Activity, label: 'Inteligência', href: '/relatorios/intelligence' },
-    { icon: FileText, label: 'Relatorios', href: '/relatorios' },
-    { icon: Clock, label: 'Tempo Operacional', href: '/relatorios/tempo-operacional' },
-    { icon: Gauge, label: 'Eficiencia Operacional', href: '/relatorios/eficiencia-operacional' },
+  { group: 'Operação', items: [
+    { icon: Play,          label: 'Operações',         href: '/operacoes' },
+    { icon: ClipboardList, label: 'Ordens de Serviço', href: '/ferramentas/ordens-servico' },
+    { icon: FileText,      label: 'Ficha Operador',    href: '/ferramentas/ficha-operador' },
+    { icon: Clock,         label: 'Timeline',          href: '/timeline' },
   ]},
-  { group: 'Ferramentas', items: [
-    { icon: FileText, label: 'Conf. Operacional', href: '/ferramentas/conferencia-operacional' },
-    { icon: ClipboardList, label: 'Ficha Operador', href: '/ferramentas/ficha-operador' },
-    { icon: RefreshCw, label: 'Integracoes', href: '/ferramentas/integracoes' },
-    { icon: Settings, label: 'Ordens de Servico', href: '/ferramentas/ordens-servico' },
+  { group: 'Combustível', items: [
+    { icon: Fuel,      label: 'Painel',         href: '/combustivel' },
+    { icon: Droplets,  label: 'Abastecimentos', href: '/combustivel/abastecimentos' },
+    { icon: Truck,     label: 'Comboios',       href: '/combustivel/comboios' },
+    { icon: Package,   label: 'Produtos',       href: '/combustivel/produtos' },
+    { icon: Droplets,  label: 'Compartimentos', href: '/combustivel/compartimentos' },
+    { icon: BarChart2, label: 'Relatórios',     href: '/combustivel/relatorios' },
   ]},
-  { group: 'Gestao de Combustivel', items: [
-    { icon: Fuel,     label: 'Painel Combustivel', href: '/combustivel' },
-    { icon: Droplets, label: 'Abastecimentos CB',  href: '/combustivel/abastecimentos' },
-    { icon: Truck,    label: 'Comboios',            href: '/combustivel/comboios' },
-    { icon: Package,  label: 'Produtos',            href: '/combustivel/produtos' },
-    { icon: Droplets, label: 'Compartimentos',      href: '/combustivel/compartimentos' },
-    { icon: BarChart2,label: 'Relatorios CB',       href: '/combustivel/relatorios' },
+  { group: 'Relatórios', items: [
+    { icon: FileText, label: 'Relatórios',             href: '/relatorios' },
+    { icon: Gauge,    label: 'Eficiência Operacional', href: '/relatorios/eficiencia-operacional' },
+    { icon: Clock,    label: 'Tempo Operacional',      href: '/relatorios/tempo-operacional' },
+    { icon: BookOpen, label: 'Auditoria',              href: '/relatorios/auditoria' },
   ]},
-  { group: 'Administracao', items: [
-    { icon: Building2, label: 'Empresas / Tenants', href: '/administracao/empresas' },
-    { icon: UserCog, label: 'Usuarios', href: '/administracao/usuarios' },
-    { icon: ShieldCheck, label: 'Perfis / RBAC', href: '/administracao/grupos-acesso' },
-    { icon: Settings, label: 'Configuracoes', href: '/configuracoes' },
-  ]}
+  { group: 'Administração', items: [
+    { icon: Building2,   label: 'Empresas',        href: '/administracao/empresas' },
+    { icon: Users,       label: 'Usuários',        href: '/administracao/usuarios' },
+    { icon: ShieldCheck, label: 'Grupos de Acesso', href: '/administracao/grupos-acesso' },
+    { icon: Settings,    label: 'Configurações',   href: '/configuracoes' },
+  ]},
 ];
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
   const { userRole, isAuthenticated } = useAuth();
 
-  // Filter menu items by role permissions
+  // Filtrar itens por permissão de role
   const filteredMenu = menuItems
     .map(group => ({
       ...group,
@@ -130,7 +122,7 @@ export function Sidebar({ className }: SidebarProps) {
           </h1>
         </Link>
         <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-tight font-black">
-          Sistema de Inteligencia Logistica Operacional
+          Sistema de Inteligência Logística Operacional
         </p>
       </div>
 
@@ -144,7 +136,7 @@ export function Sidebar({ className }: SidebarProps) {
               {group.items.map((item) => {
                 const isActive = pathname === item.href || (pathname === '/' && item.href === '/dashboard');
                 return (
-                  <Link key={item.label} href={item.href}>
+                  <Link key={item.href} href={item.href}>
                     <NavItem
                       icon={<item.icon size={18} />}
                       label={item.label}
