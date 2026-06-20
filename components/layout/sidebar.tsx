@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   UserCog,
   Fuel,
+  Droplets,
+  Package,
   RefreshCw,
   Bell,
   FileText,
@@ -76,7 +78,7 @@ const menuItems: MenuGroup[] = [
   { group: 'Operacional', items: [
     { icon: BarChart2, label: 'Painel Operacional', href: '/operacional/painel' },
     { icon: Play, label: 'Operacoes', href: '/operacoes' },
-    { icon: HistoryIcon, label: 'Timeline', href: '/operacoes/timeline' },
+    { icon: HistoryIcon, label: 'Timeline', href: '/timeline' },
     { icon: Fuel, label: 'Abastecimentos', href: '/abastecimentos' },
     { icon: RefreshCw, label: 'Sincronizacao', href: '/sincronizacao' },
     { icon: Bell, label: 'Alertas', href: '/alertas' },
@@ -90,6 +92,14 @@ const menuItems: MenuGroup[] = [
     { icon: ClipboardList, label: 'Ficha Operador', href: '/ferramentas/ficha-operador' },
     { icon: RefreshCw, label: 'Integracoes', href: '/ferramentas/integracoes' },
     { icon: Settings, label: 'Ordens de Servico', href: '/ferramentas/ordens-servico' },
+  ]},
+  { group: 'Gestao de Combustivel', items: [
+    { icon: Fuel,     label: 'Painel Combustivel', href: '/combustivel' },
+    { icon: Droplets, label: 'Abastecimentos CB',  href: '/combustivel/abastecimentos' },
+    { icon: Truck,    label: 'Comboios',            href: '/combustivel/comboios' },
+    { icon: Package,  label: 'Produtos',            href: '/combustivel/produtos' },
+    { icon: Droplets, label: 'Compartimentos',      href: '/combustivel/compartimentos' },
+    { icon: BarChart2,label: 'Relatorios CB',       href: '/combustivel/relatorios' },
   ]},
   { group: 'Administracao', items: [
     { icon: Building2, label: 'Empresas / Tenants', href: '/administracao/empresas' },

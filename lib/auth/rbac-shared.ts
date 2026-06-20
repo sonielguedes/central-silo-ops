@@ -43,7 +43,8 @@ export type Module =
   | 'administracao'
   | 'audit-log'
   | 'configuracoes'
-  | 'sincronizacao';
+  | 'sincronizacao'
+  | 'combustivel';
 
 export type Action =
   | 'visualizar'
@@ -104,6 +105,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'audit-log', actions: FULL },
     { module: 'configuracoes', actions: FULL },
     { module: 'sincronizacao', actions: FULL },
+    { module: 'combustivel', actions: FULL },
   ],
   SUPER_ADMIN: [
     { module: 'dashboard', actions: FULL },
@@ -118,6 +120,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'audit-log', actions: FULL },
     { module: 'configuracoes', actions: FULL },
     { module: 'sincronizacao', actions: FULL },
+    { module: 'combustivel', actions: FULL },
   ],
   ADMIN_EMPRESA: [
     { module: 'dashboard', actions: READ_EXPORT },
@@ -132,6 +135,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'audit-log', actions: ALL_READ },
     { module: 'configuracoes', actions: CRUD },
     { module: 'sincronizacao', actions: ['visualizar', 'editar'] },
+    { module: 'combustivel', actions: CRUD_EXPORT },
   ],
   GESTOR: [
     { module: 'dashboard', actions: READ_EXPORT },
@@ -143,6 +147,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'relatorios', actions: READ_EXPORT },
     { module: 'cadastros', actions: ALL_READ },
     { module: 'sincronizacao', actions: ALL_READ },
+    { module: 'combustivel', actions: READ_EXPORT },
   ],
   COA: [
     { module: 'dashboard', actions: ALL_READ },
@@ -212,6 +217,13 @@ export function canWrite(role: SystemRole, module: Module): boolean {
 
 export const MODULE_ALIAS: Record<string, Module> = {
   ABASTECIMENTOS:       'operacoes',
+  COMBUSTIVEL:          'combustivel',
+  COMBUSTIVEL_PAINEL:   'combustivel',
+  COMBUSTIVEL_ABAST:    'combustivel',
+  COMBUSTIVEL_COMBOIOS: 'combustivel',
+  COMBUSTIVEL_PRODUTOS: 'combustivel',
+  COMBUSTIVEL_COMPRT:   'combustivel',
+  COMBUSTIVEL_REL:      'combustivel',
   ALERTAS:              'alertas',
   CHECKLISTS:           'equipamentos',
   CONECTIVIDADE:        'dashboard',
@@ -256,6 +268,7 @@ export const ROUTE_MODULE_MAP: Array<{ pattern: RegExp; module: Module }> = [
   { pattern: /^\/operacional/, module: 'operacoes' },
   { pattern: /^\/operacoes/, module: 'operacoes' },
   { pattern: /^\/abastecimentos/, module: 'operacoes' },
+  { pattern: /^\/combustivel/, module: 'combustivel' },
   { pattern: /^\/sincronizacao/, module: 'sincronizacao' },
   { pattern: /^\/alertas/, module: 'alertas' },
   { pattern: /^\/ferramentas/, module: 'operacoes' },
