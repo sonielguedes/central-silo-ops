@@ -65,6 +65,7 @@ function MapaOperacionalPage() {
   const [selectedId, setSelectedId]       = React.useState<string | null>(null);
   const [noGpsCode, setNoGpsCode]         = React.useState<string | null>(null);
   const [filters, setFilters]             = React.useState<MapFilters>(EMPTY_FILTERS);
+  const [trailPanelOpen, setTrailPanelOpen] = React.useState(false);
 
   // Filtered fleet for sidebar display
   const filteredFleetData = React.useMemo(
@@ -365,7 +366,7 @@ function MapaOperacionalPage() {
           </div>
         </header>
 
-        <FullMap onFleetUpdate={handleFleetUpdate} selectedId={selectedId} filters={filters} />
+        <FullMap onFleetUpdate={handleFleetUpdate} onTrailOpenChange={setTrailPanelOpen} selectedId={selectedId} filters={filters} />
 
         {noGpsCode && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1450] flex items-center gap-2 bg-[#1a0f08] border border-orange-500/40 text-orange-300 px-4 py-2.5 rounded-xl shadow-2xl text-[11px] font-bold uppercase tracking-wide">
@@ -378,7 +379,10 @@ function MapaOperacionalPage() {
         )}
 
         {allFleetData.length > 0 && (
-          <div className="absolute bottom-8 left-4 z-[1400]">
+          <div className={cn(
+            "absolute left-4 z-[1400] transition-all duration-300",
+            trailPanelOpen ? "bottom-[168px]" : "bottom-8",
+          )}>
             <MapLegend items={filteredFleetData.map(m => ({ iconType: m.iconType, status: m.status }))} />
             {filteredFleetData.length !== allFleetData.length && (
               <div className="mt-1 text-[9px] font-bold text-muted-foreground text-center">
@@ -388,11 +392,14 @@ function MapaOperacionalPage() {
           </div>
         )}
 
-        <div className="absolute bottom-8 right-8 flex flex-col gap-3 z-[1400]">
-          <div className="bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] rounded-2xl p-2 flex flex-col gap-2 shadow-2xl">
-            <button className="w-12 h-12 rounded-xl bg-primary text-[#0a0e27] flex items-center justify-center font-black text-[10px] shadow-lg shadow-primary/20 hover:scale-105 transition-transform">SAT</button>
-            <button className="w-12 h-12 rounded-xl bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black text-[10px] border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase">Op</button>
-            <button className="w-12 h-12 rounded-xl bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black text-[10px] border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase">Tal</button>
+        <div className={cn(
+          "absolute right-4 flex flex-col gap-2 z-[1400] transition-all duration-300",
+          trailPanelOpen ? "bottom-[168px]" : "bottom-8",
+        )}>
+          <div className="bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] rounded-xl p-1.5 flex flex-col gap-1.5 shadow-2xl">
+            <button className="w-10 h-7 rounded-lg bg-primary text-[#0a0e27] flex items-center justify-center font-black text-[9px] shadow-md shadow-primary/20 hover:scale-105 transition-transform">SAT</button>
+            <button className="w-10 h-7 rounded-lg bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black text-[9px] border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase">Op</button>
+            <button className="w-10 h-7 rounded-lg bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black text-[9px] border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase">Tal</button>
           </div>
         </div>
       </main>

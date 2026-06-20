@@ -476,10 +476,12 @@ function FichaBox({ label, value }: { label: string; value: string | null | unde
 
 export default function FullMapEnterprise({
   onFleetUpdate,
+  onTrailOpenChange,
   selectedId,
   filters,
 }: {
   onFleetUpdate?: (data: { fleet: LiveMapItem[]; counts: MapCounts }) => void;
+  onTrailOpenChange?: (open: boolean) => void;
   selectedId?: string | null;
   filters?: MapFilters;
 }) {
@@ -601,6 +603,11 @@ export default function FullMapEnterprise({
     const t = setTimeout(() => setFlyTarget(null), 1200);
     return () => clearTimeout(t);
   }, [flyTarget]);
+
+  // Notifica o pai quando o painel de rastro abre/fecha
+  useEffect(() => {
+    onTrailOpenChange?.(trail !== null);
+  }, [trail, onTrailOpenChange]);
 
   const fieldsPolygons = [
     { name: 'T12', coords: [[-12.551,-55.730],[-12.551,-55.715],[-12.560,-55.715],[-12.560,-55.730]] as [number,number][] },
