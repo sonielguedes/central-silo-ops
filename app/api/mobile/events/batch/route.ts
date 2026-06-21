@@ -34,7 +34,7 @@ const JORNADA_FINALIZADA_CLEAR_FIELDS = [
   'operatorRegistration', 'registration', 'operatorId', 'operatorName', 'currentOperator',
   'operationCode', 'operationName', 'currentOperation', 'costCenterCode', 'costCenterName', 'costCenter', 'workOrder',
   'implementCode', 'implementId', 'implementName',
-  'stopCode', 'stopDescription', 'stopReason', 'stopStartedAt', 'stopDurationSeconds',
+  'stopCode', 'stopReasonCode', 'stopDescription', 'stopReasonDescription', 'stopReason', 'stopStartedAt', 'stopDurationSeconds',
 ] satisfies (keyof EquipmentLiveState)[];
 
 const hasValidValue = (value: unknown) => value !== undefined && value !== null && value !== '';
@@ -707,12 +707,26 @@ export async function POST(req: NextRequest) {
         case 'STOP_REASON':
         case 'PARADA': {
           applyOperationalFields(liveUpdates, d);
-          liveUpdates.status = 'PARADO';
-          if (d.stopCode || d.code)        liveUpdates.stopCode        = d.stopCode || d.code;
-          if (d.stopDescription || d.description || d.reason)
-            liveUpdates.stopDescription = d.stopDescription || d.description || d.reason;
-          if (d.stopDescription || d.description || d.reason)
-            liveUpdates.stopReason = d.stopDescription || d.description || d.reason;
+          // STOP_REASON sempre sinaliza parada apontada (motivo identificado pelo operador)
+          liveUpdates.status = 'PARADA_APONTADA';
+          // Código: aceitar todas as variações de campo que o APK pode enviar
+          const srCode = String(
+            d.stopReasonCode ?? d.reasonCode ?? d.stopCode ?? d.code ?? ''
+          ).trim();
+          if (srCode) {
+            liveUpdates.stopReasonCode = srCode;
+            liveUpdates.stopCode       = srCode;
+          }
+          // Descrição: aceitar todas as variações de campo que o APK pode enviar
+          const srDesc = String(
+            d.stopReasonDescription ?? d.reasonDescription ?? d.reasonName ??
+            d.stopDescription ?? d.description ?? d.reason ?? ''
+          ).trim();
+          if (srDesc) {
+            liveUpdates.stopReasonDescription = srDesc;
+            liveUpdates.stopDescription       = srDesc;
+            liveUpdates.stopReason            = srDesc;
+          }
           liveUpdates.stopStartedAt = d.stopStartedAt || d.startedAt || ts;
           if (d.stopDurationSeconds != null || d.durationSeconds != null) liveUpdates.stopDurationSeconds = d.stopDurationSeconds ?? d.durationSeconds;
           break;

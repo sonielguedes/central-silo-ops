@@ -42,8 +42,14 @@ function asStr(v: unknown): string | null {
 
 /** Extrai o codigo de parada do payload de um evento mobile. */
 function eventCode(payload: Record<string, unknown>): string | null {
-  // O APK pode enviar stopCode (preferido) ou code (campo generico do evento)
-  return asStr(payload.stopCode) ?? asStr(payload.code);
+  // O APK SILO OPS envia stopReasonCode como campo canonico;
+  // stopCode e code sao alternativas aceitas por compatibilidade.
+  return (
+    asStr(payload.stopReasonCode) ??
+    asStr(payload.reasonCode) ??
+    asStr(payload.stopCode) ??
+    asStr(payload.code)
+  );
 }
 
 /** Extrai a descricao de parada do payload de um evento mobile. */
@@ -101,8 +107,11 @@ export function resolveStop(
   }
 
   // ── Prioridade 2: campos do live-state (todas as variantes de nome) ───────
-  const lsCode = asStr(machine.stopCode);
+  const lsCode =
+    asStr(machine.stopReasonCode) ??
+    asStr(machine.stopCode);
   const lsDesc =
+    asStr(machine.stopReasonDescription) ??
     asStr(machine.stopDescription) ??
     asStr(machine.stopReason);
 

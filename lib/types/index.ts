@@ -632,7 +632,7 @@ export interface TrailPoint {
 
 // --- Live Fleet State ---
 
-export type EquipmentOperationalStatus = 'ONLINE' | 'OPERANDO' | 'PARADO' | 'FINALIZADO' | 'OFFLINE';
+export type EquipmentOperationalStatus = 'ONLINE' | 'OPERANDO' | 'PARADO' | 'PARADA_APONTADA' | 'FINALIZADO' | 'OFFLINE';
 export type EquipmentLiveStatus = EquipmentOperationalStatus;
 
 export interface EquipmentLiveState {
@@ -702,6 +702,10 @@ export interface EquipmentLiveState {
   stopDescription?: string;
   /** Codigo da parada atual (ex: PAR-01) */
   stopCode?: string;
+  /** Codigo canonico do APK (stopReasonCode) — alias salvo junto com stopCode */
+  stopReasonCode?: string;
+  /** Descricao canonica do APK (stopReasonDescription) — alias salvo junto com stopDescription */
+  stopReasonDescription?: string;
   /** Timestamp de inicio da parada atual */
   stopStartedAt?: string;
   /** Duracao da parada em segundos */

@@ -59,11 +59,12 @@ const STATUS_CONFIG: Record<
   Lowercase<EquipmentOperationalStatus>,
   { label: string; color: string; tailwind: string; text: string }
 > = {
-  online:     { label: 'Online',     color: '#3b82f6', tailwind: 'bg-blue-500',    text: 'text-blue-500'    },
-  operando:   { label: 'Operando',   color: '#10b981', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
-  parado:     { label: 'Parado',     color: '#f97316', tailwind: 'bg-orange-500',  text: 'text-orange-500'  },
-  finalizado: { label: 'Finalizado', color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
-  offline:    { label: 'Offline',    color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
+  online:          { label: 'Online',         color: '#3b82f6', tailwind: 'bg-blue-500',    text: 'text-blue-500'    },
+  operando:        { label: 'Operando',        color: '#10b981', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  parado:          { label: 'Parado',          color: '#f97316', tailwind: 'bg-orange-500',  text: 'text-orange-500'  },
+  parada_apontada: { label: 'Parada Apontada', color: '#f59e0b', tailwind: 'bg-amber-500',   text: 'text-amber-500'   },
+  finalizado:      { label: 'Finalizado',      color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
+  offline:         { label: 'Offline',         color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
 };
 
 type TrailState = { fleetCode: string; journeyId: string; points: TrailPoint[]; summary: TrailQualitySummary | null } | null;
