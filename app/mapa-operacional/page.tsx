@@ -474,7 +474,9 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
             {isOnline ? 'Online' : 'Offline'}
           </span>
           {!hasGps && (<div className="flex items-center gap-1 text-[9px] text-orange-400 font-bold"><AlertTriangle size={9} /><span>Sem GPS</span></div>)}
-          {hasGps && (<div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold"><Clock size={10} /><span>{machine.hourmeterCurrent != null ? machine.hourmeterCurrent + 'h' : NOT_INFORMED}</span></div>)}
+          {hasGps && (<div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold"><Clock size={10} /><span>{machine.hourmeterCurrent != null
+                ? (Number(machine.hourmeterCurrent).toFixed(1).replace('.', ',') + ' h')
+                : NOT_INFORMED}</span></div>)}
           {machine.hourmeterInconsistent && (<div className="flex items-center gap-1 text-[9px] text-red-400 font-bold"><AlertTriangle size={9} /><span>Incons.</span></div>)}
           {isSelected && (<div className="ml-auto flex items-center gap-1 text-[9px] text-primary font-bold"><Hash size={9} /><span>Selecionado</span></div>)}
         </div>
