@@ -431,7 +431,14 @@ function FilterToggle({ label, active, onClick }: { label: string; active: boole
 }
 
 function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapItem; isSelected: boolean; onSelect: (machine: LiveMapItem) => void }) {
-  const status = STATUS_CONFIG[machine.status.toLowerCase() as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
+  // Campos separados: status operacional (badge principal) e status de comunicação (secundário)
+  type ExtMachine = LiveMapItem & { operationalStatus?: string; communicationStatus?: string; isOnline?: boolean };
+  const ext = machine as ExtMachine;
+  // Usar operationalStatus quando disponível; cair em status para retrocompat
+  const opStatusKey = (ext.operationalStatus ?? machine.status).toLowerCase() as keyof typeof STATUS_CONFIG;
+  const status = STATUS_CONFIG[opStatusKey] || STATUS_CONFIG.offline;
+  // Comunicação: isOnline quando disponível (computado em getLiveFleet), fallback em status
+  const isOnline = ext.isOnline !== undefined ? ext.isOnline : machine.status !== 'OFFLINE';
   const hasGps = machine.pos !== null;
 
   return (
@@ -455,10 +462,17 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
         </div>
         <p className="text-[10px] text-white/60 font-bold uppercase truncate mb-1 tracking-tight">{machine.displayOperation}</p>
         <div className="flex items-center gap-3">
+          {/* Status operacional — badge PRINCIPAL */}
           <div className="flex items-center gap-1">
             <div className={cn("w-1.5 h-1.5 rounded-full", status.tailwind)} />
             <span className={cn("text-[9px] font-black uppercase tracking-tighter", status.text)}>{status.label}</span>
           </div>
+          {/* Status de comunicação — SECUNDÁRIO */}
+          <span className={cn("text-[8px] font-bold uppercase tracking-tighter",
+            isOnline ? "text-blue-400/60" : "text-gray-500"
+          )}>
+            {isOnline ? 'Online' : 'Offline'}
+          </span>
           {!hasGps && (<div className="flex items-center gap-1 text-[9px] text-orange-400 font-bold"><AlertTriangle size={9} /><span>Sem GPS</span></div>)}
           {hasGps && (<div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold"><Clock size={10} /><span>{machine.hourmeterCurrent != null ? machine.hourmeterCurrent + 'h' : NOT_INFORMED}</span></div>)}
           {machine.hourmeterInconsistent && (<div className="flex items-center gap-1 text-[9px] text-red-400 font-bold"><AlertTriangle size={9} /><span>Incons.</span></div>)}

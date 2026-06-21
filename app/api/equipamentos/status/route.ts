@@ -151,6 +151,17 @@ function normalizeForMap(
   // Build semantic stop state (4-state machine, no "NÃO INFORMADO")
   const stop = buildStopState(s.status, resolvedStop, s);
 
+  // ── Campos de comunicação e operacional (passam de getLiveFleet via ...s) ──
+  // Garantir que displayStatus seja correto mesmo se getLiveFleet não os calculou
+  const extS = s as typeof s & { isOnline?: boolean; communicationStatus?: string; operationalStatus?: string; hasRecentGps?: boolean; hasRecentHeartbeat?: boolean };
+  const RICH_OP_API = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
+  const isOnlineApi           = extS.isOnline           ?? (s.status !== 'OFFLINE');
+  const communicationStatusApi = extS.communicationStatus ?? (isOnlineApi ? 'ONLINE' : 'OFFLINE');
+  const operationalStatusApi   = extS.operationalStatus   ?? s.status;
+  const displayStatusApi       = RICH_OP_API.has(operationalStatusApi) ? operationalStatusApi : communicationStatusApi;
+  const hasRecentGpsApi        = extS.hasRecentGps        ?? false;
+  const hasRecentHeartbeatApi  = extS.hasRecentHeartbeat  ?? false;
+
   return {
     ...s,
     // Extra fields for the Operational Map
@@ -168,6 +179,13 @@ function normalizeForMap(
     stopSource: resolvedStop.source,
     // Structured stop state for the map card/popup
     stop,
+    // ── Status de comunicação e operacional separados ──
+    isOnline:            isOnlineApi,
+    communicationStatus: communicationStatusApi,
+    operationalStatus:   operationalStatusApi,
+    displayStatus:       displayStatusApi,
+    hasRecentGps:        hasRecentGpsApi,
+    hasRecentHeartbeat:  hasRecentHeartbeatApi,
   };
 }
 

@@ -500,7 +500,7 @@ export async function POST(req: NextRequest) {
           const srcStart = asString(d.hourmeterSource);
           if (srcStart) liveUpdates.hourmeterSource = srcStart;
           liveUpdates.statusStartedAt = ts;
-          liveUpdates.status = 'ONLINE';
+          liveUpdates.status = 'OPERANDO'; // JOURNEY_START = jornada ativa = OPERANDO
           break;
         }
         case 'LOCATION':
@@ -532,7 +532,14 @@ export async function POST(req: NextRequest) {
           }
           const srcGps = asString(d.hourmeterSource);
           if (srcGps) liveUpdates.hourmeterSource = srcGps;
-          if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
+          // Ler status operacional do payload do APK (ex: OPERANDO, PARADO, AGUARDANDO_PARADA)
+          const gpsPayloadStatus = asString(d.status)?.toUpperCase();
+          const GPS_OP_STATUSES = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
+          if (gpsPayloadStatus && GPS_OP_STATUSES.has(gpsPayloadStatus)) {
+            liveUpdates.status = gpsPayloadStatus as EquipmentLiveStatus;
+          } else if (!liveUpdates.status) {
+            liveUpdates.status = 'ONLINE';
+          }
           // Save trail point only when coordinates are valid
           const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
           const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
@@ -594,7 +601,14 @@ export async function POST(req: NextRequest) {
           if (hCurr != null) liveUpdates.hourmeterCurrent = hCurr;
           const srcHb = asString(d.hourmeterSource);
           if (srcHb) liveUpdates.hourmeterSource = srcHb;
-          if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
+          // Ler status operacional do payload do APK (HEARTBEAT pode carregar status atual)
+          const hbPayloadStatus = asString(d.status)?.toUpperCase();
+          const HB_OP_STATUSES = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
+          if (hbPayloadStatus && HB_OP_STATUSES.has(hbPayloadStatus)) {
+            liveUpdates.status = hbPayloadStatus as EquipmentLiveStatus;
+          } else if (!liveUpdates.status) {
+            liveUpdates.status = 'ONLINE';
+          }
           break;
         }
         case 'FSM_TRANSITION': {

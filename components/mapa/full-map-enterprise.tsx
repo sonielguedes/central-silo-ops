@@ -166,14 +166,30 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   displayOperation: formatValue(item.currentOperation || item.operationName),
 });
 
-export const buildLiveMapCounts = (items: EquipmentLiveState[]): MapCounts => ({
-  online:         items.filter(i => i.status === 'ONLINE').length,
-  operando:       items.filter(i => i.status === 'OPERANDO').length,
-  parado:         items.filter(i => i.status === 'PARADO').length,
-  offline:        items.filter(i => i.status === 'OFFLINE' || i.status === 'FINALIZADO').length,
-  staleGps:       items.filter(i => !isRecent(i.lastGpsAt, GPS_RECENT_MS)).length,
-  staleHeartbeat: items.filter(i => !isRecent(i.lastHeartbeatAt, HEARTBEAT_RECENT_MS)).length,
-});
+export const buildLiveMapCounts = (items: EquipmentLiveState[]): MapCounts => {
+  type ExtItem = EquipmentLiveState & {
+    operationalStatus?: string;
+    isOnline?: boolean;
+    hasRecentGps?: boolean;
+    hasRecentHeartbeat?: boolean;
+  };
+  const ext = items as ExtItem[];
+  const PARADO_STATUSES = new Set(['PARADO', 'AGUARDANDO_PARADA', 'PARADA_APONTADA']);
+  return {
+    // online = equipamentos com comunicação ativa (isOnline quando disponível)
+    online:         ext.filter(i => i.isOnline !== undefined ? i.isOnline : i.status !== 'OFFLINE').length,
+    // operando = status operacional OPERANDO
+    operando:       ext.filter(i => (i.operationalStatus ?? i.status) === 'OPERANDO').length,
+    // parado = qualquer estado de parada
+    parado:         ext.filter(i => PARADO_STATUSES.has(i.operationalStatus ?? i.status)).length,
+    // offline = sem comunicação (não conta FINALIZADO — é estado terminal, não ausência)
+    offline:        ext.filter(i => i.isOnline !== undefined ? !i.isOnline : i.status === 'OFFLINE').length,
+    // sem GPS recente (usa campo calculado quando disponível)
+    staleGps:       ext.filter(i => i.hasRecentGps !== undefined ? !i.hasRecentGps : !isRecent(i.lastGpsAt, GPS_RECENT_MS)).length,
+    // sem heartbeat recente
+    staleHeartbeat: ext.filter(i => i.hasRecentHeartbeat !== undefined ? !i.hasRecentHeartbeat : !isRecent(i.lastHeartbeatAt, HEARTBEAT_RECENT_MS)).length,
+  };
+};
 
 /* ── Direction arrows for trail ───────────────────────────────────────────────────────────────── */
 

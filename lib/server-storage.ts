@@ -243,21 +243,36 @@ export class ServerStorage {
     const all = this.loadLiveState(tenantId);
     const now = Date.now();
     const OFFLINE_TIMEOUT_MS = 120 * 1000;
+    const GPS_RECENT_MS      =   5 * 60 * 1000; // 5 min
+    const HB_RECENT_MS       =   2 * 60 * 1000; // 2 min
 
     const fleet = all.map(s => {
-      const hb = s.lastHeartbeatAt ? new Date(s.lastHeartbeatAt).getTime() : 0;
-      const gps = s.lastGpsAt ? new Date(s.lastGpsAt).getTime() : 0;
+      const hb  = s.lastHeartbeatAt ? new Date(s.lastHeartbeatAt).getTime() : 0;
+      const gps = s.lastGpsAt       ? new Date(s.lastGpsAt).getTime()       : 0;
       const lastSignal = Math.max(hb, gps);
 
       // FINALIZADO is terminal -- a finished journey must never be downgraded to OFFLINE
       // by the signal-timeout rule (offline-synced JOURNEY_END carries old timestamps).
-      if (s.status !== 'OFFLINE' && s.status !== 'FINALIZADO' && lastSignal > 0 && (now - lastSignal) > OFFLINE_TIMEOUT_MS) {
-        return { ...s, status: 'OFFLINE' as const };
-      }
-      return s;
+      const timedOut = s.status !== 'OFFLINE' && s.status !== 'FINALIZADO'
+        && lastSignal > 0 && (now - lastSignal) > OFFLINE_TIMEOUT_MS;
+
+      const base = timedOut ? { ...s, status: 'OFFLINE' as const } : s;
+
+      // ── Campos computados de comunicação (não persistidos, calculados a cada leitura) ──
+      const isOnline:           boolean           = base.status !== 'OFFLINE';
+      const communicationStatus: 'ONLINE' | 'OFFLINE' = isOnline ? 'ONLINE' : 'OFFLINE';
+      const hasRecentGps:       boolean           = gps > 0 && (now - gps) <= GPS_RECENT_MS;
+      const hasRecentHeartbeat: boolean           = hb  > 0 && (now - hb)  <= HB_RECENT_MS;
+      // operationalStatus = base.status (sempre — status já é operacional desde os eventos FSM/WORK_STARTED)
+      const operationalStatus: string = base.status;
+      // displayStatus: prioriza estados operacionais ricos; ONLINE/OFFLINE são status de comunicação
+      const RICH_OP = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
+      const displayStatus: string = RICH_OP.has(base.status) ? base.status : communicationStatus;
+
+      return { ...base, isOnline, communicationStatus, hasRecentGps, hasRecentHeartbeat, operationalStatus, displayStatus };
     });
 
-    const statusWeight = { 'OPERANDO': 0, 'ONLINE': 1, 'PARADO': 2, 'FINALIZADO': 3, 'OFFLINE': 4 };
+    const statusWeight: Record<string, number> = { 'OPERANDO': 0, 'ONLINE': 1, 'PARADO': 2, 'FINALIZADO': 3, 'OFFLINE': 4 };
     return fleet.sort((a, b) => (statusWeight[a.status] || 99) - (statusWeight[b.status] || 99));
   }
 

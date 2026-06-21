@@ -717,6 +717,20 @@ export interface EquipmentLiveState {
   type?: string;
   name?: string;
   updatedAt: string;
+
+  // ── Campos computados (não armazenados no live-state.json) ──
+  /** Computed: status de comunicação separado do status operacional */
+  communicationStatus?: 'ONLINE' | 'OFFLINE';
+  /** Computed: alias explícito para o status operacional (mesmo valor que status) */
+  operationalStatus?: string;
+  /** Computed: status de exibição — prioriza operacional (OPERANDO/PARADO/FINALIZADO) sobre comunicação */
+  displayStatus?: string;
+  /** Computed: equipamento enviando sinais recentes (heartbeat ou GPS) */
+  isOnline?: boolean;
+  /** Computed: GPS atualizado nos últimos 5 min */
+  hasRecentGps?: boolean;
+  /** Computed: Heartbeat recebido nos últimos 2 min */
+  hasRecentHeartbeat?: boolean;
 }
 
 // --- Mobile Bootstrap ---
