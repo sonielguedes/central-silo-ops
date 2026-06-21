@@ -579,7 +579,7 @@ export async function POST(req: NextRequest) {
           }
           // Save trail point only when coordinates are valid
           const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
-          const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.currentHourmeter ?? d.hourmeter ?? d.engineHours ?? d.horimetro ?? d.horimetroAtual);
+          const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.currentHourmeter ?? d.hourmeter ?? d.horimeter ?? d.engineHours ?? d.horimetro ?? d.horimetroAtual);
           if (jId && isValidGps(latitude, longitude)) {
             // qualityStatus: mark low accuracy but still save the point
             const gpsQuality = (accuracy != null && accuracy > 20)
@@ -634,7 +634,7 @@ export async function POST(req: NextRequest) {
               ' -- keeping last valid position'
             );
           }
-          const hCurr = asValidHourmeter(d.hourmeterCurrent ?? d.currentHourmeter ?? d.hourmeter ?? d.engineHours ?? d.horimetro ?? d.horimetroAtual);
+          const hCurr = asValidHourmeter(d.hourmeterCurrent ?? d.currentHourmeter ?? d.hourmeter ?? d.horimeter ?? d.engineHours ?? d.horimetro ?? d.horimetroAtual);
           if (hCurr != null) liveUpdates.hourmeterCurrent = hCurr;
           const srcHb = asString(d.hourmeterSource);
           if (srcHb) liveUpdates.hourmeterSource = srcHb;
