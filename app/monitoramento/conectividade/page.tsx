@@ -68,11 +68,12 @@ const STATUS_STYLE: Record<ConnectivityStatus, string> = {
 };
 
 const OP_STATUS_LABEL: Record<EquipmentOperationalStatus, string> = {
-  ONLINE:     'Online',
-  OPERANDO:   'Operando',
-  PARADO:     'Parado',
-  FINALIZADO: 'Finalizado',
-  OFFLINE:    'Offline',
+  ONLINE:           'Online',
+  OPERANDO:         'Operando',
+  PARADO:           'Parado',
+  PARADA_APONTADA:  'Parada Apontada',
+  FINALIZADO:       'Finalizado',
+  OFFLINE:          'Offline',
 };
 
 // ── Main Page ─────────────────────────────────────────────────────────────────

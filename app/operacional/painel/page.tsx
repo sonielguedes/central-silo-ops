@@ -35,11 +35,12 @@ const SEVERITY_CLASS: Record<AlertSeverity, string> = {
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<Lowercase<EquipmentOperationalStatus>, { label: string; color: string; bg: string }> = {
-  online:     { label: 'Online',     color: 'text-blue-400',    bg: 'bg-blue-500/15 border-blue-500/30'    },
-  operando:   { label: 'Operando',   color: 'text-emerald-400', bg: 'bg-emerald-500/15 border-emerald-500/30' },
-  parado:     { label: 'Parado',     color: 'text-orange-400',  bg: 'bg-orange-500/15 border-orange-500/30'  },
-  finalizado: { label: 'Finalizado', color: 'text-gray-400',    bg: 'bg-gray-500/15 border-gray-500/30'    },
-  offline:    { label: 'Offline',    color: 'text-gray-400',    bg: 'bg-gray-500/15 border-gray-500/30'    },
+  online:           { label: 'Online',          color: 'text-blue-400',    bg: 'bg-blue-500/15 border-blue-500/30'    },
+  operando:         { label: 'Operando',         color: 'text-emerald-400', bg: 'bg-emerald-500/15 border-emerald-500/30' },
+  parado:           { label: 'Parado',           color: 'text-orange-400',  bg: 'bg-orange-500/15 border-orange-500/30'  },
+  parada_apontada:  { label: 'Parada Apontada',  color: 'text-amber-400',   bg: 'bg-amber-500/15 border-amber-500/30'    },
+  finalizado:       { label: 'Finalizado',       color: 'text-gray-400',    bg: 'bg-gray-500/15 border-gray-500/30'    },
+  offline:          { label: 'Offline',          color: 'text-gray-400',    bg: 'bg-gray-500/15 border-gray-500/30'    },
 };
 
 const getStatusCfg = (s: EquipmentOperationalStatus) =>
