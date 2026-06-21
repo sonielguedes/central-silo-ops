@@ -39,6 +39,17 @@ const JORNADA_FINALIZADA_CLEAR_FIELDS = [
 
 const hasValidValue = (value: unknown) => value !== undefined && value !== null && value !== '';
 
+/** Returns true when the given live-state (or partial liveUpdates) signals an active stop.
+ *  Used to block GPS_POINT / HEARTBEAT from overwriting a PARADA_APONTADA / PARADO status. */
+const STOP_ACTIVE_STATUSES = new Set(['PARADA_APONTADA', 'PARADO', 'AGUARDANDO_PARADA']);
+function isStopActive(state: Record<string, unknown> | null | undefined): boolean {
+  if (!state) return false;
+  const st = String(state.status ?? '').toUpperCase();
+  if (STOP_ACTIVE_STATUSES.has(st)) return true;
+  if (state.stopReasonCode || state.stopCode) return true;
+  return false;
+}
+
 function putIfValid(target: Record<string, unknown>, key: string, value: unknown) {
   if (hasValidValue(value)) target[key] = value;
 }
@@ -416,6 +427,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
+    // Load current live-state for this equipment so GPS/HEARTBEAT can guard active stops.
+    const _currentFleet   = ServerStorage.getLiveFleet(tenantId);
+    const currentLiveState = _currentFleet.find(s => s.equipmentId === validation.equipment.id) ?? null;
+
     const firstFleetCode = typeof firstEventData?.fleetCode === 'string' ? firstEventData.fleetCode : undefined;
     const bodyFleetCode = header.fleetCode || firstFleetCode;
     if (bodyFleetCode && bodyFleetCode !== validation.equipment.code) {
@@ -464,6 +479,9 @@ export async function POST(req: NextRequest) {
     // Set to true when finalization came via FSM_TRANSITION/JORNADA_FINALIZADA (not JOURNEY_END),
     // so fieldsToDelete is passed to updateLiveState to clear journeyId/operator/stop fields.
     let jornadaFinalizadaByFsm = false;
+    // Tracks whether a stop is currently active for this equipment.
+    // Initialised from the persisted live-state; toggled by STOP_REASON / STOP_ENDED.
+    let stopActive = isStopActive(currentLiveState as unknown as Record<string, unknown>);
 
     for (const event of sorted) {
       const d = event.data || {};
@@ -533,12 +551,18 @@ export async function POST(req: NextRequest) {
           const srcGps = asString(d.hourmeterSource);
           if (srcGps) liveUpdates.hourmeterSource = srcGps;
           // Ler status operacional do payload do APK (ex: OPERANDO, PARADO, AGUARDANDO_PARADA)
-          const gpsPayloadStatus = asString(d.status)?.toUpperCase();
-          const GPS_OP_STATUSES = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
-          if (gpsPayloadStatus && GPS_OP_STATUSES.has(gpsPayloadStatus)) {
-            liveUpdates.status = gpsPayloadStatus as EquipmentLiveStatus;
-          } else if (!liveUpdates.status) {
-            liveUpdates.status = 'ONLINE';
+          // Guard: se há parada ativa (no batch ou no live-state persisido), não sobrescrever status.
+          const stopActiveNow = stopActive || isStopActive(liveUpdates);
+          if (!stopActiveNow) {
+            const gpsPayloadStatus = asString(d.status)?.toUpperCase();
+            const GPS_OP_STATUSES = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
+            if (gpsPayloadStatus && GPS_OP_STATUSES.has(gpsPayloadStatus)) {
+              liveUpdates.status = gpsPayloadStatus as EquipmentLiveStatus;
+            } else if (!liveUpdates.status) {
+              liveUpdates.status = 'ONLINE';
+            }
+          } else {
+            console.info('[batch/GPS] parada ativa -- status preservado fleetCode=' + validation.equipment.code);
           }
           // Save trail point only when coordinates are valid
           const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
@@ -602,12 +626,18 @@ export async function POST(req: NextRequest) {
           const srcHb = asString(d.hourmeterSource);
           if (srcHb) liveUpdates.hourmeterSource = srcHb;
           // Ler status operacional do payload do APK (HEARTBEAT pode carregar status atual)
-          const hbPayloadStatus = asString(d.status)?.toUpperCase();
-          const HB_OP_STATUSES = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
-          if (hbPayloadStatus && HB_OP_STATUSES.has(hbPayloadStatus)) {
-            liveUpdates.status = hbPayloadStatus as EquipmentLiveStatus;
-          } else if (!liveUpdates.status) {
-            liveUpdates.status = 'ONLINE';
+          // Guard: se há parada ativa (no batch ou no live-state persisido), não sobrescrever status.
+          const stopActiveNowHb = stopActive || isStopActive(liveUpdates);
+          if (!stopActiveNowHb) {
+            const hbPayloadStatus = asString(d.status)?.toUpperCase();
+            const HB_OP_STATUSES = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
+            if (hbPayloadStatus && HB_OP_STATUSES.has(hbPayloadStatus)) {
+              liveUpdates.status = hbPayloadStatus as EquipmentLiveStatus;
+            } else if (!liveUpdates.status) {
+              liveUpdates.status = 'ONLINE';
+            }
+          } else {
+            console.info('[batch/HEARTBEAT] parada ativa -- status preservado fleetCode=' + validation.equipment.code);
           }
           break;
         }
@@ -729,6 +759,40 @@ export async function POST(req: NextRequest) {
           }
           liveUpdates.stopStartedAt = d.stopStartedAt || d.startedAt || ts;
           if (d.stopDurationSeconds != null || d.durationSeconds != null) liveUpdates.stopDurationSeconds = d.stopDurationSeconds ?? d.durationSeconds;
+          stopActive = true; // bloqueia GPS/HEARTBEAT de sobrescrever status neste batch
+          break;
+        }
+        case 'STOP_ENDED': {
+          // Encerra a parada ativa. Preserva histórico e permite que GPS/HEARTBEAT
+          // atualizem o status novamente.
+          const seStopCode = asString(liveUpdates.stopReasonCode as string) ||
+            asString(currentLiveState?.stopReasonCode) ||
+            asString(liveUpdates.stopCode as string) ||
+            asString(currentLiveState?.stopCode);
+          const seStopDesc = asString(liveUpdates.stopReasonDescription as string) ||
+            asString(currentLiveState?.stopReasonDescription) ||
+            asString(liveUpdates.stopDescription as string) ||
+            asString(currentLiveState?.stopDescription);
+          const seStopStart = asString(liveUpdates.stopStartedAt as string) ||
+            asString(currentLiveState?.stopStartedAt);
+          if (seStopCode)  liveUpdates.lastStopReasonCode        = seStopCode;
+          if (seStopDesc)  liveUpdates.lastStopReasonDescription = seStopDesc;
+          if (seStopStart) liveUpdates.lastStopStartedAt         = seStopStart;
+          liveUpdates.lastStopEndedAt = ts;
+          // Limpar campos de parada ativa
+          liveUpdates.stopReasonCode        = '';
+          liveUpdates.stopReasonDescription = '';
+          liveUpdates.stopCode              = '';
+          liveUpdates.stopDescription       = '';
+          liveUpdates.stopReason            = '';
+          liveUpdates.stopStartedAt         = '';
+          // Status: do payload do APK ou padrão OPERANDO
+          const seStatus = asString(d.status)?.toUpperCase();
+          liveUpdates.status = (seStatus === 'OPERANDO' || seStatus === 'ONLINE' ||
+            seStatus === 'PARADO') ? seStatus as EquipmentLiveStatus : 'OPERANDO';
+          stopActive = false;
+          console.info('[batch/STOP_ENDED] parada encerrada fleetCode=' + validation.equipment.code +
+            ' code=' + (seStopCode || 'N/A') + ' desc=' + (seStopDesc || 'N/A'));
           break;
         }
         case 'JOURNEY_END': {

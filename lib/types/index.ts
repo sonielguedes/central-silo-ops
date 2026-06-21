@@ -712,6 +712,14 @@ export interface EquipmentLiveState {
   stopDurationSeconds?: number;
   /** Timestamp de encerramento da parada (preenchido no JOURNEY_END) */
   stopEndedAt?: string;
+  /** Historico: codigo da ultima parada encerrada pelo STOP_ENDED */
+  lastStopReasonCode?: string;
+  /** Historico: descricao da ultima parada encerrada pelo STOP_ENDED */
+  lastStopReasonDescription?: string;
+  /** Historico: timestamp de inicio da ultima parada encerrada */
+  lastStopStartedAt?: string;
+  /** Historico: timestamp de encerramento da ultima parada */
+  lastStopEndedAt?: string;
   /** Timestamp de inicio do status atual */
   statusStartedAt?: string;
   /** Duracao do status atual em segundos */

@@ -172,6 +172,27 @@ export class ServerStorage {
       delete cleanUpdates.status;
     }
 
+    // Active-stop guard: ONLINE / OFFLINE must not silently overwrite PARADA_APONTADA,
+    // PARADO or AGUARDANDO_PARADA. This is the last line of defence against stale
+    // GPS/HEARTBEAT batches that arrive after a STOP_REASON but before a STOP_ENDED.
+    // Allowed to bypass: new journey start, explicit stop-clearing (stopEndedAt / lastStopEndedAt).
+    const STOP_ACTIVE_GUARD = new Set(['PARADA_APONTADA', 'PARADO', 'AGUARDANDO_PARADA']);
+    if (
+      index >= 0 &&
+      current &&
+      STOP_ACTIVE_GUARD.has(String(current.status ?? '').toUpperCase()) &&
+      (cleanUpdates.status === 'ONLINE' || cleanUpdates.status === 'OFFLINE') &&
+      !cleanUpdates.stopEndedAt &&
+      !(cleanUpdates as Record<string, unknown>).lastStopEndedAt &&
+      !isNewJourneyStart
+    ) {
+      console.info(
+        `[live-state] active-stop guard: blocked status overwrite` +
+        ` current=${current.status} attempted=${cleanUpdates.status} fleetCode=${fleetCode}`
+      );
+      delete cleanUpdates.status;
+    }
+
     let state: EquipmentLiveState;
     if (index >= 0) {
       let base: Record<string, unknown> = { ...all[index] };
