@@ -2,16 +2,11 @@
 
 import React from 'react';
 import { withAuth } from '@/components/shared/with-auth';
-import { IntegracoesPageShell } from '@/components/integracoes/integracoes-page-shell';
+import { ExportacoesPage } from '@/components/integracoes/exportacoes-page';
 
-function ExportacoesPage() {
-  return (
-    <IntegracoesPageShell
-      title="Exportações"
-      subtitle="Fila e estrutura de exportações futuras para integrações externas"
-      integrationName="Exportações"
-    />
-  );
+function ExportacoesRoute() {
+  return <ExportacoesPage />;
 }
 
-export default withAuth(ExportacoesPage, { module: 'INTEGRACOES' });
+export default withAuth(ExportacoesRoute, { module: 'INTEGRACOES' });
+

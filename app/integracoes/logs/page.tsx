@@ -2,16 +2,11 @@
 
 import React from 'react';
 import { withAuth } from '@/components/shared/with-auth';
-import { IntegracoesPageShell } from '@/components/integracoes/integracoes-page-shell';
+import { LogsPage } from '@/components/integracoes/logs-page';
 
-function LogsPage() {
-  return (
-    <IntegracoesPageShell
-      title="Logs de Integração"
-      subtitle="Registro de eventos, respostas e auditoria operacional"
-      integrationName="Logs"
-    />
-  );
+function LogsRoute() {
+  return <LogsPage />;
 }
 
-export default withAuth(LogsPage, { module: 'INTEGRACOES' });
+export default withAuth(LogsRoute, { module: 'INTEGRACOES' });
+

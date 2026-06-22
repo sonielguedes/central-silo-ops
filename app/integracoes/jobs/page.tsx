@@ -2,16 +2,11 @@
 
 import React from 'react';
 import { withAuth } from '@/components/shared/with-auth';
-import { IntegracoesPageShell } from '@/components/integracoes/integracoes-page-shell';
+import { JobsPage } from '@/components/integracoes/jobs-page';
 
-function JobsPage() {
-  return (
-    <IntegracoesPageShell
-      title="Jobs de Integração"
-      subtitle="Visão operacional dos jobs, filas e reprocessamentos"
-      integrationName="Jobs"
-    />
-  );
+function JobsRoute() {
+  return <JobsPage />;
 }
 
-export default withAuth(JobsPage, { module: 'INTEGRACOES' });
+export default withAuth(JobsRoute, { module: 'INTEGRACOES' });
+
