@@ -3,6 +3,7 @@ export type SystemRole =
   | 'SUPER_ADMIN'
   | 'ADMIN_EMPRESA'
   | 'GESTOR'
+  | 'SUPORTE'
   | 'GESTOR_COA'          // alias: GESTOR com visibilidade COA
   | 'COA'
   | 'SUPERVISOR_FRENTE'   // visualiza operações da frente
@@ -44,7 +45,8 @@ export type Module =
   | 'audit-log'
   | 'configuracoes'
   | 'sincronizacao'
-  | 'combustivel';
+  | 'combustivel'
+  | 'integracoes';
 
 export type Action =
   | 'visualizar'
@@ -65,6 +67,7 @@ const ROLE_LEVEL: Record<SystemRole, number> = {
   SUPER_ADMIN_SILO:   110,
   SUPER_ADMIN:        100,
   ADMIN_EMPRESA:       80,
+  SUPORTE:             75,
   GESTOR:              60,
   GESTOR_COA:          60,  // mesmo nível que GESTOR
   COA:                 40,
@@ -106,6 +109,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'configuracoes', actions: FULL },
     { module: 'sincronizacao', actions: FULL },
     { module: 'combustivel', actions: FULL },
+    { module: 'integracoes', actions: FULL },
   ],
   SUPER_ADMIN: [
     { module: 'dashboard', actions: FULL },
@@ -121,6 +125,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'configuracoes', actions: FULL },
     { module: 'sincronizacao', actions: FULL },
     { module: 'combustivel', actions: FULL },
+    { module: 'integracoes', actions: FULL },
   ],
   ADMIN_EMPRESA: [
     { module: 'dashboard', actions: READ_EXPORT },
@@ -136,6 +141,10 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'configuracoes', actions: CRUD },
     { module: 'sincronizacao', actions: ['visualizar', 'editar'] },
     { module: 'combustivel', actions: CRUD_EXPORT },
+    { module: 'integracoes', actions: READ_EXPORT },
+  ],
+  SUPORTE: [
+    { module: 'integracoes', actions: FULL },
   ],
   GESTOR: [
     { module: 'dashboard', actions: READ_EXPORT },
@@ -148,6 +157,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'cadastros', actions: ALL_READ },
     { module: 'sincronizacao', actions: ALL_READ },
     { module: 'combustivel', actions: READ_EXPORT },
+    { module: 'integracoes', actions: READ_EXPORT },
   ],
   COA: [
     { module: 'dashboard', actions: ALL_READ },
@@ -224,6 +234,7 @@ export const MODULE_ALIAS: Record<string, Module> = {
   COMBUSTIVEL_PRODUTOS: 'combustivel',
   COMBUSTIVEL_COMPRT:   'combustivel',
   COMBUSTIVEL_REL:      'combustivel',
+  INTEGRACOES:          'integracoes',
   ALERTAS:              'alertas',
   CHECKLISTS:           'equipamentos',
   CONECTIVIDADE:        'dashboard',
@@ -269,6 +280,7 @@ export const ROUTE_MODULE_MAP: Array<{ pattern: RegExp; module: Module }> = [
   { pattern: /^\/operacoes/, module: 'operacoes' },
   { pattern: /^\/abastecimentos/, module: 'operacoes' },
   { pattern: /^\/combustivel/, module: 'combustivel' },
+  { pattern: /^\/integracoes/, module: 'integracoes' },
   { pattern: /^\/sincronizacao/, module: 'sincronizacao' },
   { pattern: /^\/alertas/, module: 'alertas' },
   { pattern: /^\/ferramentas/, module: 'operacoes' },
@@ -305,6 +317,7 @@ export const SYSTEM_ROLES: Array<{
   { id: 'role-super-admin-silo',    role: 'SUPER_ADMIN_SILO',    name: 'Super Admin SILO',        description: 'Acesso total à plataforma. Requer tenant ativo para dados operacionais.' },
   { id: 'role-super-admin',         role: 'SUPER_ADMIN',          name: 'Super Administrador',     description: 'Acesso total a todas as empresas e configuracoes globais.' },
   { id: 'role-admin-empresa',       role: 'ADMIN_EMPRESA',        name: 'Admin Empresa',           description: 'Gestao completa da propria empresa: cadastros, configuracoes, usuarios.' },
+  { id: 'role-suporte',             role: 'SUPORTE',              name: 'Suporte',                 description: 'Acesso operacional restrito aos módulos de integração e apoio técnico.' },
   { id: 'role-gestor',              role: 'GESTOR',               name: 'Gestor',                  description: 'Dashboard, relatorios, alertas, operacoes. Sem configuracoes de sistema.' },
   { id: 'role-gestor-coa',          role: 'GESTOR_COA',           name: 'Gestor / COA',            description: 'Permissoes de Gestor com visibilidade operacional em tempo real.' },
   { id: 'role-coa',                 role: 'COA',                  name: 'Centro de Operacoes',     description: 'Visualizacao em tempo real, mapa, alertas. Sem escrita em cadastros.' },

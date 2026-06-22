@@ -55,6 +55,8 @@ function resolveRole(accessGroupId: string | undefined): SystemRole {
     'ag-admin': 'SUPER_ADMIN',
     'role-admin-empresa': 'ADMIN_EMPRESA',
     'ag-admin-empresa': 'ADMIN_EMPRESA',
+    'role-suporte': 'SUPORTE',
+    'ag-suporte': 'SUPORTE',
     'role-gestor': 'GESTOR',
     'ag-gestor': 'GESTOR',
     'role-coa': 'COA',

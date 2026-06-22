@@ -43,6 +43,7 @@ function roleLabel(role?: string) {
   switch (role) {
     case 'SUPER_ADMIN_SILO': return 'Admin Plataforma';
     case 'ADMIN_EMPRESA': return 'Admin Empresa';
+    case 'SUPORTE': return 'Suporte';
     case 'GESTOR_COA': return 'Gestor COA';
     case 'GESTOR': return 'Gestor';
     case 'COA': return 'COA';
@@ -621,4 +622,3 @@ function Notice({ tone, message }: { tone: 'error' | 'success'; message: string 
     </div>
   );
 }
-

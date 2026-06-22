@@ -19,6 +19,7 @@ export type AuthRole =
   | 'SUPER_ADMIN_SILO'
   | 'ADMIN_EMPRESA'
   | 'GESTOR'
+  | 'SUPORTE'
   | 'GESTOR_COA'
   | 'COA'
   | 'SUPERVISOR_FRENTE'
@@ -82,6 +83,8 @@ export function roleFromAccessGroupId(accessGroupId: string): AuthRole {
     case 'role-super-admin-silo':   return 'SUPER_ADMIN_SILO';
     case 'role-super-admin':        return 'SUPER_ADMIN_SILO';
     case 'role-admin-empresa':      return 'ADMIN_EMPRESA';
+    case 'ag-suporte':              return 'SUPORTE';
+    case 'role-suporte':            return 'SUPORTE';
     case 'role-gestor':             return 'GESTOR';
     case 'role-gestor-coa':         return 'GESTOR_COA';
     case 'role-coa':                return 'COA';

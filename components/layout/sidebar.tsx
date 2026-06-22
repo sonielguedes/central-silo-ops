@@ -25,6 +25,12 @@ import {
   BarChart2,
   Gauge,
   BookOpen,
+  Database,
+  Webhook,
+  FileDown,
+  Clock3,
+  ScrollText,
+  Settings2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -92,6 +98,14 @@ const menuItems: MenuGroup[] = [
     { icon: Gauge,    label: 'Eficiência Operacional', href: '/relatorios/eficiencia-operacional' },
     { icon: Clock,    label: 'Tempo Operacional',      href: '/relatorios/tempo-operacional' },
     { icon: BookOpen, label: 'Auditoria',              href: '/relatorios/auditoria' },
+  ]},
+  { group: 'Integrações', items: [
+    { icon: Database,   label: 'PIMS',               href: '/integracoes/pims' },
+    { icon: Webhook,    label: 'TOTVS',              href: '/integracoes/totvs' },
+    { icon: FileDown,   label: 'Exportações',        href: '/integracoes/exportacoes' },
+    { icon: Clock3,     label: 'Jobs de Integração', href: '/integracoes/jobs' },
+    { icon: ScrollText, label: 'Logs de Integração', href: '/integracoes/logs' },
+    { icon: Settings2,  label: 'Configurações API',  href: '/integracoes/configuracoes-api' },
   ]},
   { group: 'Administração', items: [
     { icon: Building2,   label: 'Empresas',        href: '/administracao/empresas' },
