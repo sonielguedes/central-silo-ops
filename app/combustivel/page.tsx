@@ -16,6 +16,7 @@ import {
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 import type { FuelingRecord } from '@/lib/fueling-storage';
+import { resolveComboioBomba } from '@/lib/fueling-display';
 
 type ApiResponse = {
   summary?: {
@@ -257,7 +258,10 @@ function CombustivelPainelPage() {
                       {record.fleetDescription ? <div className="text-[10px] text-muted-foreground">{record.fleetDescription}</div> : null}
                     </td>
                     <td className="px-4 py-3 text-white/80">{record.operatorName ?? record.operatorRegistration ?? '—'}</td>
-                    <td className="px-4 py-3 text-white/80">{record.truckFleetCode ?? record.pumpCode ?? record.targetFleetCode ?? '—'}</td>
+                    <td className="px-4 py-3 text-white/80">{resolveComboioBomba({
+                      pumpCode: record.pumpCode,
+                      comboioFleetCode: record.truckFleetCode ?? record.targetFleetCode,
+                    })}</td>
                     <td className="px-4 py-3 text-white/80">{record.fuelType ?? '—'}</td>
                     <td className="px-4 py-3 text-white/80">{formatLiters(record.dieselLiters)}</td>
                     <td className="px-4 py-3 text-white/80">{record.syncStatus ?? 'SYNCED'}</td>
@@ -295,6 +299,7 @@ function CombustivelPainelPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { href: '/combustivel/abastecimentos', label: 'Abastecimentos', icon: <Fuel size={16} /> },
+              { href: '/combustivel/jornadas', label: 'Jornadas', icon: <Clock size={16} /> },
               { href: '/combustivel/comboios', label: 'Comboios', icon: <Truck size={16} /> },
               { href: '/combustivel/produtos', label: 'Produtos', icon: <Package size={16} /> },
               { href: '/combustivel/compartimentos', label: 'Compartimentos', icon: <Droplets size={16} /> },

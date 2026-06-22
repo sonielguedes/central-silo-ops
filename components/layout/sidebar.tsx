@@ -88,6 +88,7 @@ const menuItems: MenuGroup[] = [
   { group: 'Combustível', items: [
     { icon: Fuel,      label: 'Painel',         href: '/combustivel' },
     { icon: Droplets,  label: 'Abastecimentos', href: '/combustivel/abastecimentos' },
+    { icon: Clock3,    label: 'Jornadas',       href: '/combustivel/jornadas' },
     { icon: Truck,     label: 'Comboios',       href: '/combustivel/comboios' },
     { icon: Package,   label: 'Produtos',       href: '/combustivel/produtos' },
     { icon: Droplets,  label: 'Compartimentos', href: '/combustivel/compartimentos' },
