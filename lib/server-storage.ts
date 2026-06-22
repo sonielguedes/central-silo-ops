@@ -146,11 +146,6 @@ export class ServerStorage {
     const index = all.findIndex(s => s.equipmentId === equipmentId);
     const current = index >= 0 ? all[index] : undefined;
     const hourmeterKeys = new Set(['hourmeter', 'hourmeterInitial', 'hourmeterStart', 'hourmeterCurrent', 'hourmeterFinal', 'hourmeterEnd', 'totalHourmeter']);
-
-    // Determine new-journey-start early (before cleanUpdates) so the filter can use it.
-    // Rely on updates directly: batch route only sets hourmeterStart after asValidHourmeter passes.
-    const isNewJourneyStart = (updates as Record<string, unknown>).hourmeterStart !== undefined;
-
     const cleanUpdates = Object.fromEntries(
       Object.entries(updates).filter(([key, value]) => {
         if (value === undefined || value === null || value === '') return false;
@@ -159,16 +154,16 @@ export class ServerStorage {
         if (key === 'totalHourmeter') return value >= 0;
         if (value <= 0) return false;
         if (key === 'hourmeterCurrent' && current?.hourmeterStart && value < current.hourmeterStart) return false;
-        // Non-regression: hourmeterCurrent must not decrease while in the same journey.
-        // APK sends hourmeterStart as hourmeterCurrent in heartbeats (floor value); if the
-        // real current is already higher (from a later GPS or JOURNEY_END), reject the regression.
-        if (key === 'hourmeterCurrent' && current?.hourmeterCurrent && !isNewJourneyStart && value < current.hourmeterCurrent) return false;
         if (key === 'hourmeterEnd' && current?.hourmeterStart && value < current.hourmeterStart) return false;
         return true;
       })
     ) as Partial<EquipmentLiveState>;
 
-    // isNewJourneyStart already declared above (hoisted before cleanUpdates filter).
+    // When a new journey starts (hourmeterStart is being updated), clear stale end-of-journey
+    // fields from the existing record. Without this, a residual hourmeterEnd from a previous
+    // journey would be carried forward and re-trigger the end<start inconsistency check
+    // against the new hourmeterStart.
+    const isNewJourneyStart = cleanUpdates.hourmeterStart !== undefined;
 
     // FINALIZADO is terminal. Never let an OFFLINE update overwrite it in the same
     // merge/sanitize (e.g. a stale heartbeat timeout arriving after JOURNEY_END).
@@ -196,22 +191,6 @@ export class ServerStorage {
         ` current=${current.status} attempted=${cleanUpdates.status} fleetCode=${fleetCode}`
       );
       delete cleanUpdates.status;
-    }
-
-    // Block hourmeterEnd from being set while a journey is active (not FINALIZADO).
-    // Only JOURNEY_END transitions the equipment to FINALIZADO; any other event setting
-    // hourmeterEnd is a stale batch artifact from a previous journey.
-    if (
-      cleanUpdates.hourmeterEnd !== undefined &&
-      current?.status !== 'FINALIZADO' &&
-      cleanUpdates.status !== 'FINALIZADO' &&
-      !isNewJourneyStart
-    ) {
-      console.info(
-        `[live-state] hourmeterEnd guard: blocked (status not FINALIZADO) fleetCode=${fleetCode}`
-      );
-      delete cleanUpdates.hourmeterEnd;
-      delete (cleanUpdates as Record<string, unknown>).totalHourmeter;
     }
 
     let state: EquipmentLiveState;

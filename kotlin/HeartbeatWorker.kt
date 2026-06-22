@@ -46,8 +46,6 @@ import java.util.concurrent.TimeUnit
  *   "accuracy":             8.5,
  *   "speed":                0.0,          // m/s
  *   "speedKmh":             0.0,          // km/h (alias para a Central)
- *   "hourmeterCurrent":     11.2,         // só presente quando há jornada com horímetro inicial
- *   "hourmeterSource":      "MANUAL",     // fonte do horímetro (MANUAL, CAN, OBD2…)
  * }
  *
  * IMPORTANTE — Validação:
@@ -113,11 +111,6 @@ class HeartbeatWorker @AssistedInject constructor(
             // Contexto operacional — se disponível
             session.journeyId?.let      { put("journeyId",     it) }
             session.operationCode?.let  { put("operationCode", it) }
-
-            // Horímetro — valor de início como referência mínima do horímetro atual.
-            // Permite que a Central atualize hourmeterCurrent sem regressão durante a jornada.
-            session.hourmeterStart?.let { put("hourmeterCurrent", it) }
-            session.hourmeterSource?.let { put("hourmeterSource", it) }
 
             // GPS — SOMENTE quando válido (nunca envia null, 0,0 ou fora do range)
             if (hasValidGps && loc != null) {

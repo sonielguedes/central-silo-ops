@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Fuel,
   Truck,
@@ -15,8 +15,16 @@ import {
 } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
+import type { FuelingRecord } from '@/lib/fueling-storage';
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
+type ApiResponse = {
+  summary?: {
+    pending?: number;
+    inconsistent?: number;
+  };
+  records?: FuelingRecord[];
+  recentRecords?: FuelingRecord[];
+};
 
 interface KpiCardProps {
   icon: React.ReactNode;
@@ -28,17 +36,17 @@ interface KpiCardProps {
 
 function KpiCard({ icon, label, value, sub, color = 'default' }: KpiCardProps) {
   const colors = {
-    green:   'border-emerald-500/30 shadow-emerald-500/5',
-    blue:    'border-blue-500/30 shadow-blue-500/5',
-    orange:  'border-orange-500/30 shadow-orange-500/5',
-    red:     'border-red-500/30 shadow-red-500/5',
+    green: 'border-emerald-500/30 shadow-emerald-500/5',
+    blue: 'border-blue-500/30 shadow-blue-500/5',
+    orange: 'border-orange-500/30 shadow-orange-500/5',
+    red: 'border-red-500/30 shadow-red-500/5',
     default: 'border-[#2d3647] shadow-black/10',
   };
   const iconColors = {
-    green:   'text-emerald-400',
-    blue:    'text-blue-400',
-    orange:  'text-orange-400',
-    red:     'text-red-400',
+    green: 'text-emerald-400',
+    blue: 'text-blue-400',
+    orange: 'text-orange-400',
+    red: 'text-red-400',
     default: 'text-slate-400',
   };
   return (
@@ -53,8 +61,6 @@ function KpiCard({ icon, label, value, sub, color = 'default' }: KpiCardProps) {
   );
 }
 
-// ── Alert Row ─────────────────────────────────────────────────────────────────
-
 interface AlertRowProps {
   type: 'warning' | 'info' | 'error';
   message: string;
@@ -64,8 +70,8 @@ interface AlertRowProps {
 function AlertRow({ type, message, time }: AlertRowProps) {
   const styles = {
     warning: 'bg-orange-500/10 border-orange-500/30 text-orange-300',
-    info:    'bg-blue-500/10 border-blue-500/30 text-blue-300',
-    error:   'bg-red-500/10 border-red-500/30 text-red-300',
+    info: 'bg-blue-500/10 border-blue-500/30 text-blue-300',
+    error: 'bg-red-500/10 border-red-500/30 text-red-300',
   };
   return (
     <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-xs ${styles[type]}`}>
@@ -76,15 +82,100 @@ function AlertRow({ type, message, time }: AlertRowProps) {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+const tz = 'America/Sao_Paulo';
+
+function formatDateTime(value?: string): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: tz,
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function todayKey() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+}
+
+function isToday(value?: string): boolean {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(date) === todayKey();
+}
+
+function formatLiters(value?: number): string {
+  if (!Number.isFinite(value ?? NaN)) return '0,0 L';
+  return `${(value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+}
+
+function isInconsistent(record: FuelingRecord): boolean {
+  return !Number.isFinite(record.dieselLiters) ||
+    record.dieselLiters <= 0 ||
+    !Number.isFinite(record.hourmeter) ||
+    record.hourmeter <= 0 ||
+    ((record.gpsLatitude != null || record.gpsLongitude != null) &&
+      (
+        !Number.isFinite(record.gpsLatitude as number) ||
+        !Number.isFinite(record.gpsLongitude as number) ||
+        record.gpsLatitude === 0 ||
+        record.gpsLongitude === 0
+      ));
+}
+
+function getTopFuel(records: FuelingRecord[]): { fuelType: string; liters: number } {
+  const totals = new Map<string, number>();
+  for (const record of records) {
+    const key = String(record.fuelType ?? '').trim() || 'Desconhecido';
+    totals.set(key, (totals.get(key) ?? 0) + (Number(record.dieselLiters) || 0));
+  }
+  let fuelType = '—';
+  let liters = 0;
+  for (const [key, total] of totals.entries()) {
+    if (total > liters) {
+      fuelType = key;
+      liters = total;
+    }
+  }
+  return { fuelType, liters };
+}
 
 function CombustivelPainelPage() {
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<ApiResponse>({});
 
-  const handleRefresh = () => {
+  const load = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
+    setError(null);
+    try {
+      const res = await fetch('/api/abastecimentos', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Falha ao carregar abastecimentos');
+      setData(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar abastecimentos');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const records = data.records ?? [];
+  const todayRecords = records.filter((record) => isToday(record.fueledAt ?? record.receivedAt));
+  const recentRecords = (data.recentRecords?.length ? data.recentRecords : records.slice(0, 5)).slice(0, 5);
+  const topFuel = getTopFuel(todayRecords.length ? todayRecords : records);
+  const litersToday = todayRecords.reduce((sum, record) => sum + (Number(record.dieselLiters) || 0), 0);
+  const fuelingToday = todayRecords.length;
+  const pending = records.filter((record) => record.syncStatus !== 'SYNCED').length;
+  const divergences = records.filter(isInconsistent).length;
+  const hasData = records.length > 0;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#060c1a] text-white">
@@ -95,7 +186,7 @@ function CombustivelPainelPage() {
         actions={
           <>
             <button
-              onClick={handleRefresh}
+              onClick={load}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d1426] border border-[#2d3647] text-xs font-bold text-muted-foreground hover:text-white hover:border-[#3d4a5f] transition-all"
             >
               <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
@@ -113,29 +204,36 @@ function CombustivelPainelPage() {
       />
 
       <div className="px-8 py-6 space-y-8">
-        {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <KpiCard icon={<Droplets size={20} />} label="Litros Hoje" value="0,0 L" sub="Nenhum registro" color="blue" />
-          <KpiCard icon={<Fuel size={20} />} label="Abastecimentos Hoje" value="0" sub="Aguardando registros" color="green" />
-          <KpiCard icon={<Truck size={20} />} label="Comboios Ativos" value="0" sub="Cadastrar comboio" color="orange" />
-          <KpiCard icon={<Package size={20} />} label="Produto + Utilizado" value="—" sub="Sem dados" color="default" />
-          <KpiCard icon={<Clock size={20} />} label="Pendentes Sincronismo" value="0" sub="Tudo sincronizado" color="default" />
-          <KpiCard icon={<AlertTriangle size={20} />} label="Divergências" value="0" sub="Sem alertas" color="default" />
+          <KpiCard icon={<Droplets size={20} />} label="Litros Hoje" value={formatLiters(litersToday)} sub={hasData ? 'Dados reais do tenant' : 'Nenhum registro'} color="blue" />
+          <KpiCard icon={<Fuel size={20} />} label="Abastecimentos Hoje" value={fuelingToday} sub={hasData ? 'Registros do dia' : 'Aguardando registros'} color="green" />
+          <KpiCard icon={<Truck size={20} />} label="Comboios Ativos" value="—" sub="Base para próxima fase" color="orange" />
+          <KpiCard icon={<Package size={20} />} label="Produto + Utilizado" value={topFuel.fuelType} sub={topFuel.liters > 0 ? formatLiters(topFuel.liters) : 'Sem dados do dia'} color="default" />
+          <KpiCard icon={<Clock size={20} />} label="Pendentes Sincronismo" value={pending} sub={pending > 0 ? 'Há eventos pendentes' : 'Tudo sincronizado'} color="default" />
+          <KpiCard icon={<AlertTriangle size={20} />} label="Divergências" value={divergences} sub={divergences > 0 ? 'Revisar inconsistências' : 'Sem alertas'} color="default" />
         </div>
 
-        {/* Alertas */}
         <div>
           <h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-3">Alertas Recentes</h2>
           <div className="space-y-2">
-            <AlertRow
-              type="info"
-              message="Módulo inicializado. Cadastre comboios e produtos para iniciar os controles."
-              time="agora"
-            />
+            {error ? (
+              <AlertRow type="error" message={error} time="agora" />
+            ) : hasData ? (
+              <AlertRow
+                type="info"
+                message={`Painel atualizado com ${records.length} abastecimento(s) reais do tenant.`}
+                time={refreshing ? 'atualizando' : 'agora'}
+              />
+            ) : (
+              <AlertRow
+                type="info"
+                message={loading ? 'Carregando abastecimentos reais...' : 'Nenhum abastecimento real recebido ainda.'}
+                time="agora"
+              />
+            )}
           </div>
         </div>
 
-        {/* Últimos abastecimentos */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Últimos Abastecimentos</h2>
@@ -151,36 +249,47 @@ function CombustivelPainelPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Fuel size={32} className="opacity-20" />
-                      <p className="font-bold text-sm">Nenhum abastecimento registrado</p>
-                      <p className="text-[10px]">Os registros aparecerão aqui após o primeiro abastecimento via App ou Web.</p>
-                    </div>
-                  </td>
-                </tr>
+                {recentRecords.length > 0 ? recentRecords.map((record) => (
+                  <tr key={record.eventId} className="border-t border-[#1f2740]">
+                    <td className="px-4 py-3 text-white/80 whitespace-nowrap">{formatDateTime(record.fueledAt ?? record.receivedAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-white font-semibold">{record.fleetCode}</div>
+                      {record.fleetDescription ? <div className="text-[10px] text-muted-foreground">{record.fleetDescription}</div> : null}
+                    </td>
+                    <td className="px-4 py-3 text-white/80">{record.operatorName ?? record.operatorRegistration ?? '—'}</td>
+                    <td className="px-4 py-3 text-white/80">{record.truckFleetCode ?? record.pumpCode ?? record.targetFleetCode ?? '—'}</td>
+                    <td className="px-4 py-3 text-white/80">{record.fuelType ?? '—'}</td>
+                    <td className="px-4 py-3 text-white/80">{formatLiters(record.dieselLiters)}</td>
+                    <td className="px-4 py-3 text-white/80">{record.syncStatus ?? 'SYNCED'}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center">
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Fuel size={32} className="opacity-20" />
+                        <p className="font-bold text-sm">Nenhum abastecimento registrado</p>
+                        <p className="text-[10px]">Os registros aparecerão aqui após o primeiro abastecimento via App ou Web.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Info integração */}
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <TrendingUp size={18} className="text-blue-400 mt-0.5 shrink-0" />
             <div>
               <p className="text-xs font-black text-blue-300 mb-1">Integração App Robson</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Este módulo está preparado para receber eventos <code className="bg-blue-500/10 px-1 rounded text-blue-300">FUELING_RECORDED</code> do
-                App Robson (appCode: ROBSON). Após a integração, os abastecimentos realizados no campo
-                serão sincronizados automaticamente.
+                Este módulo agora lê dados reais persistidos por tenant a partir da sincronização mobile.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Links rápidos */}
         <div>
           <h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-3">Acessos Rápidos</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

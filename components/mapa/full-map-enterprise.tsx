@@ -143,12 +143,7 @@ const formatValue = (value: unknown): string => {
 
 const formatSpeed     = (v?: number): string => v == null ? NOT_INFORMED : Number(v).toFixed(1) + ' km/h';
 const formatAccuracy  = (v?: number): string => v == null ? NOT_INFORMED : Number(v).toFixed(1) + ' m';
-const formatHourmeter = (v?: number | string | null): string => {
-  if (v == null) return '—';
-  const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) return '—';
-  return n.toFixed(1).replace('.', ',') + ' h';
-};
+const formatHourmeter = (v?: number): string => v == null ? NOT_INFORMED : v + 'h';
 
 const getTypeIcon = (type?: string): LiveMapItem['typeIcon'] => {
   const n = (type || '').toUpperCase();
@@ -401,9 +396,9 @@ function FichaPanel({
 
             <FichaSection label="Horimetro">
               <div className="grid grid-cols-3 gap-2">
-                <FichaBox label="Inicial" value={formatHourmeter(ficha.hourmeterStart)} />
-                <FichaBox label="Final" value={ficha.status === 'FINALIZADO' ? formatHourmeter(ficha.hourmeterEnd) : '—'} />
-                <FichaBox label="Total" value={ficha.status === 'FINALIZADO' && ficha.totalHourmeter != null ? formatHourmeter(ficha.totalHourmeter) : '—'} />
+                <FichaBox label="Inicial" value={ficha.hourmeterStart != null ? ficha.hourmeterStart + 'h' : null} />
+                <FichaBox label="Final" value={ficha.hourmeterEnd != null ? ficha.hourmeterEnd + 'h' : null} />
+                <FichaBox label="Total" value={ficha.totalHourmeter != null ? ficha.totalHourmeter + 'h' : null} />
               </div>
             </FichaSection>
 
@@ -843,7 +838,6 @@ function OperationalPopup({
   const hStart   = machine.hourmeterStart   ?? machine.hourmeterInitial;
   const hCurrent = machine.hourmeterCurrent ?? machine.hourmeter;
   const hEnd     = machine.hourmeterEnd     ?? machine.hourmeterFinal;
-  const isFinalized = machine.status === 'FINALIZADO';
   const stopDesc = machine.stopDescription  ?? machine.stopReason;
 
   const isMyTrail = activeTrail?.fleetCode === machine.code;
@@ -905,7 +899,7 @@ function OperationalPopup({
           <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
             <PField icon={<Clock size={11} />} label="Inicial" value={formatHourmeter(hStart)} />
             <PField icon={<Clock size={11} />} label="Atual" value={formatHourmeter(hCurrent)} />
-            <PField icon={<Clock size={11} />} label="Final" value={isFinalized ? formatHourmeter(hEnd) : '—'} />
+            <PField icon={<Clock size={11} />} label="Final" value={formatHourmeter(hEnd)} />
           </div>
         </PSection>
 
