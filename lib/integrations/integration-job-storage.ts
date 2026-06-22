@@ -63,6 +63,7 @@ const TYPES = new Set<IntegrationJobType>([
   'SYNC_MASTER_DATA',
   'TEST_CONNECTION',
   'SEND_PIMS_HOMOLOGATION',
+  'SEND_TOTVS_HOMOLOGATION',
   'MANUAL',
 ]);
 const SOURCES = new Set<IntegrationJobSource>(['MANUAL', 'SYSTEM', 'API']);
