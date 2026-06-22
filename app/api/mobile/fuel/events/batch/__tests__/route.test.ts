@@ -224,4 +224,230 @@ describe('POST /api/mobile/fuel/events/batch', () => {
     const res = await POST(makeReq({ companyCode: 'SG01', tenantId: 'sg01-1781359594113' }));
     expect(res.status).toBe(400);
   });
+
+  it('accepts JOURNEY_END payload using the APK contract fields', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'JOURNEY_END',
+          offlineId: 'journey-end-new-contract',
+          occurredAt: '2026-06-21T22:10:00-03:00',
+          payload: {
+            journeyId: 'journey-new-contract',
+            comboioFleetCode: '770',
+            driverRegistration: '12345',
+            driverName: 'Robson Silva',
+            shift: 'Dia',
+            kmInicial: 180,
+            kmFinal: 981,
+            distanciaPercorrida: 801,
+            tanqueInicial: 15000,
+            totalCarregadoPosto: 0,
+            totalAbastecidoMaquinas: 3676,
+            saldoTeorico: 11324,
+            tanqueFinal: 15000,
+            diferenca: 3676,
+            startedAt: '2026-06-21T18:33:00-03:00',
+            finishedAt: '2026-06-21T22:10:00-03:00',
+            status: 'FINALIZADA',
+            source: 'APK',
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      success: true,
+      received: 1,
+      synced: 1,
+      duplicates: 0,
+      errors: [],
+    });
+
+    const { FuelJourneyStorage } = await import('@/lib/fuel-journey-storage');
+    const [saved] = FuelJourneyStorage.getAll('sg01-1781359594113', { type: 'JOURNEY_END' });
+    expect(saved?.payload).toMatchObject({
+      journeyId: 'journey-new-contract',
+      comboioFleetCode: '770',
+      driverRegistration: '12345',
+      driverName: 'Robson Silva',
+      shift: 'Dia',
+      kmStart: 180,
+      kmFinal: 981,
+      distanciaPercorrida: 801,
+      tankStartLiters: 15000,
+      totalCarregadoPosto: 0,
+      totalAbastecidoMaquinas: 3676,
+      saldoTeorico: 11324,
+      tankFinalLiters: 15000,
+      diferenca: 3676,
+      startedAt: '2026-06-21T18:33:00-03:00',
+      finishedAt: '2026-06-21T22:10:00-03:00',
+      status: 'FINALIZADA',
+      source: 'APK',
+    });
+  });
+
+  it('blocks a second JOURNEY_START for the same active comboio without quebrar sync', async () => {
+    const first = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'JOURNEY_START',
+          offlineId: 'journey-start-first',
+          occurredAt: '2026-06-21T21:56:00-03:00',
+          payload: {
+            journeyId: 'journey-first',
+            comboioFleetCode: '770',
+            driverRegistration: '12345',
+            driverName: 'Robson Silva',
+            shift: 'B',
+            kmStart: 1000.5,
+            tankStartLiters: 250,
+          },
+        },
+      ],
+    }));
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      success: true,
+      received: 1,
+      synced: 1,
+      duplicates: 0,
+      errors: [],
+    });
+
+    const second = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'JOURNEY_START',
+          offlineId: 'journey-start-second',
+          occurredAt: '2026-06-21T21:57:00-03:00',
+          payload: {
+            journeyId: 'journey-second',
+            comboioFleetCode: '770',
+            driverRegistration: '12345',
+            driverName: 'Robson Silva',
+            shift: 'B',
+            kmStart: 1001,
+            tankStartLiters: 251,
+          },
+        },
+      ],
+    }));
+
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({
+      success: true,
+      received: 1,
+      synced: 0,
+      duplicates: 1,
+      errors: [],
+    });
+
+    const { FuelJourneyStorage } = await import('@/lib/fuel-journey-storage');
+    const journeys = FuelJourneyStorage.getAll('sg01-1781359594113', { type: 'JOURNEY_START' });
+    expect(journeys).toHaveLength(1);
+  });
+
+  it('treats the same journeyId as idempotent and accepts JOURNEY_END afterwards', async () => {
+    const start = {
+      type: 'JOURNEY_START',
+      offlineId: 'journey-start-idempotent',
+      occurredAt: '2026-06-21T21:56:00-03:00',
+      payload: {
+        journeyId: 'journey-idempotent',
+        comboioFleetCode: '770',
+        driverRegistration: '12345',
+        driverName: 'Robson Silva',
+        shift: 'B',
+        kmStart: 1000.5,
+        tankStartLiters: 250,
+      },
+    };
+
+    const first = await POST(makeReq({ ...batchBody(), events: [start] }));
+    expect(first.status).toBe(200);
+    expect((await first.json()).synced).toBe(1);
+
+    const duplicate = await POST(makeReq({
+      ...batchBody(),
+      events: [{ ...start, offlineId: 'journey-start-idempotent-resend' }],
+    }));
+    expect(duplicate.status).toBe(200);
+    expect(await duplicate.json()).toMatchObject({
+      success: true,
+      received: 1,
+      synced: 0,
+      duplicates: 1,
+    });
+
+    const end = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'JOURNEY_END',
+          offlineId: 'journey-end-idempotent',
+          occurredAt: '2026-06-21T22:10:00-03:00',
+          payload: {
+            journeyId: 'journey-idempotent',
+            comboioFleetCode: '770',
+            kmInicial: 180,
+            kmFinal: 981,
+            distanciaPercorrida: 801,
+            tanqueInicial: 15000,
+            totalCarregadoPosto: 0,
+            totalAbastecidoMaquinas: 3676,
+            saldoTeorico: 11324,
+            tanqueFinal: 15000,
+            diferenca: 0,
+            startedAt: '2026-06-21T21:56:00-03:00',
+            finishedAt: '2026-06-21T22:10:00-03:00',
+            status: 'FINALIZADA',
+            source: 'APK',
+          },
+        },
+      ],
+    }));
+    expect(end.status).toBe(200);
+    expect(await end.json()).toEqual({
+      success: true,
+      received: 1,
+      synced: 1,
+      duplicates: 0,
+      errors: [],
+    });
+
+    const afterEnd = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'JOURNEY_START',
+          offlineId: 'journey-start-after-end',
+          occurredAt: '2026-06-21T22:11:00-03:00',
+          payload: {
+            journeyId: 'journey-after-end',
+            comboioFleetCode: '770',
+            driverRegistration: '12345',
+            driverName: 'Robson Silva',
+            shift: 'B',
+            kmStart: 1002,
+            tankStartLiters: 252,
+          },
+        },
+      ],
+    }));
+
+    expect(afterEnd.status).toBe(200);
+    expect(await afterEnd.json()).toEqual({
+      success: true,
+      received: 1,
+      synced: 1,
+      duplicates: 0,
+      errors: [],
+    });
+  });
 });

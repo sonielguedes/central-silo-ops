@@ -185,6 +185,11 @@ function resolveJourneyComboio(record: {
   return candidate;
 }
 
+function normalizeComboioKey(value?: string | null): string {
+  const candidate = clean(value);
+  return candidate && !isUuid(candidate) ? candidate.toLowerCase() : '';
+}
+
 function dedupeByEventId<T extends { offlineId: string }>(events: T[]): T[] {
   const seen = new Set<string>();
   const output: T[] = [];
@@ -340,6 +345,49 @@ function mergeEvents(tenantId: string): JourneyBaseEvent[] {
   });
 }
 
+function journeyIdentityKey(item: FuelJourneySummary): string {
+  const companyCode = clean(item.companyCode).toLowerCase();
+  const comboio = normalizeComboioKey(item.comboioFleetCode) || normalizeComboioKey(item.comboioDescription);
+  return `${companyCode}::${comboio}`;
+}
+
+function cloneSummary(item: FuelJourneySummary): FuelJourneySummary {
+  return {
+    ...item,
+    timeline: [...item.timeline],
+    fuelings: [...item.fuelings],
+  };
+}
+
+function enforceSingleActiveJourneyPerComboio(items: FuelJourneySummary[]): FuelJourneySummary[] {
+  const groups = new Map<string, FuelJourneySummary[]>();
+  for (const item of items) {
+    if (item.status !== 'ATIVA') continue;
+    const key = journeyIdentityKey(item);
+    if (!key || key.endsWith('::')) continue;
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  }
+
+  if (groups.size === 0) return items;
+
+  const byJourneyId = new Map(items.map((item) => [item.journeyId, cloneSummary(item)]));
+  for (const group of groups.values()) {
+    if (group.length <= 1) continue;
+    const sorted = [...group].sort((a, b) => (b.startedAt || b.finishedAt || '').localeCompare(a.startedAt || a.finishedAt || '') || b.journeyId.localeCompare(a.journeyId));
+    for (const duplicate of sorted.slice(1)) {
+      const target = byJourneyId.get(duplicate.journeyId);
+      if (!target) continue;
+      target.status = 'INCONSISTENTE';
+      target.divergent = true;
+      target.hasDuplicate = true;
+    }
+  }
+
+  return items.map((item) => byJourneyId.get(item.journeyId) ?? cloneSummary(item));
+}
+
 function groupKey(event: JourneyBaseEvent): string {
   return `${event.tenantId}::${event.journeyId}`;
 }
@@ -491,7 +539,9 @@ export function listFuelJourneys(filters: FuelJourneyFilters): FuelJourneySummar
   }
 
   const items = Array.from(groups.values()).map(toSummary).filter((item) => withinRange(item, filters.from, filters.to) && matchesFilter(item, filters));
-  return items.sort((a, b) => (b.startedAt || b.finishedAt || '').localeCompare(a.startedAt || a.finishedAt || '') || b.journeyId.localeCompare(a.journeyId));
+  return enforceSingleActiveJourneyPerComboio(
+    items.sort((a, b) => (b.startedAt || b.finishedAt || '').localeCompare(a.startedAt || a.finishedAt || '') || b.journeyId.localeCompare(a.journeyId)),
+  );
 }
 
 export function getFuelJourneyDetails(tenantId: string, journeyId: string, companyCode?: string): FuelJourneyDetail | null {
@@ -531,6 +581,23 @@ export function calculateJourneyKpis(journeys: FuelJourneySummary[], date?: stri
 export function listFuelJourneyFuelings(tenantId: string, journeyId?: string): FuelJourneyFuelingItem[] {
   const summaries = listFuelJourneys({ tenantId, journeyId });
   return summaries.flatMap((journey) => journey.fuelings);
+}
+
+export function findActiveFuelJourneyByComboio(tenantId: string, companyCode: string | undefined, comboioFleetCode: string | undefined): FuelJourneySummary | null {
+  const comboioKey = normalizeComboioKey(comboioFleetCode);
+  if (!comboioKey) return null;
+
+  const active = listFuelJourneys({
+    tenantId,
+    companyCode,
+    status: 'ATIVA',
+  }).filter((item) => {
+    const itemKey = normalizeComboioKey(item.comboioFleetCode) || normalizeComboioKey(item.comboioDescription);
+    return itemKey === comboioKey;
+  });
+
+  if (!active.length) return null;
+  return active.sort((a, b) => (b.startedAt || b.finishedAt || '').localeCompare(a.startedAt || a.finishedAt || '') || b.journeyId.localeCompare(a.journeyId))[0];
 }
 
 export { formatDateTime as formatFuelJourneyDateTime, resolveJourneyComboio };

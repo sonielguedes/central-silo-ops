@@ -221,4 +221,31 @@ describe('fuel journeys aggregator', () => {
     expect(detail?.summary.totalLiters).toBe(100);
     expect(detail?.timeline).toHaveLength(2);
   });
+
+  it('mantém no máximo uma jornada ATIVA por tenant/company/comboio e rebaixa duplicadas para INCONSISTENTE', async () => {
+    const { FuelJourneyStorage, listFuelJourneys } = await load();
+    FuelJourneyStorage.save({
+      eventId: 'start-a',
+      tenantId: 'tenant-a',
+      companyCode: '001',
+      deviceId: 'dev-1',
+      type: 'JOURNEY_START',
+      occurredAt: '2026-06-22T08:00:00.000-03:00',
+      payload: { journeyId: 'journey-a', comboioFleetCode: '770', driverRegistration: '01', driverName: 'Robson Silva', shift: 'Dia', kmInicial: 180, tanqueInicial: 15000, startedAt: '2026-06-22T08:00:00.000-03:00', source: 'APK' },
+    });
+    FuelJourneyStorage.save({
+      eventId: 'start-b',
+      tenantId: 'tenant-a',
+      companyCode: '001',
+      deviceId: 'dev-1',
+      type: 'JOURNEY_START',
+      occurredAt: '2026-06-22T08:05:00.000-03:00',
+      payload: { journeyId: 'journey-b', comboioFleetCode: '770', driverRegistration: '01', driverName: 'Robson Silva', shift: 'Dia', kmInicial: 181, tanqueInicial: 15000, startedAt: '2026-06-22T08:05:00.000-03:00', source: 'APK' },
+    });
+
+    const journeys = listFuelJourneys({ tenantId: 'tenant-a', companyCode: '001' });
+    expect(journeys.filter((item) => item.status === 'ATIVA')).toHaveLength(1);
+    expect(journeys.filter((item) => item.status === 'INCONSISTENTE')).toHaveLength(1);
+    expect(journeys[0].status).toBe('ATIVA');
+  });
 });

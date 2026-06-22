@@ -4,6 +4,7 @@ import { auditFromRequest } from '@/lib/audit/audit-log';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { FuelJourneyStorage, FuelJourneyEventType } from '@/lib/fuel-journey-storage';
 import { FuelingStorage } from '@/lib/fueling-storage';
+import { findActiveFuelJourneyByComboio } from '@/lib/fuel-journeys';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,8 +95,9 @@ function normalizeJourneyPayload(type: FuelBatchEventType, payload: Record<strin
         driverRegistration: asString(payload.driverRegistration),
         driverName: asString(payload.driverName),
         shift: asString(payload.shift),
-        kmStart: asFiniteNumber(payload.kmStart),
-        tankStartLiters: asFiniteNumber(payload.tankStartLiters),
+        kmStart: asFiniteNumber(payload.kmStart ?? payload.kmInicial),
+        tankStartLiters: asFiniteNumber(payload.tankStartLiters ?? payload.tanqueInicial),
+        startedAt: asString(payload.startedAt),
       };
     case 'POST_REFUEL':
       return {
@@ -111,12 +113,22 @@ function normalizeJourneyPayload(type: FuelBatchEventType, payload: Record<strin
       return {
         journeyId: asString(payload.journeyId),
         comboioFleetCode: asString(payload.comboioFleetCode),
+        driverRegistration: asString(payload.driverRegistration),
+        driverName: asString(payload.driverName),
+        shift: asString(payload.shift),
+        kmStart: asFiniteNumber(payload.kmStart ?? payload.kmInicial),
         kmFinal: asFiniteNumber(payload.kmFinal),
-        tankFinalLiters: asFiniteNumber(payload.tankFinalLiters),
-        totalLoaded: asFiniteNumber(payload.totalLoaded),
-        totalSupplied: asFiniteNumber(payload.totalSupplied),
-        theoreticalBalance: asFiniteNumber(payload.theoreticalBalance),
-        difference: asFiniteNumber(payload.difference),
+        distanciaPercorrida: asFiniteNumber(payload.distanciaPercorrida),
+        tankStartLiters: asFiniteNumber(payload.tankStartLiters ?? payload.tanqueInicial),
+        totalCarregadoPosto: asFiniteNumber(payload.totalCarregadoPosto ?? payload.totalLoaded),
+        totalAbastecidoMaquinas: asFiniteNumber(payload.totalAbastecidoMaquinas ?? payload.totalSupplied),
+        saldoTeorico: asFiniteNumber(payload.saldoTeorico ?? payload.theoreticalBalance),
+        tankFinalLiters: asFiniteNumber(payload.tankFinalLiters ?? payload.tanqueFinal),
+        diferenca: asFiniteNumber(payload.diferenca ?? payload.difference),
+        startedAt: asString(payload.startedAt),
+        finishedAt: asString(payload.finishedAt),
+        status: asString(payload.status),
+        source: asString(payload.source) ?? 'APK',
       };
     case 'FUEL_SUPPLY':
       return {
@@ -133,6 +145,11 @@ function normalizeJourneyPayload(type: FuelBatchEventType, payload: Record<strin
         averageFlowLitersPerMinute: asFiniteNumber(payload.averageFlowLitersPerMinute),
       };
   }
+}
+
+function getJourneyIdFromPayload(type: FuelBatchEventType, payload: Record<string, unknown>): string | undefined {
+  if (type === 'FUEL_SUPPLY') return asString(payload.journeyId);
+  return asString(payload.journeyId);
 }
 
 export async function POST(req: NextRequest) {
@@ -253,9 +270,40 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      const journeyId = getJourneyIdFromPayload(type, payload);
       if (FuelJourneyStorage.isDuplicate(bodyTenantId, offlineId)) {
         duplicates += 1;
         continue;
+      }
+      if (journeyId && FuelJourneyStorage.getAll(bodyTenantId).some((event) => event.type === type && asString(event.payload?.journeyId) === journeyId)) {
+        duplicates += 1;
+        continue;
+      }
+
+      if (type === 'JOURNEY_START') {
+        const comboioFleetCode = asString(payload.comboioFleetCode);
+        const activeJourney = findActiveFuelJourneyByComboio(bodyTenantId, bodyCompanyCode, comboioFleetCode);
+        if (activeJourney) {
+          if (journeyId && activeJourney.journeyId === journeyId) {
+            duplicates += 1;
+            continue;
+          }
+
+          duplicates += 1;
+          auditFromRequest(req, bodyTenantId, {
+            action: 'FUEL_JOURNEY_DUPLICATE_ACTIVE',
+            entity: 'journey',
+            entityId: journeyId ?? offlineId,
+            metadata: {
+              companyCode: bodyCompanyCode,
+              comboioFleetCode,
+              activeJourneyId: activeJourney.journeyId,
+              activeComboio: activeJourney.comboioFleetCode,
+              source: 'APK',
+            },
+          });
+          continue;
+        }
       }
 
       const saveResult = FuelJourneyStorage.save({
