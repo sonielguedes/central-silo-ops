@@ -2,3 +2,8 @@ export * from './totvs-mapping-types';
 export * from './totvs-mapping-storage';
 export * from './totvs-validation-storage';
 export * from './totvs-validation-engine';
+export * from './totvs-dispatch-types';
+export * from './totvs-dispatch-storage';
+export * from './totvs-payload-builder';
+export * from './totvs-client';
+export * from './totvs-dispatch-service';
