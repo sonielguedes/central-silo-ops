@@ -34,10 +34,10 @@ const SYSTEM_LABELS: Record<IntegrationSystem, string> = {
 
 const TYPE_LABELS: Record<IntegrationJobType, string> = {
   EXPORT_FICHA_OPERADOR: 'Ficha Operador',
-  EXPORT_JOURNEY: 'Journey',
-  EXPORT_STOP_EVENTS: 'Stop Events',
-  EXPORT_FUELINGS: 'Fuelings',
-  SYNC_MASTER_DATA: 'Sync Master',
+  EXPORT_JOURNEY: 'Jornadas',
+  EXPORT_STOP_EVENTS: 'Eventos de Parada',
+  EXPORT_FUELINGS: 'Abastecimentos',
+  SYNC_MASTER_DATA: 'Sincronização Mestre',
   TEST_CONNECTION: 'Teste Conexão',
   SEND_PIMS_HOMOLOGATION: 'PIMS Homologação',
   SEND_TOTVS_HOMOLOGATION: 'TOTVS Homologação',
@@ -282,7 +282,7 @@ export function JobsPage() {
                             Ver detalhes
                           </button>
                           <button type="button" disabled={saving || !['FAILED', 'CANCELED'].includes(item.status)} onClick={() => void mutate(`/api/integracoes/jobs/${item.id}/retry`)} className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-200 disabled:opacity-40">
-                            Retry
+                            Reprocessar
                           </button>
                           <button type="button" disabled={saving || !['PENDING', 'RETRYING'].includes(item.status)} onClick={() => void mutate(`/api/integracoes/jobs/${item.id}/cancel`)} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-200 disabled:opacity-40">
                             Cancelar

@@ -40,11 +40,11 @@ const ENV_LABELS: Record<FormState['environment'], string> = {
 };
 
 const AUTH_LABELS: Record<FormState['authType'], string> = {
-  NONE: 'Sem auth',
-  API_KEY: 'API Key',
+  NONE: 'Sem autentica??o',
+  API_KEY: 'Chave de API',
   BEARER_TOKEN: 'Bearer',
-  BASIC_AUTH: 'Basic Auth',
-  CUSTOM_HEADER: 'Header custom',
+  BASIC_AUTH: 'Autentica??o b?sica',
+  CUSTOM_HEADER: 'Cabe?alho personalizado',
 };
 
 const STATUS_LABELS: Record<FormState['status'], string> = {
@@ -229,8 +229,8 @@ export function ConfiguracoesApiPage() {
     try { new URL(form.baseUrl); } catch { return 'Endpoint deve ser uma URL válida.'; }
     if (!form.authType) return 'Tipo de autenticação obrigatório.';
     if (form.timeoutMs < 1000) return 'Timeout mínimo é 1000ms.';
-    if (form.retryCount < 0 || form.retryCount > 10) return 'Retry deve ficar entre 0 e 10.';
-    if (form.authType === 'API_KEY' && !form.apiKey.trim() && !editing?.hasApiKey) return 'API Key obrigatória.';
+    if (form.retryCount < 0 || form.retryCount > 10) return 'Reprocessar deve ficar entre 0 e 10.';
+    if (form.authType === 'API_KEY' && !form.apiKey.trim() && !editing?.hasApiKey) return 'Chave de API obrigatória.';
     if (form.authType === 'BEARER_TOKEN' && !form.bearerToken.trim() && !editing?.hasBearerToken) return 'Bearer Token obrigatório.';
     if (form.authType === 'BASIC_AUTH' && (!form.username.trim() || (!form.password.trim() && !editing?.hasPassword))) return 'Usuário e senha obrigatórios.';
     if (form.authType === 'CUSTOM_HEADER' && (!form.customHeaderName.trim() || (!form.customHeaderValue.trim() && !editing?.hasCustomHeaderValue))) return 'Header e valor obrigatórios.';
@@ -485,7 +485,7 @@ export function ConfiguracoesApiPage() {
               </Field>
 
               {form.authType === 'API_KEY' && (
-                <Field label="API Key">
+                <Field label="Chave de API">
                   <Input value={form.apiKey} onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))} placeholder={editing?.hasApiKey ? 'Mantida se em branco' : 'Chave da API'} />
                 </Field>
               )}
@@ -502,7 +502,7 @@ export function ConfiguracoesApiPage() {
               )}
               {form.authType === 'CUSTOM_HEADER' && (
                 <>
-                  <Field label="Header customizado"><Input value={form.customHeaderName} onChange={(e) => setForm((prev) => ({ ...prev, customHeaderName: e.target.value }))} placeholder="X-API-KEY" /></Field>
+                  <Field label="Cabe?alho personalizadoizado"><Input value={form.customHeaderName} onChange={(e) => setForm((prev) => ({ ...prev, customHeaderName: e.target.value }))} placeholder="X-API-KEY" /></Field>
                   <Field label="Valor do header"><Input value={form.customHeaderValue} onChange={(e) => setForm((prev) => ({ ...prev, customHeaderValue: e.target.value }))} placeholder={editing?.hasCustomHeaderValue ? 'Mantido se em branco' : ''} /></Field>
                 </>
               )}

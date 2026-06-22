@@ -107,7 +107,7 @@ export function LogsPage() {
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric label="Total de logs" value={metrics.total} icon={<AlertCircle size={18} />} />
-            <Metric label="Info" value={metrics.info} icon={<ShieldCheck size={18} />} />
+            <Metric label="Informação" value={metrics.info} icon={<ShieldCheck size={18} />} />
             <Metric label="Alertas" value={metrics.warn} icon={<AlertTriangle size={18} />} />
             <Metric label="Erros" value={metrics.error} icon={<Bug size={18} />} />
           </div>
