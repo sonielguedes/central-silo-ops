@@ -13,7 +13,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Activity, AlertTriangle, CheckCircle2, Clock, ClipboardCopy,
+  Activity, AlertTriangle, Clock,
   Crosshair, FileText, Gauge, Hash, Loader2,
   MapPin, Navigation, PauseCircle, Route, User, Zap, X as XIcon,
 } from 'lucide-react';
@@ -49,9 +49,6 @@ const LEAFLET_CSS = (
 
 const GPS_RECENT_MS       = 15 * 60 * 1000;
 const HEARTBEAT_RECENT_MS =  3 * 60 * 1000;
-const GPS_ALERT_MS        =      120 * 1000;
-const HB_ALERT_MS         =      120 * 1000;
-const GPS_FRESH_MS        =       60 * 1000;
 const REFRESH_INTERVAL_MS = 5 * 1000; // 5s — atualização em tempo real
 const NOT_INFORMED        = 'Nao informado';
 
@@ -112,28 +109,6 @@ const isRecent = (value: string | undefined, thresholdMs: number) => {
   if (!value) return false;
   const t = new Date(value).getTime();
   return Number.isFinite(t) && Date.now() - t <= thresholdMs;
-};
-
-const ageMs = (value?: string): number => {
-  if (!value) return Infinity;
-  const t = new Date(value).getTime();
-  return Number.isFinite(t) ? Math.max(0, Date.now() - t) : Infinity;
-};
-
-const formatAge = (ms: number): string => {
-  if (!Number.isFinite(ms)) return '';
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return 'ha ' + s + 's';
-  const m = Math.floor(s / 60);
-  if (m < 60) return 'ha ' + m + 'min';
-  return 'ha ' + Math.floor(m / 60) + 'h';
-};
-
-const formatDateTime = (value?: string): string => {
-  if (!value) return NOT_INFORMED;
-  const t = new Date(value);
-  if (Number.isNaN(t.getTime())) return NOT_INFORMED;
-  return t.toLocaleString('pt-BR');
 };
 
 const formatValue = (value: unknown): string => {
@@ -692,7 +667,7 @@ export default function FullMapEnterprise({
                 remove: ()  => { delete markerRefs.current[machine.id]; },
               }}>
               <Popup className="silo-enterprise-popup" minWidth={320} maxWidth={340}>
-                <OperationalPopup machine={machine} statusCfg={sCfg} onRequestTrail={fetchTrail} onClearTrail={clearTrail} trailLoading={trailLoading} activeTrail={trail} onCenterOn={handleCenterOn} onCopyJourney={handleCopyJourney} copiedId={copiedId} onOpenFicha={handleOpenFicha} rawMode={rawMode} onToggleRaw={onToggleRaw} />
+                <OperationalPopup machine={machine} statusCfg={sCfg} onRequestTrail={fetchTrail} onClearTrail={clearTrail} trailLoading={trailLoading} activeTrail={trail} onCenterOn={handleCenterOn} onOpenFicha={handleOpenFicha} rawMode={rawMode} onToggleRaw={onToggleRaw} />
               </Popup>
             </Marker>
           );
@@ -817,7 +792,7 @@ type StatusCfg = { label: string; color: string };
 
 function OperationalPopup({
   machine, statusCfg, onRequestTrail, onClearTrail, trailLoading, activeTrail,
-  onCenterOn, onCopyJourney, copiedId, onOpenFicha, rawMode, onToggleRaw,
+  onCenterOn, onOpenFicha, rawMode, onToggleRaw,
 }: {
   machine: LiveMapItem;
   statusCfg: StatusCfg;
@@ -826,38 +801,31 @@ function OperationalPopup({
   trailLoading: boolean;
   activeTrail: TrailState;
   onCenterOn: (pos: [number, number] | null) => void;
-  onCopyJourney: (id: string) => void;
-  copiedId: string | null;
   onOpenFicha: (fleetCode: string, journeyId: string | null) => void;
   rawMode: boolean;
   onToggleRaw: () => void;
 }) {
-  const gpsAge   = ageMs(machine.lastGpsAt);
-  const hbAge    = ageMs(machine.lastHeartbeatAt);
-  const gpsStale = gpsAge > GPS_ALERT_MS;
-  const hbStale  = hbAge  > HB_ALERT_MS;
-  const gpsFresh = gpsAge <= GPS_FRESH_MS;
-  const anyAlert = gpsStale || hbStale;
-
   const registration = machine.operatorRegistration ?? machine.registration;
-  const hStart   = machine.hourmeterStart   ?? machine.hourmeterInitial;
   const hCurrent = machine.hourmeterCurrent ?? machine.hourmeter;
-  const hEnd     = machine.hourmeterEnd     ?? machine.hourmeterFinal;
-  const isFinalized = machine.status === 'FINALIZADO';
-  const stopDesc = machine.stopDescription  ?? machine.stopReason;
 
   const isMyTrail = activeTrail?.fleetCode === machine.code;
 
+  const speed = formatSpeed(machine.speedKmh ?? (machine.speed != null ? machine.speed * 3.6 : undefined));
+  const rpm = (machine as unknown as Record<string, number>).rpm != null ? String((machine as unknown as Record<string, number>).rpm) + ' rpm' : NOT_INFORMED;
+  const hourmeter = formatHourmeter(hCurrent);
+  const accuracy = formatAccuracy(machine.accuracy);
+  const implement = formatValue((machine as unknown as Record<string,string>).implementName || machine.implementCode);
+
   return (
     <div className="bg-[#0a0e27] text-white rounded-xl border border-[#2d3647] font-sans shadow-2xl overflow-hidden" style={{ width: 320 }}>
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[#2d3647]/60">
-        <div className="flex items-center gap-3">
+      <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3 border-b border-[#2d3647]/60">
+        <div className="flex items-start gap-3 min-w-0">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0" style={{ backgroundColor: statusCfg.color }}>
             <Navigation size={20} />
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-base font-black italic tracking-tighter leading-none uppercase truncate">{machine.code}</span>
-            <span className="text-[9px] uppercase text-muted-foreground font-bold tracking-widest truncate">{formatValue(machine.type || machine.name)}</span>
+            <span className="mt-1 text-[9px] uppercase text-muted-foreground font-bold tracking-widest truncate">{formatValue(machine.type || machine.name)}</span>
           </div>
         </div>
         <div className="shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border" style={{ color: statusCfg.color, borderColor: statusCfg.color + '40', backgroundColor: statusCfg.color + '15' }}>
@@ -865,55 +833,30 @@ function OperationalPopup({
         </div>
       </div>
 
-      {anyAlert && (
-        <div className="flex flex-col gap-1 px-4 py-2 bg-[#1a0f08] border-b border-[#3d2010]/60">
-          {gpsStale && <AlertRow text={'GPS desatualizado (' + formatAge(gpsAge) + ')'} color="#f97316" />}
-          {hbStale  && <AlertRow text={'Sem heartbeat (' + formatAge(hbAge) + ')'} color="#ef4444" />}
-        </div>
-      )}
-      {gpsFresh && !anyAlert && (
-        <div className="flex items-center gap-1.5 px-4 py-1.5 bg-[#061a0f] border-b border-[#0d3320]/60">
-          <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
-          <span className="text-[10px] font-bold text-emerald-400">{'GPS recente (' + formatAge(gpsAge) + ')'}</span>
-        </div>
-      )}
-
       <div className="px-4 py-3 flex flex-col gap-3">
-        <PSection label="Telemetria">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-            <PField icon={<Gauge size={11} />}    label="Velocidade"   value={formatSpeed(machine.speedKmh ?? (machine.speed != null ? machine.speed * 3.6 : undefined))} />
-            <PField icon={<Activity size={11} />} label="RPM"          value={(machine as unknown as Record<string, number>).rpm != null ? String((machine as unknown as Record<string, number>).rpm) + ' rpm' : NOT_INFORMED} />
-            <PField icon={<Clock size={11} />}    label="Horimetro"    value={formatHourmeter(machine.hourmeterCurrent ?? machine.hourmeter)} />
-            <PField icon={<MapPin size={11} />}   label="Precisao GPS" value={formatAccuracy(machine.accuracy)} />
-            <PField icon={<Clock size={11} />}    label="Ultimo GPS"   value={formatDateTime(machine.lastGpsAt)} alert={gpsStale} />
-            <PField icon={<Activity size={11} />} label="Heartbeat"    value={formatDateTime(machine.lastHeartbeatAt)} alert={hbStale} />
-          </div>
-        </PSection>
+        <div className="grid grid-cols-2 gap-2.5">
+          <CompactMetric icon={<Gauge size={11} />} label="Velocidade" value={speed} />
+          <CompactMetric icon={<Activity size={11} />} label="RPM" value={rpm} />
+          <CompactMetric icon={<Clock size={11} />} label="Horímetro" value={hourmeter} />
+          <CompactMetric icon={<MapPin size={11} />} label="Precisão GPS" value={accuracy} />
+        </div>
 
-        <PSection label="Operacao">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-            <PField icon={<Hash size={11} />} label="Jornada ID" value={formatValue(machine.journeyId)} />
+        <div className="rounded-xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
+          <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Operação</p>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
             <PField icon={<User size={11} />} label="Operador" value={machine.displayOperator} />
-            <PField icon={<Hash size={11} />} label="Matricula" value={formatValue(registration)} />
-            <PField icon={<Zap size={11} />} label="Operacao" value={machine.displayOperation} />
-            <PField icon={<Hash size={11} />} label="Cod.Operacao" value={formatValue(machine.operationName || machine.operationCode)} />
-            <PField icon={<Hash size={11} />} label="Implemento" value={formatValue((machine as unknown as Record<string,string>).implementName || machine.implementCode)} />
+            <PField icon={<Hash size={11} />} label="Matrícula" value={formatValue(registration)} />
+            <PField icon={<Zap size={11} />} label="Operação" value={machine.displayOperation} />
+            <PField icon={<Hash size={11} />} label="Implemento" value={implement} />
           </div>
-        </PSection>
+        </div>
 
-        <PSection label="Horimetro">
-          <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
-            <PField icon={<Clock size={11} />} label="Inicial" value={formatHourmeter(hStart)} />
-            <PField icon={<Clock size={11} />} label="Atual" value={formatHourmeter(hCurrent)} />
-            <PField icon={<Clock size={11} />} label="Final" value={isFinalized ? formatHourmeter(hEnd) : '—'} />
-          </div>
-        </PSection>
+        <div className="rounded-xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
+          <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Parada</p>
+          <StopBlock stop={machine.stop} stopDesc={machine.stopDescription ?? machine.stopReason} stopCode={machine.stopCode} />
+        </div>
 
-        <PSection label="Parada">
-          <StopBlock stop={machine.stop} stopDesc={stopDesc} stopCode={machine.stopCode} />
-        </PSection>
-
-        <div className="pt-2 border-t border-[#2d3647]/40 flex flex-col gap-2">
+        <div className="pt-1 flex flex-col gap-2">
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => onOpenFicha(machine.code, machine.journeyId ?? null)} className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[10px] font-black uppercase hover:bg-primary/20 transition-all">
               <FileText size={11} /> Ver ficha
@@ -922,12 +865,6 @@ function OperationalPopup({
               <Crosshair size={11} /> Centralizar
             </button>
           </div>
-
-          {machine.journeyId && (
-            <button onClick={() => onCopyJourney(machine.journeyId!)} className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 text-[9px] font-bold uppercase hover:bg-white/10 transition-all">
-              <ClipboardCopy size={10} /> {copiedId === machine.journeyId ? 'Copiado!' : 'Copiar journeyId'}
-            </button>
-          )}
 
           {!isMyTrail && (
             <button onClick={() => onRequestTrail(machine.code, machine.journeyId ?? '')} disabled={trailLoading} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase hover:bg-blue-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1029,27 +966,6 @@ function StopBlock({
   );
 }
 
-function AlertRow({ text, color }: { text: string; color: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <AlertTriangle size={11} style={{ color }} className="shrink-0" />
-      <span className="text-[10px] font-bold" style={{ color }}>{text}</span>
-    </div>
-  );
-}
-
-function PSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-2 flex items-center gap-2">
-        <span>{label}</span>
-        <div className="flex-1 h-px bg-[#2d3647]/60" />
-      </div>
-      {children}
-    </div>
-  );
-}
-
 function PField({ icon, label, value, alert = false }: {
   icon: React.ReactNode; label: string; value: string; alert?: boolean;
 }) {
@@ -1063,6 +979,18 @@ function PField({ icon, label, value, alert = false }: {
         {label}
       </div>
       <div className={cls}>{value}</div>
+    </div>
+  );
+}
+
+function CompactMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
+      <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-black uppercase tracking-tighter">
+        <span className="text-primary">{icon}</span>
+        {label}
+      </div>
+      <div className="mt-1.5 text-[11px] font-bold uppercase text-white truncate">{value}</div>
     </div>
   );
 }
