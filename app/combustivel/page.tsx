@@ -198,7 +198,7 @@ function CombustivelPainelPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all"
             >
               <Plus size={13} />
-              Novo Abastecimento
+Registrar abastecimento
             </a>
           </>
         }
@@ -209,13 +209,13 @@ function CombustivelPainelPage() {
           <KpiCard icon={<Droplets size={20} />} label="Litros Hoje" value={formatLiters(litersToday)} sub={hasData ? 'Dados reais do tenant' : 'Nenhum registro'} color="blue" />
           <KpiCard icon={<Fuel size={20} />} label="Abastecimentos Hoje" value={fuelingToday} sub={hasData ? 'Registros do dia' : 'Aguardando registros'} color="green" />
           <KpiCard icon={<Truck size={20} />} label="Comboios Ativos" value="—" sub="Base para próxima fase" color="orange" />
-          <KpiCard icon={<Package size={20} />} label="Produto + Utilizado" value={topFuel.fuelType} sub={topFuel.liters > 0 ? formatLiters(topFuel.liters) : 'Sem dados do dia'} color="default" />
+<KpiCard icon={<Package size={20} />} label="Produto mais utilizado" value={topFuel.fuelType} sub={topFuel.liters > 0 ? formatLiters(topFuel.liters) : 'Sem dados do dia'} color="default" />
           <KpiCard icon={<Clock size={20} />} label="Pendentes Sincronismo" value={pending} sub={pending > 0 ? 'Há eventos pendentes' : 'Tudo sincronizado'} color="default" />
           <KpiCard icon={<AlertTriangle size={20} />} label="Divergências" value={divergences} sub={divergences > 0 ? 'Revisar inconsistências' : 'Sem alertas'} color="default" />
         </div>
 
         <div>
-          <h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-3">Alertas Recentes</h2>
+<h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-3">Alertas recentes</h2>
           <div className="space-y-2">
             {error ? (
               <AlertRow type="error" message={error} time="agora" />
@@ -286,7 +286,7 @@ function CombustivelPainelPage() {
           <div className="flex items-start gap-3">
             <TrendingUp size={18} className="text-blue-400 mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs font-black text-blue-300 mb-1">Integração App Robson</p>
+<p className="text-xs font-black text-blue-300 mb-1">Integração com o aplicativo</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 Este módulo agora lê dados reais persistidos por tenant a partir da sincronização mobile.
               </p>
