@@ -37,6 +37,23 @@ const JORNADA_FINALIZADA_CLEAR_FIELDS = [
   'stopCode', 'stopReasonCode', 'stopDescription', 'stopReasonDescription', 'stopReason', 'stopStartedAt', 'stopDurationSeconds',
 ] satisfies (keyof EquipmentLiveState)[];
 
+/** Fields cleared from live-state when a new journey starts (JOURNEY_START).
+ *  Prevents stale hourmeter/stop data from a previous journey bleeding into the new one. */
+const JOURNEY_START_CLEAR_FIELDS = [
+  'hourmeterEnd', 'hourmeterFinal', 'totalHourmeter', 'hourmeterInconsistent', 'hourmeterInconsistencyReason',
+  'stopCode', 'stopReasonCode', 'stopDescription', 'stopReasonDescription', 'stopReason', 'stopStartedAt', 'stopDurationSeconds',
+  'lastStopReasonCode', 'lastStopReasonDescription', 'lastStopStartedAt', 'lastStopEndedAt',
+] satisfies (keyof EquipmentLiveState)[];
+
+/** Fields that must be absent from the live-state while a journey is active.
+ *  These are end-of-journey artifacts. Any active event (GPS, HEARTBEAT, etc.)
+ *  that arrives when the equipment is NOT finalised must trigger their removal. */
+const ACTIVE_JOURNEY_END_FIELDS_TO_DELETE = [
+  'endedAt',
+  'hourmeterEnd',
+  'totalHourmeter',
+] satisfies (keyof EquipmentLiveState)[];
+
 const hasValidValue = (value: unknown) => value !== undefined && value !== null && value !== '';
 
 /** Returns true when the given live-state (or partial liveUpdates) signals an active stop.
@@ -159,7 +176,15 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   const rawCostCenter = data.costCenterName ?? data.costCenterCode ?? data.costCenter;
   const costCenterCode = data.costCenterCode ?? data.costCenter ?? data.costCenterName;
   const costCenterName = data.costCenterName ?? data.costCenter ?? data.costCenterCode;
-  const hourmeterCurrent = asValidHourmeter(data.hourmeterCurrent ?? data.hourmeter);
+  const hourmeterCurrent = asValidHourmeter(
+    data.hourmeterCurrent ??
+      data.currentHourmeter ??
+      data.hourmeter ??
+      data.horimeter ??
+      data.engineHours ??
+      data.horimetro ??
+      data.horimetroAtual,
+  );
 
   putIfValid(target, 'operatorRegistration', operatorRegistration);
   putIfValid(target, 'registration', operatorRegistration);
@@ -479,6 +504,13 @@ export async function POST(req: NextRequest) {
     // Set to true when finalization came via FSM_TRANSITION/JORNADA_FINALIZADA (not JOURNEY_END),
     // so fieldsToDelete is passed to updateLiveState to clear journeyId/operator/stop fields.
     let jornadaFinalizadaByFsm = false;
+    // Set to true when JOURNEY_START is processed — used to pass JOURNEY_START_CLEAR_FIELDS.
+    let journeyStarted = false;
+    // Accumulates fields to delete from live-state when STOP_ENDED is processed.
+    let stopEndedFieldsToDelete: (keyof EquipmentLiveState)[] = [];
+    // Set to true when any active event (GPS, HEARTBEAT, JOURNEY_START…) is processed.
+    // Used to trigger clearing of stale end-of-journey fields from the live-state.
+    let activeEventSeen = false;
     // Tracks whether a stop is currently active for this equipment.
     // Initialised from the persisted live-state; toggled by STOP_REASON / STOP_ENDED.
     let stopActive = isStopActive(currentLiveState as unknown as Record<string, unknown>);
@@ -519,6 +551,8 @@ export async function POST(req: NextRequest) {
           if (srcStart) liveUpdates.hourmeterSource = srcStart;
           liveUpdates.statusStartedAt = ts;
           liveUpdates.status = 'OPERANDO'; // JOURNEY_START = jornada ativa = OPERANDO
+          journeyStarted = true;
+          activeEventSeen = true;
           break;
         }
         case 'LOCATION':
@@ -526,6 +560,7 @@ export async function POST(req: NextRequest) {
         case 'GPS_POINT': {
           // Late GPS after journey finalized must not reopen the journey or update status.
           if (journeyEnded) break;
+          activeEventSeen = true;
           applyOperationalFields(liveUpdates, d);
           const latitude  = asNumber(d.latitude);
           const longitude = asNumber(d.longitude);
@@ -566,7 +601,7 @@ export async function POST(req: NextRequest) {
           }
           // Save trail point only when coordinates are valid
           const jId = asString(d.journeyId) || asString(liveUpdates.journeyId) || '';
-          const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
+          const hCurrGps = asValidHourmeter(d.hourmeterCurrent ?? d.currentHourmeter ?? d.hourmeter ?? d.horimeter ?? d.engineHours ?? d.horimetro ?? d.horimetroAtual);
           if (jId && isValidGps(latitude, longitude)) {
             // qualityStatus: mark low accuracy but still save the point
             const gpsQuality = (accuracy != null && accuracy > 20)
@@ -598,6 +633,7 @@ export async function POST(req: NextRequest) {
         case 'HEARTBEAT': {
           // Late heartbeat after journey finalized must not reopen the journey or update status.
           if (journeyEnded) break;
+          activeEventSeen = true;
           applyOperationalFields(liveUpdates, d);
           liveUpdates.lastHeartbeatAt = now;
           const latitude  = asNumber(d.latitude);
@@ -621,7 +657,7 @@ export async function POST(req: NextRequest) {
               ' -- keeping last valid position'
             );
           }
-          const hCurr = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
+          const hCurr = asValidHourmeter(d.hourmeterCurrent ?? d.currentHourmeter ?? d.hourmeter ?? d.horimeter ?? d.engineHours ?? d.horimetro ?? d.horimetroAtual);
           if (hCurr != null) liveUpdates.hourmeterCurrent = hCurr;
           const srcHb = asString(d.hourmeterSource);
           if (srcHb) liveUpdates.hourmeterSource = srcHb;
@@ -779,13 +815,12 @@ export async function POST(req: NextRequest) {
           if (seStopDesc)  liveUpdates.lastStopReasonDescription = seStopDesc;
           if (seStopStart) liveUpdates.lastStopStartedAt         = seStopStart;
           liveUpdates.lastStopEndedAt = ts;
-          // Limpar campos de parada ativa
-          liveUpdates.stopReasonCode        = '';
-          liveUpdates.stopReasonDescription = '';
-          liveUpdates.stopCode              = '';
-          liveUpdates.stopDescription       = '';
-          liveUpdates.stopReason            = '';
-          liveUpdates.stopStartedAt         = '';
+          // Limpar campos de parada ativa via fieldsToDelete (empty strings são filtrados pelo cleanUpdates)
+          stopEndedFieldsToDelete = [
+            'stopReasonCode', 'stopReasonDescription',
+            'stopCode', 'stopDescription', 'stopReason',
+            'stopStartedAt', 'stopDurationSeconds',
+          ];
           // Status: do payload do APK ou padrão OPERANDO
           const seStatus = asString(d.status)?.toUpperCase();
           liveUpdates.status = (seStatus === 'OPERANDO' || seStatus === 'ONLINE' ||
@@ -938,7 +973,25 @@ export async function POST(req: NextRequest) {
       liveUpdates,
       // JORNADA_FINALIZADA via FSM_TRANSITION: explicitly clear journey/operator/stop fields
       // from the existing live-state record so they don't carry over into the finalized state.
-      jornadaFinalizadaByFsm ? JORNADA_FINALIZADA_CLEAR_FIELDS : undefined,
+      (() => {
+        const toDelete: (keyof EquipmentLiveState)[] = [];
+        if (jornadaFinalizadaByFsm) toDelete.push(...JORNADA_FINALIZADA_CLEAR_FIELDS);
+        if (journeyStarted) toDelete.push(...JOURNEY_START_CLEAR_FIELDS);
+        if (stopEndedFieldsToDelete.length) toDelete.push(...stopEndedFieldsToDelete);
+        // Clear stale end-of-journey fields when any active event is received and
+        // the equipment is NOT in a finalized state. This covers the case where a
+        // previous JOURNEY_END left hourmeterEnd/endedAt/totalHourmeter in the
+        // live-state and a new active batch arrives without a JOURNEY_START.
+        if (
+          activeEventSeen &&
+          !jornadaFinalizadaByFsm &&
+          !journeyEnded &&
+          currentLiveState?.status !== 'FINALIZADO'
+        ) {
+          toDelete.push(...ACTIVE_JOURNEY_END_FIELDS_TO_DELETE);
+        }
+        return toDelete.length ? toDelete : undefined;
+      })(),
     );
 
     auditFromRequest(req, tenantId, {

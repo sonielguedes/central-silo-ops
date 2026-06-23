@@ -138,3 +138,22 @@ export async function GET(req: NextRequest) {
     tenantId,
   });
 }
+
+export async function POST() { return handleMethodNotAllowed(); }
+export async function PUT() { return handleMethodNotAllowed(); }
+export async function DELETE() { return handleMethodNotAllowed(); }
+export async function PATCH() { return handleMethodNotAllowed(); }
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Company-Token, X-Tenant-Id',
+    },
+  });
+}
+
+function handleMethodNotAllowed() {
+  return NextResponse.json({ error: 'Metodo nao permitido para este endpoint mobile.' }, { status: 405 });
+}

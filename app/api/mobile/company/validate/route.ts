@@ -1,22 +1,16 @@
 /**
  * POST /api/mobile/company/validate
  *
- * Rota usada pelo APK depois de ler o QR Code de configuração ("SILO_OPS_MOBILE_CONFIG").
- * O aplicativo envia o companyToken lido do QR e valida se ele é legítimo antes de
- * concluir a configuração. Em caso de sucesso devolve a configuração completa para
- * preencher/confirmar a tela do app (hosts, portas, IDs).
+ * Valida a configuração da empresa antes de o APK salvar no dispositivo.
+ * Chamada pelo botão "Testar Conexão" na tela de Configurações da Central.
  *
  * REGRAS DE SEGURANÇA:
- * - Não exige sessão web (o APK ainda está em configuração).
- * - Aceita o token via header X-Company-Token (preferencial) ou no corpo JSON.
- * - Nunca gera token novo.
- * - Nunca devolve o token completo na resposta (apenas máscara).
+ * - Não exige sessão web.
+ * - Rota somente leitura — nunca grava, altera ou cria dados.
+ * - Nunca retorna o token completo na resposta.
  * - Nunca loga o token completo (sempre maskToken).
- * - Respeita o flag mobileEnabled da empresa (acesso mobile pode ser bloqueado
- *   sem destruir o token).
+ * - tenantId sempre resolvido pelo token — nunca confiado no body/header isoladamente.
  * - Rate limit anti-brute-force dedicado.
- * - Registra auditoria MOBILE_TOKEN_VALIDATED / MOBILE_TOKEN_VALIDATION_FAILED
- *   (usuário=APK, data/hora automática, tenantId e ação).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,9 +20,9 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
 import { writeAudit } from '@/lib/audit/audit-log';
 import { validateCompanyAccess } from '@/lib/subscription/subscription-validator';
 import { migrateCompanySubscription } from '@/lib/subscription/subscription-migrator';
-import { getMobileApiBaseUrl, getMobileApiHost, getMobileApiPort } from '@/lib/mobile-config';
+import { getMobileApiBaseUrl } from '@/lib/mobile-config';
 
-// ── Rate limit dedicado — mesmo padrão restritivo do resolve ─────────────────
+// ── Rate limit dedicado ───────────────────────────────────────────────────────
 
 const VALIDATE_RATE_LIMIT = {
   maxRequests: 20,
@@ -65,20 +59,30 @@ function extractProtocol(apiBaseUrl?: string): 'HTTPS' | 'HTTP' {
   return apiBaseUrl.startsWith('https') ? 'HTTPS' : 'HTTP';
 }
 
-async function extractToken(req: NextRequest): Promise<string | undefined> {
-  // 1. Header preferencial
-  const headerToken = req.headers.get('x-company-token')?.trim();
-  if (headerToken) return headerToken;
+function getCentralUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_CENTRAL_URL ||
+    process.env.CENTRAL_URL ||
+    'https://central.siloops.com.br'
+  );
+}
 
-  // 2. Corpo JSON (companyToken | token)
+function getApiHost(apiBaseUrl: string): string {
   try {
-    const body = (await req.json()) as { companyToken?: string; token?: string } | null;
-    const bodyToken = (body?.companyToken || body?.token)?.trim();
-    if (bodyToken) return bodyToken;
+    return new URL(apiBaseUrl).hostname;
   } catch {
-    /* corpo ausente ou inválido — ignora, cai no erro de token ausente */
+    return 'api.siloops.com.br';
   }
-  return undefined;
+}
+
+function getApiPort(apiBaseUrl: string): number {
+  try {
+    const url = new URL(apiBaseUrl);
+    if (url.port) return Number(url.port);
+    return url.protocol === 'https:' ? 443 : 80;
+  } catch {
+    return 443;
+  }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -87,13 +91,62 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
   const userAgent = getUserAgent(req);
 
-  // 1. Rate limit anti-brute-force (antes de qualquer lógica)
+  // 1. Rate limit anti-brute-force
   const rl = checkRateLimit(req, VALIDATE_RATE_LIMIT);
   if (rl) return rl;
 
-  // 2. Extrair token (header ou corpo)
-  const companyToken = await extractToken(req);
+  // 2. Ler body com segurança
+  let body: Record<string, unknown> = {};
+  try {
+    const raw = await req.json();
+    if (raw && typeof raw === 'object') body = raw as Record<string, unknown>;
+  } catch {
+    /* corpo ausente ou não-JSON — tratado abaixo */
+  }
 
+  // 3. Normalizar entradas — strings sempre, nunca converter para número
+  const headerToken = req.headers.get('x-company-token')?.trim() || undefined;
+  const headerTenantId = req.headers.get('x-tenant-id')?.trim() || undefined;
+  const headerCode = req.headers.get('x-company-code')?.trim() || undefined;
+
+  const bodyToken =
+    (typeof body.companyToken === 'string' ? body.companyToken.trim() : undefined) ||
+    (typeof body.token === 'string' ? body.token.trim() : undefined) ||
+    undefined;
+  const bodyTenantId =
+    (typeof body.tenantId === 'string' ? body.tenantId.trim() : undefined) ||
+    (typeof body.tenant === 'string' ? body.tenant.trim() : undefined) ||
+    undefined;
+  const bodyCode =
+    (typeof body.companyCode === 'string' ? body.companyCode.trim() : undefined) ||
+    (typeof body.code === 'string' ? body.code.trim() : undefined) ||
+    undefined;
+
+  // 4. Token: header tem prioridade; se ambos presentes e divergem → 403
+  let companyToken: string | undefined;
+  if (headerToken && bodyToken) {
+    if (headerToken !== bodyToken) {
+      console.warn('[mobile/company/validate] token divergente header/body', { ip });
+      return NextResponse.json(
+        {
+          success: false,
+          valid: false,
+          errorCode: 'TOKEN_MISMATCH',
+          error: 'Token divergente entre header e corpo da requisição.',
+          message: 'Token divergente entre header e corpo da requisição.',
+        },
+        { status: 403 },
+      );
+    }
+    companyToken = headerToken;
+  } else {
+    companyToken = headerToken || bodyToken;
+  }
+
+  const tenantIdInput = headerTenantId || bodyTenantId;
+  const companyCodeInput = headerCode || bodyCode;
+
+  // 5. Validar campos obrigatórios
   if (!companyToken) {
     console.warn('[mobile/company/validate] token ausente', { ip });
     return NextResponse.json(
@@ -101,13 +154,14 @@ export async function POST(req: NextRequest) {
         success: false,
         valid: false,
         errorCode: 'MISSING_COMPANY_TOKEN',
+        error: 'Token da empresa ausente.',
         message: 'Token da empresa ausente. Leia novamente o QR Code de configuração.',
       },
       { status: 401 },
     );
   }
 
-  // 3. Localizar empresa pelo token (nunca logar token completo)
+  // 6. Buscar empresa pelo token
   const rawCompany = ServerStorage.getCompanyByToken(companyToken);
 
   if (!rawCompany) {
@@ -129,16 +183,83 @@ export async function POST(req: NextRequest) {
         success: false,
         valid: false,
         errorCode: 'INVALID_COMPANY_TOKEN',
+        error: 'Token da empresa inválido.',
         message: 'Token inválido ou não reconhecido.',
       },
       { status: 401 },
     );
   }
 
-  // 4. Migração lazy dos campos de assinatura
+  // 7. Migração lazy de campos de assinatura
   const { company } = migrateCompanySubscription(rawCompany);
 
-  // 5. Acesso mobile explicitamente desabilitado (token preservado)
+  // 8. Validar companyCode — se informado, deve bater com o da empresa encontrada
+  if (companyCodeInput && companyCodeInput !== company.code) {
+    console.warn('[mobile/company/validate] companyCode divergente', {
+      informed: companyCodeInput,
+      actual: company.code,
+      token: maskToken(companyToken),
+      ip,
+    });
+    writeAudit(company.tenantId, {
+      userId: 'APK',
+      action: 'MOBILE_TOKEN_VALIDATION_FAILED',
+      entity: 'company',
+      entityId: company.id,
+      after: {
+        errorCode: 'COMPANY_CODE_MISMATCH',
+        informedCode: companyCodeInput,
+        tokenPreview: maskToken(companyToken),
+      },
+      ip,
+      userAgent,
+    });
+    return NextResponse.json(
+      {
+        success: false,
+        valid: false,
+        errorCode: 'COMPANY_CODE_MISMATCH',
+        error: 'Empresa não encontrada.',
+        message: 'Código da empresa não corresponde ao token informado.',
+      },
+      { status: 404 },
+    );
+  }
+
+  // 9. Validar tenantId — se informado, deve bater com o tenant da empresa/token
+  if (tenantIdInput && tenantIdInput !== company.tenantId) {
+    console.warn('[mobile/company/validate] tenantId divergente', {
+      informed: tenantIdInput,
+      actual: company.tenantId,
+      token: maskToken(companyToken),
+      ip,
+    });
+    writeAudit(company.tenantId, {
+      userId: 'APK',
+      action: 'MOBILE_TOKEN_VALIDATION_FAILED',
+      entity: 'company',
+      entityId: company.id,
+      after: {
+        errorCode: 'TENANT_MISMATCH',
+        informedTenantId: tenantIdInput,
+        tokenPreview: maskToken(companyToken),
+      },
+      ip,
+      userAgent,
+    });
+    return NextResponse.json(
+      {
+        success: false,
+        valid: false,
+        errorCode: 'TENANT_MISMATCH',
+        error: 'Tenant informado não pertence à empresa.',
+        message: 'Tenant informado não pertence à empresa vinculada ao token.',
+      },
+      { status: 403 },
+    );
+  }
+
+  // 10. Mobile explicitamente desabilitado
   if (company.mobileEnabled === false) {
     console.warn('[mobile/company/validate] mobile desabilitado', {
       token: maskToken(companyToken),
@@ -159,13 +280,14 @@ export async function POST(req: NextRequest) {
         success: false,
         valid: false,
         errorCode: 'MOBILE_DISABLED',
+        error: 'Empresa inativa ou não habilitada para mobile.',
         message: 'O acesso mobile desta empresa está desativado. Contate o administrador.',
       },
       { status: 403 },
     );
   }
 
-  // 6. Validar status de assinatura / empresa ativa
+  // 11. Validar status de assinatura / empresa ativa
   const access = validateCompanyAccess(company);
   if (!access.allowed) {
     const errorCode = access.code ?? 'COMPANY_INACTIVE';
@@ -173,7 +295,6 @@ export async function POST(req: NextRequest) {
       token: maskToken(companyToken),
       tenantId: company.tenantId,
       errorCode,
-      subscriptionStatus: access.status,
       ip,
     });
     writeAudit(company.tenantId, {
@@ -181,11 +302,7 @@ export async function POST(req: NextRequest) {
       action: 'MOBILE_TOKEN_VALIDATION_FAILED',
       entity: 'company',
       entityId: company.id,
-      after: {
-        errorCode,
-        subscriptionStatus: access.status,
-        tokenPreview: maskToken(companyToken),
-      },
+      after: { errorCode, tokenPreview: maskToken(companyToken) },
       ip,
       userAgent,
     });
@@ -193,24 +310,26 @@ export async function POST(req: NextRequest) {
       {
         success: false,
         valid: false,
-        errorCode,
-        message: access.message,
+        errorCode: 'MOBILE_DISABLED',
+        error: 'Empresa inativa ou não habilitada para mobile.',
+        message: 'O acesso mobile desta empresa está desativado. Contate o administrador.',
       },
       { status: 403 },
     );
   }
 
-  // 7. Token válido — montar configuração (sem nenhum campo de token completo)
-  // apiBaseUrl é a fonte oficial; host/porta derivados dela (porta = 443, nunca a interna).
-  const apiHost = getMobileApiHost(company);
+  // 12. Tudo válido — montar resposta (sem token completo)
+  const apiBaseUrl = getMobileApiBaseUrl(company);
   const mqttHost = extractMqttHost(company.mqttUrl);
   const protocol = extractProtocol(company.apiBaseUrl);
 
-  console.info('[mobile/company/validate] token validado', {
+  const apiHost = getApiHost(apiBaseUrl);
+  const apiPort = getApiPort(apiBaseUrl);
+  const companyName = company.tradingName || company.corporateName || String(company.code);
+
+  console.info('[mobile/company/validate] validado com sucesso', {
     companyCode: company.code,
     tenantId: company.tenantId,
-    apiPort: company.apiPort,
-    mqttPort: company.mqttPort,
     subscriptionStatus: access.status,
     token: maskToken(companyToken),
     ip,
@@ -223,8 +342,6 @@ export async function POST(req: NextRequest) {
     entityId: company.id,
     after: {
       companyCode: company.code,
-      apiPort: company.apiPort,
-      mqttPort: company.mqttPort,
       subscriptionStatus: access.status,
       tokenPreview: maskToken(companyToken),
     },
@@ -233,37 +350,59 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({
+    // Formato legado — compatível com o APK atual
     success: true,
     valid: true,
     companyId: company.id,
-    companyCode: company.code,
-    companyName: company.tradingName || company.corporateName || company.code,
-    tenantId: company.tenantId,
+    companyCode: String(company.code),
+    companyName,
+    tenantId: String(company.tenantId),
     status: company.status,
     plan: company.plan,
     subscriptionStatus: access.status,
-    // O guard acima rejeita mobileEnabled === false; aqui o tipo é (true | undefined),
-    // ou seja, mobile SEMPRE habilitado neste ponto (undefined = habilitado para
-    // registros legados). Expomos true explicitamente para o APK.
     mobileEnabled: true,
-    apiBaseUrl: getMobileApiBaseUrl(company),
+    apiBaseUrl,
     apiHost,
-    apiPort: getMobileApiPort(company),
+    apiPort,
     mqttHost,
     mqttPort: company.mqttPort ?? null,
     protocol,
     tokenPreview: maskToken(companyToken),
+
+    // Formato novo — evolução segura para próximas versões do APK
+    company: {
+      id: company.id,
+      code: String(company.code),
+      name: companyName,
+      tenantId: String(company.tenantId),
+      status: company.status,
+      plan: company.plan,
+      subscriptionStatus: access.status,
+      mobileEnabled: true,
+    },
+    api: {
+      baseUrl: apiBaseUrl,
+      host: apiHost,
+      port: apiPort,
+      centralUrl: getCentralUrl(),
+      mqttHost,
+      mqttPort: company.mqttPort ?? null,
+      protocol,
+    },
+    serverTime: new Date().toISOString(),
   });
 }
 
-// GET conveniente — explica o uso correto
+// GET — informa uso correto
 export async function GET(_req: NextRequest) {
   return NextResponse.json(
     {
       success: false,
+      valid: false,
       errorCode: 'METHOD_NOT_ALLOWED',
+      error: 'Método não permitido.',
       message:
-        'Use POST /api/mobile/company/validate com header X-Company-Token (ou { companyToken } no corpo).',
+        'Use POST /api/mobile/company/validate com header X-Company-Token ou { companyToken } no corpo.',
     },
     { status: 405, headers: { Allow: 'POST' } },
   );
