@@ -149,12 +149,12 @@ function TimelinePage() {
                value={filters.fleetCode}
                onChange={(e) => setFilters({...filters, fleetCode: e.target.value})}
              >
-                <option value="">Todas Frotas</option>
+                <option value="">Todas as frotas</option>
                 {equipments.map(e => <option key={e.id} value={e.code}>{e.code}</option>)}
              </select>
              <input
                 type="text"
-                placeholder="Journey ID..."
+                placeholder="ID da jornada..."
                 className="bg-[#1a1f3a] border border-[#2d3647] rounded-xl px-4 py-2 text-xs focus:border-primary outline-none font-bold max-w-[150px]"
                 value={filters.journeyId}
                 onChange={(e) => setFilters({...filters, journeyId: e.target.value})}
@@ -162,7 +162,7 @@ function TimelinePage() {
              <button
                onClick={() => setFilters({search: '', equipmentId: '', fleetCode: '', operatorRegistration: '', journeyId: '', type: ''})}
                className="p-2.5 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-muted-foreground hover:text-white transition-colors"
-               title="Limpar Filtros"
+               title="Limpar filtros"
              >
                <FilterX size={18} />
              </button>
@@ -171,13 +171,13 @@ function TimelinePage() {
           {loading ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4">
                 <Loader2 size={40} className="text-primary animate-spin" />
-                <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Sincronizando Eventos Reais...</p>
+                <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Sincronizando eventos reais...</p>
              </div>
           ) : error ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4">
                <AlertCircle size={40} className="text-red-500" />
                <p className="text-sm text-red-400 font-bold">{error}</p>
-               <button onClick={loadData} className="px-4 py-2 bg-primary/20 text-primary rounded-xl text-xs font-black uppercase hover:bg-primary/30 transition-colors">Tentar Novamente</button>
+               <button onClick={loadData} className="px-4 py-2 bg-primary/20 text-primary rounded-xl text-xs font-black uppercase hover:bg-primary/30 transition-colors">Tentar novamente</button>
              </div>
           ) : (
              <div className="max-w-4xl mx-auto space-y-1 relative">
@@ -260,7 +260,7 @@ function TimelinePage() {
                            onClick={() => setFilters({search: '', equipmentId: '', fleetCode: '', operatorRegistration: '', journeyId: '', type: ''})}
                            className="mt-6 px-4 py-2 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-[10px] font-black uppercase hover:text-white transition-colors"
                          >
-                           Limpar Filtros
+                           Limpar filtros
                          </button>
                       )}
                    </div>

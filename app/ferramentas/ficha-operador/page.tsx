@@ -559,7 +559,7 @@ function JornadasTab({ ficha }: { ficha: FichaDiaria }) {
             <span className="text-[9px] font-black text-primary uppercase tracking-widest">Jornada {i + 1}</span>
             <StatusBadge status={j.hasJourneyEnd ? (j.hourmeterEnd ? 'FINALIZADO' : 'INCONSISTENTE') : 'EM_ANDAMENTO'} />
           </div>
-          <FieldRow label="Journey ID"  value={fv(j.journeyId)} />
+          <FieldRow label="ID da jornada"  value={fv(j.journeyId)} />
           <FieldRow label="Início"      value={fmtDT(j.startedAt)} />
           <FieldRow label="Fim"         value={j.hasJourneyEnd ? fmtDT(j.endedAt) : '(Em andamento)'} />
           <FieldRow label="Operador"    value={fv(j.operatorName)} />
