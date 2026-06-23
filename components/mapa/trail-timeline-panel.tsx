@@ -244,7 +244,7 @@ export function TrailTimelinePanel({
               className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 text-[9px] font-black uppercase hover:bg-white/10 transition-all"
             >
               <ClipboardCopy size={9} />
-              {copiedId === trail.journeyId ? 'Copiado!' : 'Copiar JourneyId'}
+              {copiedId === trail.journeyId ? 'Copiado!' : 'Copiar ID da jornada'}
             </button>
           )}
 

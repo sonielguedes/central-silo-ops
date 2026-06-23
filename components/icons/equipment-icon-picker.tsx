@@ -45,7 +45,7 @@ export const EquipmentIconPicker = memo<EquipmentIconPickerProps>(({
     return items;
   }, [search, activeCategory]);
 
-  const categories = Object.keys(EQUIPMENT_ICON_CATEGORIES);
+  const categories = Object.keys(EQUIPMENT_ICON_CATEGORIES).filter(cat => EQUIPMENT_ICON_CATEGORIES[cat].length > 0);
 
   const currentLabel = value && EQUIPMENT_ICON_LABELS[value as EquipmentIconType]
     ? EQUIPMENT_ICON_LABELS[value as EquipmentIconType]

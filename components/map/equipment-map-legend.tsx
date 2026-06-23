@@ -39,43 +39,65 @@ export const MapLegend = memo<MapLegendProps>(({ items }) => {
   if (items.length === 0) return null;
 
   return (
-    <div className="bg-[#0a0e27]/92 backdrop-blur-xl border border-[#2d3647] rounded-2xl p-3 shadow-2xl min-w-[180px]">
-      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2">
-        Legenda — {items.length} equipamentos
-      </p>
+    <div
+      className="w-[220px] sm:w-[240px] rounded-2xl border border-slate-600/30 p-4 shadow-2xl backdrop-blur-xl"
+      style={{
+        background: 'rgba(8, 13, 30, 0.88)',
+        boxShadow: '0 16px 40px rgba(0,0,0,0.35)',
+      }}
+    >
+      {/* Cabeçalho */}
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+          Legenda
+        </span>
+        <span className="rounded-full border border-slate-600/40 bg-slate-900/70 px-2 py-0.5 text-[10px] font-black text-slate-200">
+          {items.length} {items.length === 1 ? 'equipamento' : 'equipamentos'}
+        </span>
+      </div>
 
       {/* Por status */}
-      <div className="space-y-1 mb-3">
-        <p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Status</p>
+      <div className="space-y-2">
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Status</p>
         {EQUIPMENT_OPERATIONAL_STATUSES.map(st => {
           const count = grouped.statusCounts[st] || 0;
           if (count === 0) return null;
           const c = STATUS_COLORS[st];
           return (
-            <div key={st} className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.ring }} />
-              <span className="text-[10px] text-white/80 font-bold flex-1">{c.label}</span>
-              <span className="text-[10px] font-black text-white/60">{count}</span>
+            <div key={st} className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: c.ring,
+                    boxShadow: `0 0 8px ${c.ring}70`,
+                  }}
+                />
+                <span className="truncate text-xs font-bold text-slate-200">{c.label}</span>
+              </div>
+              <span className="text-xs font-black text-white">{count}</span>
             </div>
           );
         })}
       </div>
 
+      {/* Separador */}
+      <div className="my-3 h-px bg-slate-700/50" />
+
       {/* Por tipo (top 6) */}
-      <div className="space-y-1 border-t border-[#2d3647] pt-2">
-        <p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Tipos</p>
+      <div className="space-y-2">
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Tipos</p>
         {Object.entries(grouped.typeCounts)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 6)
           .map(([type, count]) => (
-            <div key={type} className="flex items-center gap-2">
-              <span className="text-[10px] text-white/80 font-bold flex-1">
+            <div key={type} className="flex items-center justify-between gap-4">
+              <span className="truncate text-xs font-bold text-slate-200">
                 {EQUIPMENT_ICON_LABELS[type as EquipmentIconType] || type}
               </span>
-              <span className="text-[10px] font-black text-white/60">{count}</span>
+              <span className="text-xs font-black text-white">{count}</span>
             </div>
-          ))
-        }
+          ))}
       </div>
     </div>
   );
