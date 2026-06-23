@@ -132,7 +132,7 @@ function CombustivelRelatoriosPage() {
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 Futuramente os relatórios poderão ser exportados em <strong className="text-white">CSV</strong> e <strong className="text-white">Excel (.xlsx)</strong>.
                 Os dados incluirão todos os campos de cada abastecimento com rastreabilidade completa de origem
-                (Web / App Robson / Offline).
+                (Web / aplicativo / Offline).
               </p>
             </div>
           </div>

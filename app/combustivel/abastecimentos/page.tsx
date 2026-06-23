@@ -16,6 +16,7 @@ import {
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 import type { FuelingRecord } from '@/lib/fueling-storage';
+import { resolveComboioBomba } from '@/lib/fueling-display';
 
 type ApiResponse = { records?: FuelingRecord[] };
 
@@ -147,7 +148,7 @@ function CombustivelAbastecimentosPage() {
             </button>
             <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all">
               <Plus size={13} />
-              Registrar
+              Registrar abastecimento
             </button>
           </>
         }
@@ -202,7 +203,10 @@ function CombustivelAbastecimentosPage() {
                       {record.fleetDescription ? <div className="text-[10px] text-muted-foreground">{record.fleetDescription}</div> : null}
                     </td>
                     <td className="px-4 py-3 text-white/80">{record.operatorName ?? record.operatorRegistration ?? '—'}</td>
-                    <td className="px-4 py-3 text-white/80">{record.truckFleetCode ?? record.pumpCode ?? '—'}</td>
+                    <td className="px-4 py-3 text-white/80">{resolveComboioBomba({
+                      pumpCode: record.pumpCode,
+                      comboioFleetCode: record.truckFleetCode,
+                    })}</td>
                     <td className="px-4 py-3 text-white/80">{record.fuelType ?? '—'}</td>
                     <td className="px-4 py-3 text-white/80">{formatLiters(record.dieselLiters)}</td>
                     <td className="px-4 py-3 text-white/80">{formatMetric(record.hourmeter ?? record.odometer)}</td>
@@ -225,8 +229,8 @@ function CombustivelAbastecimentosPage() {
                       <Fuel size={40} className="opacity-15" />
                       <p className="font-black text-sm text-white/50">Nenhum abastecimento encontrado</p>
                       <p className="text-[11px] max-w-sm text-center">
-                        Registros aparecerão após o primeiro abastecimento via Web ou App Robson.
-                        Utilize o botão <strong className="text-orange-400">Registrar</strong> para adicionar manualmente.
+                        Registros aparecerão após o primeiro abastecimento via Web ou aplicativo.
+                        Utilize o botão <strong className="text-orange-400">Registrar abastecimento</strong> para adicionar manualmente.
                       </p>
                     </div>
                   </td>

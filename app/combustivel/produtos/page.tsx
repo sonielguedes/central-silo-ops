@@ -85,7 +85,7 @@ function CombustivelProdutosPage() {
 
         {/* Info */}
         <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-4 text-[11px] text-orange-200/70">
-          Estes produtos serão usados nos abastecimentos e sincronizados com o App Robson via código (<code className="text-orange-300">productCode</code>).
+          Estes produtos serão usados nos abastecimentos e sincronizados com o aplicativo via código (<code className="text-orange-300">productCode</code>).
           O código deve ser único por empresa e nunca convertido para número.
         </div>
 
