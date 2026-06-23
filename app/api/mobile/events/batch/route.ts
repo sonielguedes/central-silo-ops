@@ -466,12 +466,15 @@ export async function POST(req: NextRequest) {
       // ── FUELING pre-validation (reject invalid before saveEvent) ──
       if (event.type === 'FUELING') {
         const fLiters = typeof event.data?.dieselLiters === 'number' ? event.data.dieselLiters : NaN;
-        const fHm    = typeof event.data?.hourmeter === 'number' ? event.data.hourmeter : NaN;
+        const fHm = typeof event.data?.hourmeter === 'number' ? event.data.hourmeter : NaN;
+        const fOdo = typeof event.data?.odometer === 'number' ? event.data.odometer : NaN;
         if (!Number.isFinite(fLiters) || fLiters <= 0) {
           return { offlineId: event.uuid, status: 'REJECTED' as const, reason: 'dieselLiters deve ser > 0' };
         }
-        if (!Number.isFinite(fHm) || fHm <= 0) {
-          return { offlineId: event.uuid, status: 'REJECTED' as const, reason: 'hourmeter deve ser > 0' };
+        const hasValidHourmeter = Number.isFinite(fHm) && fHm > 0;
+        const hasValidOdometer = Number.isFinite(fOdo) && fOdo > 0;
+        if (!hasValidHourmeter && !hasValidOdometer) {
+          return { offlineId: event.uuid, status: 'REJECTED' as const, reason: 'hourmeter ou odometer deve ser > 0' };
         }
       }
       if (event.data?.mobileToken && event.data.mobileToken !== validation.equipment.mobileToken) {
@@ -895,6 +898,7 @@ export async function POST(req: NextRequest) {
           applyOperationalFields(liveUpdates, d);
           const diesel   = asNumber(d.dieselLiters);
           const hourmeter = asValidHourmeter(d.hourmeter);
+          const odometer  = asNumber(d.odometer);
           const fuelType = asString(d.fuelType ?? d.fuelTypeCode);
           const targetFleetCode = asString(d.targetFleetCode ?? d.fueledFleetCode ?? d.abastecidaFleetCode ?? d.fleetCode);
 
@@ -911,7 +915,8 @@ export async function POST(req: NextRequest) {
               fleetCode:            targetFleetCode ?? validation.equipment.code,
               truckFleetCode:       validation.equipment.code,
               dieselLiters:         diesel ?? 0,
-              hourmeter:            hourmeter ?? 0,
+              hourmeter:            hourmeter ?? null,
+              odometer:             odometer != null && odometer > 0 ? odometer : null,
               fuelType,
               gpsLatitude:          asNumber(d.gpsLatitude ?? d.latitude),
               gpsLongitude:         asNumber(d.gpsLongitude ?? d.longitude),
@@ -925,9 +930,9 @@ export async function POST(req: NextRequest) {
               action:   'FUELING_RECEIVED',
               entity:   'fueling',
               entityId: event.uuid,
-              metadata: { fleetCode: targetFleetCode ?? validation.equipment.code, truckFleetCode: validation.equipment.code, liters: diesel, hourmeter, fuelType, source: 'APK' },
+              metadata: { fleetCode: targetFleetCode ?? validation.equipment.code, truckFleetCode: validation.equipment.code, liters: diesel, hourmeter, odometer, fuelType, source: 'APK' },
             });
-            console.info('[Fueling] persisted eventId=' + event.uuid + ' fleetCode=' + String(targetFleetCode ?? validation.equipment.code) + ' truck=' + validation.equipment.code + ' liters=' + String(diesel) + ' h=' + String(hourmeter));
+            console.info('[Fueling] persisted eventId=' + event.uuid + ' fleetCode=' + String(targetFleetCode ?? validation.equipment.code) + ' truck=' + validation.equipment.code + ' liters=' + String(diesel) + ' h=' + String(hourmeter) + ' odo=' + String(odometer));
           } else {
             console.info('[Fueling] idempotent eventId=' + event.uuid + ' fleetCode=' + validation.equipment.code);
           }

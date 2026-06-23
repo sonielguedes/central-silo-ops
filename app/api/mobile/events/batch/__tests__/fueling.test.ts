@@ -62,6 +62,7 @@ jest.mock('@/lib/server-storage', () => ({
     getEquipmentById: jest.fn((_id: string, tenantId: string) =>
       tenantId === TENANT_A ? mockEquipment : null
     ),
+    getLiveFleet: jest.fn(() => []),
     validateMobileEquipment: jest.fn(() => mockEquipValidation),
     saveEvent: jest.fn((event: { offlineId: string; type: string }, tenantId: string) => {
       if (!eventStore[tenantId]) eventStore[tenantId] = [];
@@ -84,7 +85,7 @@ const fuelingStore: Record<string, { eventId: string }[]> = {};
 
 jest.mock('@/lib/fueling-storage', () => ({
   FuelingStorage: {
-    save: jest.fn((input: { eventId: string; tenantId: string; dieselLiters: number; hourmeter: number }) => {
+    save: jest.fn((input: { eventId: string; tenantId: string; dieselLiters: number; hourmeter: number; odometer?: number }) => {
       if (!fuelingStore[input.tenantId]) fuelingStore[input.tenantId] = [];
       const dup = fuelingStore[input.tenantId].some(r => r.eventId === input.eventId);
       if (dup) return 'DUPLICATE';
@@ -226,28 +227,45 @@ describe('FUELING — frota 1002', () => {
     expect(body.results[0].status).toBe('REJECTED');
   });
 
-  it('5. 200 REJECTED — hourmeter = 0', async () => {
+  it('5. 200 REJECTED ? hourmeter = 0', async () => {
     const res = await POST(makeBatchReq([fuelingEvent({ hourmeter: 0 })]));
     const body = await res.json() as { results: { status: string; reason?: string }[] };
     expect(body.results[0].status).toBe('REJECTED');
-    expect(body.results[0].reason).toMatch(/hourmeter/i);
   });
 
-  it('6. 200 REJECTED — hourmeter missing', async () => {
+  it('6. 200 SYNCED ? odometer > 0 accepted without hourmeter', async () => {
+    const uuid = 'event-fueling-odometer-only';
+    const res = await POST(makeBatchReq([fuelingEvent({ hourmeter: undefined, odometer: 12345.6 }, uuid)]));
+    expect(res.status).toBe(200);
+    const body = await res.json() as { results: { status: string }[] };
+    expect(body.results[0].status).toBe('SYNCED');
+    const { FuelingStorage } = await import('@/lib/fueling-storage');
+    expect(FuelingStorage.save).toHaveBeenCalledTimes(1);
+    expect((FuelingStorage.save as jest.Mock).mock.calls[0][0].odometer).toBe(12345.6);
+  });
+
+  it('7. 200 REJECTED ? hourmeter missing and odometer missing', async () => {
     const ev = fuelingEvent({});
     delete (ev.data as Record<string, unknown>).hourmeter;
+    delete (ev.data as Record<string, unknown>).odometer;
     const res = await POST(makeBatchReq([ev]));
     const body = await res.json() as { results: { status: string }[] };
     expect(body.results[0].status).toBe('REJECTED');
   });
 
-  it('7. 200 REJECTED — mobileToken mismatch inside event data', async () => {
+  it('8. 200 REJECTED ? odometer = 0', async () => {
+    const res = await POST(makeBatchReq([fuelingEvent({ hourmeter: undefined, odometer: 0 })]));
+    const body = await res.json() as { results: { status: string; reason?: string }[] };
+    expect(body.results[0].status).toBe('REJECTED');
+  });
+
+  it('8. 200 REJECTED — mobileToken mismatch inside event data', async () => {
     const res = await POST(makeBatchReq([fuelingEvent({ mobileToken: 'WRONG-TOKEN' })]));
     const body = await res.json() as { results: { status: string }[] };
     expect(body.results[0].status).toBe('REJECTED');
   });
 
-  it('8. FuelingStorage.save not called for REJECTED events', async () => {
+  it('10. FuelingStorage.save not called for REJECTED events', async () => {
     await POST(makeBatchReq([fuelingEvent({ dieselLiters: -5 })]));
     const { FuelingStorage } = await import('@/lib/fueling-storage');
     expect(FuelingStorage.save).not.toHaveBeenCalled();
@@ -257,19 +275,19 @@ describe('FUELING — frota 1002', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Auth and fleet validation', () => {
 
-  it('9. 401 — missing X-Company-Token', async () => {
+  it('10. 401 — missing X-Company-Token', async () => {
     mockAuthOk = false;
     const res = await POST(makeBatchReq([fuelingEvent()]));
     expect(res.status).toBe(401);
   });
 
-  it('10. 403 — inactive fleet', async () => {
+  it('11. 403 — inactive fleet', async () => {
     mockEquipValidation = { ok: false, status: 403, error: 'Frota inativa' };
     const res = await POST(makeBatchReq([fuelingEvent()]));
     expect(res.status).toBe(403);
   });
 
-  it('11. 400 — missing machineId in header', async () => {
+  it('12. 400 — missing machineId in header', async () => {
     const res = await POST(
       new NextRequest('http://localhost/api/mobile/events/batch', {
         method: 'POST',
@@ -287,7 +305,7 @@ describe('Auth and fleet validation', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Cross-tenant isolation', () => {
 
-  it('12. tenant B cannot create fueling records in tenant A store', async () => {
+  it('14. tenant B cannot create fueling records in tenant A store', async () => {
     // Tenant B authenticates
     mockTenantId = 'fazenda-b';
     mockEquipValidation = { ok: false, status: 403, error: 'Frota nao permitida para este tenant' };
@@ -305,7 +323,7 @@ describe('Cross-tenant isolation', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Mixed batch — FUELING + HEARTBEAT', () => {
 
-  it('13. Both events processed; only FUELING triggers FuelingStorage.save', async () => {
+  it('15. Both events processed; only FUELING triggers FuelingStorage.save', async () => {
     const fuelUuid = 'fuel-mixed-001';
     const hbUuid   = 'hb-mixed-001';
     const events = [
@@ -333,7 +351,7 @@ describe('Mixed batch — FUELING + HEARTBEAT', () => {
     expect((FuelingStorage.save as jest.Mock).mock.calls[0][0].eventId).toBe(fuelUuid);
   });
 
-  it('14. Audit: one MOBILE_BATCH + one FUELING_RECEIVED for a valid batch', async () => {
+  it('16. Audit: one MOBILE_BATCH + one FUELING_RECEIVED for a valid batch', async () => {
     await POST(makeBatchReq([fuelingEvent({}, 'audit-test-uuid')]));
     const mobileBatchAudits = auditCalls.filter(a => a.action === 'MOBILE_BATCH');
     const fuelingAudits     = auditCalls.filter(a => a.action === 'FUELING_RECEIVED');
