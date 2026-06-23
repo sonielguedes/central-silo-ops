@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AccessGroup, Company } from '@/lib/types';
 import { AccessGroupService, CompanyService, BaseService } from '@/services/master.service';
+import { getCsrfTokenFromDocument } from '@/lib/auth/csrf-client';
 import {
   SystemRole,
   hasPermission,
@@ -76,6 +77,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState<SystemRole>('CONSULTA');
 
+  const clearSessionState = useCallback(() => {
+    localStorage.removeItem('silo_auth_user');
+    sessionStorage.removeItem('silo_auth_user');
+    setUser(null);
+    setUserRole('CONSULTA');
+    setAccessGroup(null);
+    setTenant(null);
+  }, []);
+
   useEffect(() => {
     restoreSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,21 +99,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionUser.activeTenantId || sessionUser.tenantId || sessionUser.defaultTenantId || '',
       );
 
-      const group = await AccessGroupService.getById(sessionUser.accessGroupId);
-      const companies = await CompanyService.getAllGlobal();
+      setUser(sessionUser);
+      setUserRole(sessionUser.role || resolveRole(sessionUser.accessGroupId));
+
+      const group = await AccessGroupService.getById(sessionUser.accessGroupId).catch(() => null);
+      const companies = await CompanyService.getAllGlobal().catch(() => []);
       const currentTenant =
         companies.find(c => c.id === sessionUser.activeTenantId) ||
         companies.find(c => c.id === sessionUser.tenantId) ||
         companies.find(c => c.id === sessionUser.defaultTenantId) ||
         null;
 
-      setUser(sessionUser);
-      setUserRole(sessionUser.role || resolveRole(sessionUser.accessGroupId));
       setAccessGroup(group || null);
       setTenant(currentTenant);
     } catch (error) {
       console.error('Failed to load session', error);
-      logout();
     } finally {
       setIsLoading(false);
     }
@@ -117,17 +127,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const restoreSession = async () => {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
-      if (!res.ok) {
-        // 401 = no valid session — clear stale client state and stop loading.
-        localStorage.removeItem('silo_auth_user');
+      if (res.status === 401) {
+        clearSessionState();
         setIsLoading(false);
         return;
       }
-      const body = await res.json() as { session: SessionUser };
-      localStorage.setItem('silo_auth_user', JSON.stringify(body.session));
-      await loadSession(body.session);
+      if (!res.ok) {
+        setIsLoading(false);
+        return;
+      }
+      const body = await res.json() as { session?: SessionUser; user?: SessionUser };
+      const sessionUser = body.session || body.user;
+      if (!sessionUser) {
+        setIsLoading(false);
+        return;
+      }
+      localStorage.setItem('silo_auth_user', JSON.stringify(sessionUser));
+      await loadSession(sessionUser);
     } catch {
-      localStorage.removeItem('silo_auth_user');
       setIsLoading(false);
     }
   };
@@ -141,10 +158,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
       if (!res.ok) return;
-      const body = await res.json() as { session: SessionUser };
-      localStorage.setItem('silo_auth_user', JSON.stringify(body.session));
-      setUser(body.session);
-      setUserRole(body.session.role || resolveRole(body.session.accessGroupId));
+      const body = await res.json() as { session?: SessionUser; user?: SessionUser };
+      const sessionUser = body.session || body.user;
+      if (!sessionUser) return;
+      localStorage.setItem('silo_auth_user', JSON.stringify(sessionUser));
+      setUser(sessionUser);
+      setUserRole(sessionUser.role || resolveRole(sessionUser.accessGroupId));
     } catch {
       // Non-critical: next navigation will re-check auth state.
     }
@@ -175,13 +194,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
-    localStorage.removeItem('silo_auth_user');
-    sessionStorage.removeItem('silo_auth_user');
-    setUser(null);
-    setUserRole('CONSULTA');
-    setAccessGroup(null);
-    setTenant(null);
+    const csrf = getCsrfTokenFromDocument();
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...(csrf ? { 'x-csrf-token': csrf } : {}),
+      },
+    }).catch(() => null);
+    clearSessionState();
     setIsLoading(false);
   };
 

@@ -10,7 +10,11 @@ export async function POST(req: NextRequest) {
   const sessionCookie = req.cookies.get(AuthStore.cookieName)?.value;
   AuthStore.revokeSession(sessionCookie);
 
-  const response = NextResponse.json({ ok: true });
+  const response = NextResponse.json({
+    success: true,
+    ok: true,
+    message: 'Sessao encerrada com sucesso.',
+  });
   response.cookies.set(AuthStore.cookieName, '', {
     httpOnly: true,
     sameSite: 'lax',

@@ -170,6 +170,9 @@ test('logout invalida a sessao', async () => {
     headers: { cookie: ownerCookie, 'x-csrf-token': ownerCsrf },
   }));
   assert.equal(logout.status, 200);
+  const logoutBody = await asJson(logout);
+  assert.equal(logoutBody.success, true);
+  assert.equal(logoutBody.message, 'Sessao encerrada com sucesso.');
   const sessionsAfter = readJsonFile(path.join(tmpRoot, 'auth', 'sessions.json'));
   assert.equal(sessionsAfter.length, sessionsBefore.length);
   const revoked = sessionsAfter.find((session) => session.sessionIdHash === targetHash);
@@ -179,6 +182,9 @@ test('logout invalida a sessao', async () => {
     headers: { cookie: ownerCookie },
   }));
   assert.equal(me.status, 401);
+  const meBody = await asJson(me);
+  assert.equal(meBody.authenticated, false);
+  assert.equal(meBody.user, null);
 });
 
 test('usuario inativo nao loga', async () => {

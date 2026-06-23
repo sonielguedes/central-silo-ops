@@ -246,8 +246,11 @@ export function HeaderActions() {
     setProfileOpen(false);
     setCompanyOpen(false);
     setPasswordOpen(false);
-    await logout();
-    window.location.replace('/login');
+    try {
+      await logout();
+    } finally {
+      window.location.replace('/login');
+    }
   }, [logout]);
 
   const markRead = async (ids?: string[]) => {

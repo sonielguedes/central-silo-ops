@@ -80,12 +80,10 @@ export async function middleware(req: NextRequest) {
 
   const valid = await verifySessionCookie(cookieValue);
   if (!valid) {
-    // Cookie adulterado → redirecionar e limpar cookie corrompido
+    // Cookie adulterado → redirecionar sem efeito colateral de logout global
     const loginUrl = new URL('/login', req.url);
     loginUrl.searchParams.set('next', pathname);
-    const response = NextResponse.redirect(loginUrl);
-    response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
-    return response;
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
