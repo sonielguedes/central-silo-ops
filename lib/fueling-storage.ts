@@ -15,7 +15,7 @@ export interface FuelingRecord {
   pumpCode?: string;
   equipmentId: string;
   dieselLiters: number;
-  hourmeter: number;
+  hourmeter?: number | null;
   fuelType?: string;
   fleetDescription?: string;
   gpsLatitude?: number;
@@ -25,7 +25,7 @@ export interface FuelingRecord {
   operationCode?: string;
   targetFleetCode?: string;
   deviceId?: string;
-  odometer?: number;
+  odometer?: number | null;
   durationSeconds?: number;
   averageFlowLitersPerMinute?: number;
   journeyId?: string;
@@ -42,7 +42,7 @@ export interface FuelingRecordInput {
   fleetCode: string;
   truckFleetCode?: string;
   dieselLiters: number;
-  hourmeter: number;
+  hourmeter?: number | null;
   fuelType?: string;
   fleetDescription?: string;
   gpsLatitude?: number;
@@ -53,7 +53,7 @@ export interface FuelingRecordInput {
   targetFleetCode?: string;
   pumpCode?: string;
   deviceId?: string;
-  odometer?: number;
+  odometer?: number | null;
   durationSeconds?: number;
   averageFlowLitersPerMinute?: number;
   journeyId?: string;
