@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -41,13 +41,6 @@ export default function MapInner() {
     { id: 'CAM-08', pos: [-12.5530, -55.7180] as [number, number], status: 'stopped' },
   ];
 
-  const fieldBoundary: [number, number][] = [
-    [-12.5510, -55.7300],
-    [-12.5510, -55.7150],
-    [-12.5650, -55.7150],
-    [-12.5650, -55.7300],
-    [-12.5510, -55.7300],
-  ];
 
   return (
     <div className="w-full h-full min-h-[450px]">
@@ -69,9 +62,6 @@ export default function MapInner() {
           url="https://stamen-tiles-{s}.a.ssl.fastly.net/toner-labels/{z}/{y}/{x}.png"
           opacity={0.5}
         />
-
-        {/* Polígono do Talhão */}
-        <Polyline positions={fieldBoundary} color="#10b981" weight={2} dashArray="5, 10" />
 
         {/* Máquinas no Mapa */}
         {machines.map((m) => (
