@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { cn } from '@/lib/utils';
 import type { IntegrationJob, IntegrationLog } from '@/lib/integrations/integration-job-types';
 import type { TotvsMapping, TotvsMappingStatus, TotvsMappingType, TotvsValidationResult, TotvsValidationTargetDataType } from '@/lib/integrations/totvs';
+import { translateMappingTypeLabel, translateStatusLabel, translateValidationTargetLabel } from '@/lib/ui/status-labels';
 
 type TabKey = 'mappings' | 'validate' | 'results' | 'jobs' | 'logs';
 
@@ -16,7 +17,10 @@ const mappingStatuses: TotvsMappingStatus[] = ['ACTIVE', 'INACTIVE', 'PENDING_RE
 const validationTargets: TotvsValidationTargetDataType[] = ['FICHA_OPERADOR', 'FUEL_JOURNEY', 'FUELINGS'];
 
 function titleCase(value: string) {
-  return value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (s) => s.toUpperCase());
+  return translateValidationTargetLabel(value)
+    || translateMappingTypeLabel(value)
+    || translateStatusLabel(value)
+    || value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (s) => s.toUpperCase());
 }
 
 function fmt(value?: string | null) {
@@ -199,7 +203,7 @@ export function TotvsPage() {
                 <table className="w-full text-left text-sm">
                   <thead className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground"><tr><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">SILO</th><th className="px-4 py-3">TOTVS</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Ações</th></tr></thead>
                   <tbody>
-                    {mappings.length === 0 ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>Nenhum mapeamento encontrado.</td></tr> : mappings.map((item) => <tr key={item.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(item.type)}</td><td className="px-4 py-3">{item.siloCode}</td><td className="px-4 py-3">{item.totvsCode}</td><td className="px-4 py-3">{item.status}</td><td className="px-4 py-3"><button onClick={() => { setEditing(item); setForm({ type: item.type, siloCode: item.siloCode, siloName: item.siloName ?? '', totvsCode: item.totvsCode, totvsName: item.totvsName ?? '', description: item.description ?? '', status: item.status }); }} className="mr-3 text-cyan-200">Editar</button><button onClick={() => archive(item.id)} className="text-amber-200">Inativar</button></td></tr>)}
+                    {mappings.length === 0 ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>Nenhum mapeamento encontrado.</td></tr> : mappings.map((item) => <tr key={item.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(item.type)}</td><td className="px-4 py-3">{item.siloCode}</td><td className="px-4 py-3">{item.totvsCode}</td><td className="px-4 py-3">{titleCase(item.status)}</td><td className="px-4 py-3"><button onClick={() => { setEditing(item); setForm({ type: item.type, siloCode: item.siloCode, siloName: item.siloName ?? '', totvsCode: item.totvsCode, totvsName: item.totvsName ?? '', description: item.description ?? '', status: item.status }); }} className="mr-3 text-cyan-200">Editar</button><button onClick={() => archive(item.id)} className="text-amber-200">Inativar</button></td></tr>)}
                   </tbody>
                 </table>
               </div>
@@ -215,7 +219,7 @@ export function TotvsPage() {
                 <input type="date" value={validateForm.periodEnd} onChange={(e) => setValidateForm((p) => ({ ...p, periodEnd: e.target.value }))} className="rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm" />
                 <input value={validateForm.fleetCode} onChange={(e) => setValidateForm((p) => ({ ...p, fleetCode: e.target.value }))} placeholder="Frota" className="rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm" />
                 <input value={validateForm.operatorRegistration} onChange={(e) => setValidateForm((p) => ({ ...p, operatorRegistration: e.target.value }))} placeholder="Operador" className="rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm" />
-                <input value={validateForm.journeyId} onChange={(e) => setValidateForm((p) => ({ ...p, journeyId: e.target.value }))} placeholder="Journey" className="rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm" />
+                <input value={validateForm.journeyId} onChange={(e) => setValidateForm((p) => ({ ...p, journeyId: e.target.value }))} placeholder="Jornada" className="rounded-xl border border-[#2d3647] bg-[#050812] px-3 py-2 text-sm" />
               </div>
               <button disabled={busy} onClick={runValidation} className="mt-4 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-[#03140d]">Executar pré-validação</button>
             </section>
@@ -227,7 +231,7 @@ export function TotvsPage() {
                 <table className="w-full text-left text-sm">
                   <thead className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground"><tr><th className="px-4 py-3">Status</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">Período</th><th className="px-4 py-3">Fontes</th><th className="px-4 py-3">Alertas</th></tr></thead>
                   <tbody>
-                    {results.length === 0 ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>Nenhum resultado encontrado.</td></tr> : results.map((item) => <tr key={item.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{item.status}</td><td className="px-4 py-3">{item.targetDataType}</td><td className="px-4 py-3">{item.periodStart} → {item.periodEnd}</td><td className="px-4 py-3">{item.sources.join(', ') || '—'}</td><td className="px-4 py-3">{item.issues.length}</td></tr>)}
+                    {results.length === 0 ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>Nenhum resultado encontrado.</td></tr> : results.map((item) => <tr key={item.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(item.status)}</td><td className="px-4 py-3">{titleCase(item.targetDataType)}</td><td className="px-4 py-3">{item.periodStart} → {item.periodEnd}</td><td className="px-4 py-3">{item.sources.join(', ') || '—'}</td><td className="px-4 py-3">{item.issues.length}</td></tr>)}
                   </tbody>
                 </table>
               </div>
@@ -240,7 +244,7 @@ export function TotvsPage() {
                 <table className="w-full text-left text-sm">
                   <thead className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground"><tr><th className="px-4 py-3">Status</th><th className="px-4 py-3">Título</th><th className="px-4 py-3">Criado</th></tr></thead>
                   <tbody>
-                    {jobs.length === 0 ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={3}>Nenhum job encontrado.</td></tr> : jobs.map((item) => <tr key={item.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{item.status}</td><td className="px-4 py-3">{item.title}</td><td className="px-4 py-3">{fmt(item.createdAt)}</td></tr>)}
+                    {jobs.length === 0 ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={3}>Nenhum job encontrado.</td></tr> : jobs.map((item) => <tr key={item.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(item.status)}</td><td className="px-4 py-3">{item.title}</td><td className="px-4 py-3">{fmt(item.createdAt)}</td></tr>)}
                   </tbody>
                 </table>
               </div>

@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import type { PimsMapping, PimsMappingStatus, PimsMappingType, PimsValidationResult, PimsValidationTargetDataType } from '@/lib/integrations/pims/pims-mapping-types';
 import type { IntegrationConfigPublic } from '@/lib/integrations/integration-config-types';
 import type { PimsDispatch } from '@/lib/integrations/pims/pims-dispatch-types';
+import { translateMappingTypeLabel, translateStatusLabel, translateValidationTargetLabel } from '@/lib/ui/status-labels';
 
 type TabKey = 'mappings' | 'validate' | 'results' | 'dispatches';
 
@@ -17,7 +18,10 @@ const mappingStatuses: PimsMappingStatus[] = ['ACTIVE', 'INACTIVE', 'PENDING_REV
 const validationTargets: PimsValidationTargetDataType[] = ['FICHA_OPERADOR', 'JOURNEY', 'STOP_EVENTS', 'FULL_OPERATIONAL_PACKAGE'];
 
 function titleCase(value: string) {
-  return value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (s) => s.toUpperCase());
+  return translateValidationTargetLabel(value)
+    || translateMappingTypeLabel(value)
+    || translateStatusLabel(value)
+    || value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (s) => s.toUpperCase());
 }
 
 function fmt(value?: string | null) {
@@ -172,7 +176,7 @@ export function PimsPage() {
                 <table className="w-full text-left text-sm">
                   <thead className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground"><tr><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">Código SILO</th><th className="px-4 py-3">Nome SILO</th><th className="px-4 py-3">Código PIMS</th><th className="px-4 py-3">Nome PIMS</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Atualizado em</th><th className="px-4 py-3">Ações</th></tr></thead>
                   <tbody>
-                    {mappings.map((m) => <tr key={m.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(m.type)}</td><td className="px-4 py-3">{m.siloCode}</td><td className="px-4 py-3">{m.siloName ?? '—'}</td><td className="px-4 py-3">{m.pimsCode}</td><td className="px-4 py-3">{m.pimsName ?? '—'}</td><td className="px-4 py-3">{m.status}</td><td className="px-4 py-3">{fmt(m.updatedAt)}</td><td className="px-4 py-3"><button onClick={() => { setEditing(m); setForm({ type: m.type, siloCode: m.siloCode, siloName: m.siloName ?? '', pimsCode: m.pimsCode, pimsName: m.pimsName ?? '', description: m.description ?? '', status: m.status }); }} className="mr-2 text-cyan-200">Editar</button><button onClick={() => inactivate(m.id)} className="text-amber-200">Inativar</button></td></tr>)}
+                    {mappings.map((m) => <tr key={m.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(m.type)}</td><td className="px-4 py-3">{m.siloCode}</td><td className="px-4 py-3">{m.siloName ?? '—'}</td><td className="px-4 py-3">{m.pimsCode}</td><td className="px-4 py-3">{m.pimsName ?? '—'}</td><td className="px-4 py-3">{titleCase(m.status)}</td><td className="px-4 py-3">{fmt(m.updatedAt)}</td><td className="px-4 py-3"><button onClick={() => { setEditing(m); setForm({ type: m.type, siloCode: m.siloCode, siloName: m.siloName ?? '', pimsCode: m.pimsCode, pimsName: m.pimsName ?? '', description: m.description ?? '', status: m.status }); }} className="mr-2 text-cyan-200">Editar</button><button onClick={() => inactivate(m.id)} className="text-amber-200">Inativar</button></td></tr>)}
                   </tbody>
                 </table>
               </div>
@@ -198,7 +202,7 @@ export function PimsPage() {
               </div>
               <button disabled={busy} onClick={runValidation} className="mt-4 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-[#03140d]">Validar para PIMS</button>
               <button disabled={busy} onClick={runDispatch} className="mt-4 ml-3 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-[#03111f]">Enviar para Homologação</button>
-              {active && <div className="mt-4 rounded-2xl border border-[#2d3647] bg-[#050812] p-4"><p className="text-sm font-bold">{active.status}</p><p className="text-xs text-muted-foreground">{active.issues.length} alerta(s)</p></div>}
+              {active && <div className="mt-4 rounded-2xl border border-[#2d3647] bg-[#050812] p-4"><p className="text-sm font-bold">{titleCase(active.status)}</p><p className="text-xs text-muted-foreground">{active.issues.length} alerta(s)</p></div>}
             </section>
           )}
 
@@ -207,7 +211,7 @@ export function PimsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground"><tr><th className="px-4 py-3">Status</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">Frota</th><th className="px-4 py-3">Operador</th><th className="px-4 py-3">Data</th><th className="px-4 py-3">Problemas</th></tr></thead>
-                  <tbody>{results.map((r) => <tr key={r.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{r.status}</td><td className="px-4 py-3">{r.targetDataType}</td><td className="px-4 py-3">{r.fleetCode ?? '—'}</td><td className="px-4 py-3">{r.operatorRegistration ?? '—'}</td><td className="px-4 py-3">{fmt(r.checkedAt)}</td><td className="px-4 py-3">{r.issues.length}</td></tr>)}</tbody>
+                  <tbody>{results.map((r) => <tr key={r.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(r.status)}</td><td className="px-4 py-3">{titleCase(r.targetDataType)}</td><td className="px-4 py-3">{r.fleetCode ?? '—'}</td><td className="px-4 py-3">{r.operatorRegistration ?? '—'}</td><td className="px-4 py-3">{fmt(r.checkedAt)}</td><td className="px-4 py-3">{r.issues.length}</td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -218,7 +222,7 @@ export function PimsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground"><tr><th className="px-4 py-3">Status</th><th className="px-4 py-3">Período</th><th className="px-4 py-3">Config</th><th className="px-4 py-3">Registros</th><th className="px-4 py-3">Erro</th></tr></thead>
-                  <tbody>{dispatches.map((d) => <tr key={d.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{d.status}</td><td className="px-4 py-3">{d.periodStart} → {d.periodEnd}</td><td className="px-4 py-3">{d.configId ?? '—'}</td><td className="px-4 py-3">{d.payloadSummary?.recordCount ?? 0}</td><td className="px-4 py-3">{d.lastErrorMessage ?? '—'}</td></tr>)}</tbody>
+                  <tbody>{dispatches.map((d) => <tr key={d.id} className="border-t border-[#2d3647]/50"><td className="px-4 py-3">{titleCase(d.status)}</td><td className="px-4 py-3">{d.periodStart} → {d.periodEnd}</td><td className="px-4 py-3">{d.configId ?? '—'}</td><td className="px-4 py-3">{d.payloadSummary?.recordCount ?? 0}</td><td className="px-4 py-3">{d.lastErrorMessage ?? '—'}</td></tr>)}</tbody>
                 </table>
               </div>
             </section>

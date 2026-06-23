@@ -38,6 +38,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/context/auth-context';
 import { canAccessRoute } from '@/lib/auth/rbac-shared';
 import { DEMO_BADGE_LABEL, IS_DEMO_ENV } from '@/lib/environment';
+import { translateUiLabel } from '@/lib/ui/labels';
 import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
@@ -58,7 +59,7 @@ interface MenuGroup {
 
 const menuItems: MenuGroup[] = [
   { group: 'Monitoramento', items: [
-    { icon: LayoutDashboard, label: 'Dashboard',         href: '/dashboard' },
+    { icon: LayoutDashboard, label: translateUiLabel('Dashboard'),         href: '/dashboard' },
     { icon: MapIcon,         label: 'Mapa Operacional',  href: '/mapa-operacional' },
     { icon: Activity,        label: 'Conectividade',     href: '/monitoramento/conectividade' },
   ]},
@@ -106,7 +107,7 @@ const menuItems: MenuGroup[] = [
     { icon: FileDown,   label: 'Exportações',        href: '/integracoes/exportacoes' },
     { icon: Clock3,     label: 'Jobs de Integração', href: '/integracoes/jobs' },
     { icon: ScrollText, label: 'Logs de Integração', href: '/integracoes/logs' },
-    { icon: Settings2,  label: 'Configurações API',  href: '/integracoes/configuracoes-api' },
+    { icon: Settings2,  label: 'Configurações da API',  href: '/integracoes/configuracoes-api' },
   ]},
   { group: 'Administração', items: [
     { icon: Building2,   label: 'Empresas',        href: '/administracao/empresas' },
@@ -174,8 +175,8 @@ export function Sidebar({ className }: SidebarProps) {
           <div>
             <p className="text-xs font-black italic tracking-tighter text-white uppercase leading-none">SILO <span className="text-primary">OPS</span></p>
             <p className="text-[8px] text-muted-foreground font-bold mt-1 uppercase">
-              {isAuthenticated ? userRole.replace('_', ' ') : 'SILO OPS Central'}
-            </p>
+            {isAuthenticated ? userRole.replace('_', ' ') : 'SILO OPS Central'}
+          </p>
             {IS_DEMO_ENV && (
               <span className="mt-2 inline-flex text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
                 {DEMO_BADGE_LABEL}

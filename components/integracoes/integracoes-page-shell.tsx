@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
 import { cn } from '@/lib/utils';
+import { translateIntegrationLabel, translateUiLabel } from '@/lib/ui/labels';
 
 interface IntegracoesPageShellProps {
   title: string;
@@ -80,7 +81,7 @@ export function IntegracoesPageShell({ title, subtitle, integrationName }: Integ
               className="inline-flex items-center gap-2 rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white opacity-70"
             >
               <Settings2 size={14} />
-              Configurar
+              {translateUiLabel('Configure')}
             </button>
           </PageHeader>
 
@@ -88,7 +89,7 @@ export function IntegracoesPageShell({ title, subtitle, integrationName }: Integ
             <div className="flex items-start gap-3">
               <Sparkles size={18} className="mt-0.5 text-cyan-300" />
               <div>
-                <p className="text-xs font-black uppercase tracking-widest text-cyan-200">Integração em preparação</p>
+                <p className="text-xs font-black uppercase tracking-widest text-cyan-200">{translateIntegrationLabel('Integration')} em preparação</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-cyan-100/80">
                   A base visual já está pronta. A execução real entra depois, sem misturar dados entre empresas.
                 </p>
@@ -97,26 +98,26 @@ export function IntegracoesPageShell({ title, subtitle, integrationName }: Integ
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={<Database size={18} />} label="Status" value="Estrutura pronta" tone="cyan" />
-            <MetricCard icon={<Clock3 size={18} />} label="Fila" value="Aguardando" tone="amber" />
+            <MetricCard icon={<Database size={18} />} label={translateUiLabel('Status')} value="Estrutura pronta" tone="cyan" />
+            <MetricCard icon={<Clock3 size={18} />} label={translateUiLabel('Queue')} value="Aguardando" tone="amber" />
             <MetricCard icon={<ShieldCheck size={18} />} label="Acesso" value="Tenant isolado" tone="emerald" />
-            <MetricCard icon={<AlertTriangle size={18} />} label="Observações" value="Sem execução real" />
+            <MetricCard icon={<AlertTriangle size={18} />} label={translateUiLabel('Warning')} value="Sem execução real" />
           </div>
 
           <div className="mt-6 overflow-hidden rounded-3xl border border-[#2d3647] bg-[#0a0e27]/70">
             <div className="border-b border-[#2d3647] px-5 py-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">
-                {integrationName} - tabela placeholder
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">
+                {integrationName} - tabela provisória
               </p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
                   <tr className="border-b border-[#2d3647]">
-                    <th className="px-4 py-3">Evento</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Detalhe</th>
-                    <th className="px-4 py-3">Ação</th>
+                    <th className="px-4 py-3">{translateUiLabel('Type')}</th>
+                    <th className="px-4 py-3">{translateUiLabel('Status')}</th>
+                    <th className="px-4 py-3">{translateUiLabel('Details')}</th>
+                    <th className="px-4 py-3">{translateUiLabel('Actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
