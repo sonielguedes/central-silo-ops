@@ -141,7 +141,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'configuracoes', actions: CRUD },
     { module: 'sincronizacao', actions: ['visualizar', 'editar'] },
     { module: 'combustivel', actions: CRUD_EXPORT },
-    { module: 'integracoes', actions: READ_EXPORT },
+    { module: 'integracoes', actions: CRUD_EXPORT },
   ],
   SUPORTE: [
     { module: 'integracoes', actions: FULL },
@@ -157,7 +157,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'cadastros', actions: ALL_READ },
     { module: 'sincronizacao', actions: ALL_READ },
     { module: 'combustivel', actions: READ_EXPORT },
-    { module: 'integracoes', actions: READ_EXPORT },
+    { module: 'integracoes', actions: CRUD_EXPORT },
   ],
   COA: [
     { module: 'dashboard', actions: ALL_READ },
