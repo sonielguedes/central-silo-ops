@@ -450,4 +450,142 @@ describe('POST /api/mobile/fuel/events/batch', () => {
       errors: [],
     });
   });
+
+  it('accepts FUEL_SUPPLY with ONLY odometer', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-odo-only',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            fleetCode: '1401',
+            liters: 1.0,
+            hourmeter: null,
+            odometer: 55890.0,
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.synced).toBe(1);
+  });
+
+  it('accepts FUEL_SUPPLY with ONLY hourmeter', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-hour-only',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            fleetCode: '100',
+            liters: 115.0,
+            hourmeter: 13.4,
+            odometer: null,
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.synced).toBe(1);
+  });
+
+  it('rejects FUEL_SUPPLY with hourmeter = 0 and odometer = null', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-hour-zero',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            fleetCode: '1401',
+            liters: 1.0,
+            hourmeter: 0,
+            odometer: null,
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects FUEL_SUPPLY with hourmeter = null and odometer = 0', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-odo-zero',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            fleetCode: '1401',
+            liters: 1.0,
+            hourmeter: null,
+            odometer: 0,
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects FUEL_SUPPLY with hourmeter = 0 and odometer = 0', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-both-zero',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            fleetCode: '1401',
+            liters: 1.0,
+            hourmeter: 0,
+            odometer: 0,
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects FUEL_SUPPLY with NEITHER hourmeter NOR odometer', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-invalid',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            fleetCode: '1401',
+            liters: 1.0,
+            hourmeter: null,
+            odometer: null,
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.errors[0].error).toContain('hourmeter ou odometer validos');
+  });
 });

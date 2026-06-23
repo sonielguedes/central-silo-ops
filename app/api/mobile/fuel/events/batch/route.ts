@@ -228,11 +228,23 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
+        const fleetCode = asString(payload.fleetCode);
         const liters = asFiniteNumber(payload.liters);
         const hourmeter = asFiniteNumber(payload.hourmeter);
-        const fleetCode = asString(payload.fleetCode);
-        if (!fleetCode || liters == null || hourmeter == null || liters <= 0 || hourmeter <= 0) {
-          return fail(400, 'Payload invalido', { errors: [{ offlineId, error: 'FUEL_SUPPLY requer fleetCode, liters e hourmeter validos' }] });
+        const odometer = asFiniteNumber(payload.odometer);
+
+        const hasFleetCode = typeof fleetCode === 'string' && fleetCode.trim().length > 0;
+        const hasLiters = typeof liters === 'number' && Number.isFinite(liters) && liters > 0;
+        const hasHourmeter = typeof hourmeter === 'number' && Number.isFinite(hourmeter) && hourmeter > 0;
+        const hasOdometer = typeof odometer === 'number' && Number.isFinite(odometer) && odometer > 0;
+
+        if (!hasFleetCode || !hasLiters || (!hasHourmeter && !hasOdometer)) {
+          return fail(400, 'Payload invalido', {
+            errors: [{
+              offlineId,
+              error: 'FUEL_SUPPLY requer fleetCode, liters e hourmeter ou odometer validos'
+            }]
+          });
         }
 
         const saveResult = FuelingStorage.save({
@@ -243,11 +255,11 @@ export async function POST(req: NextRequest) {
           truckFleetCode: asString(payload.pumpCode ?? bodyDeviceId),
           pumpCode: asString(payload.pumpCode),
           dieselLiters: liters,
-          hourmeter,
+          hourmeter: hasHourmeter ? hourmeter : null,
           fuelType: asString(payload.fuelType),
           fleetDescription: asString(payload.fleetDescription),
           operatorName: asString(payload.operatorName),
-          odometer: asFiniteNumber(payload.odometer),
+          odometer: hasOdometer ? odometer : null,
           durationSeconds: asFiniteNumber(payload.durationSeconds),
           averageFlowLitersPerMinute: asFiniteNumber(payload.averageFlowLitersPerMinute),
           journeyId: asString(payload.journeyId),
