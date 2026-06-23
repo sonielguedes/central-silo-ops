@@ -41,17 +41,17 @@ const TARGET_LABELS: Record<ExportTargetSystem, string> = {
 };
 
 const TYPE_LABELS: Record<ExportDataType, string> = {
-  FICHA_OPERADOR: 'Ficha Operador',
-  JOURNEYS: 'Journeys',
-  STOP_EVENTS: 'Stop Events',
+  FICHA_OPERADOR: 'Ficha do Operador',
+  JOURNEYS: 'Jornadas do Comboio',
+  STOP_EVENTS: 'Eventos de Parada',
   HOURMETERS: 'Horímetros',
-  FUELINGS: 'Fuelings',
+  FUELINGS: 'Abastecimentos',
   EQUIPMENTS: 'Equipamentos',
   OPERATORS: 'Operadores',
   OPERATIONS: 'Operações',
   COST_CENTERS: 'Centros de Custo',
   IMPLEMENTS: 'Implementos',
-  FULL_OPERATIONAL_PACKAGE: 'Pacote Operacional',
+  FULL_OPERATIONAL_PACKAGE: 'Pacote Operacional Completo',
 };
 
 const FORMAT_LABELS: Record<ExportFormat, string> = {
@@ -315,7 +315,7 @@ export function ExportacoesPage() {
                             Ver detalhes
                           </button>
                           <button type="button" disabled={saving || item.status !== 'SUCCESS' || !item.fileName} onClick={() => window.location.assign(`/api/integracoes/exportacoes/${item.id}/download`)} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-cyan-200 disabled:opacity-40">
-                            Download
+                            Baixar
                           </button>
                           <button type="button" disabled={saving || !['PENDING', 'PROCESSING'].includes(item.status)} onClick={() => void mutate(`/api/integracoes/exportacoes/${item.id}/cancel`)} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-200 disabled:opacity-40">
                             Cancelar
