@@ -47,22 +47,22 @@ type Step = 1 | 2 | 3 | 4 | 5;
 
 // --- Constants ---
 const REPORT_TYPES = [
-  { id: 'HOURS', label: 'Horas Operacionais', icon: Clock, description: 'AnÃ¡lise de utilizaÃ§Ã£o de motor e trabalho.' },
-  { id: 'EFFICIENCY', label: 'EficiÃªncia Operacional', icon: TrendingUp, description: 'RelaÃ§Ã£o entre tempo produtivo e improdutivo.' },
+  { id: 'HOURS', label: 'Horas Operacionais', icon: Clock, description: 'Análise de utilização de motor e trabalho.' },
+  { id: 'EFFICIENCY', label: 'Eficiência Operacional', icon: TrendingUp, description: 'Relação entre tempo produtivo e improdutivo.' },
   { id: 'STOPS', label: 'Motivos de Parada', icon: AlertCircle, description: 'Gargalos e causas de indisponibilidade.' },
-  { id: 'SUPPLY', label: 'Abastecimentos', icon: Database, description: 'Consumo de combustÃ­vel e indicadores L/h.' },
-  { id: 'CHECKLIST', label: 'Checklists', icon: CheckCircle2, description: 'Conformidade tÃ©cnica prÃ©-operacional.' },
-  { id: 'OPERATIONS', label: 'Atividades', icon: Play, description: 'Rastro de execuÃ§Ãµes no campo.' },
-  { id: 'PRODUCTION', label: 'ProduÃ§Ã£o', icon: BarChart3, description: 'Volume colhido ou Ã¡rea trabalhada.' },
-  { id: 'TIMELINE', label: 'Linha do Tempo', icon: History, description: 'VisÃ£o sequencial de eventos.' },
-  { id: 'MAP', label: 'RelatÃ³rios GeogrÃ¡ficos', icon: MapPin, description: 'Mapas de calor e rastro GPS.' },
-  { id: 'RANKING', label: 'Ranking', icon: Star, description: 'Benchmarks de operadores e mÃ¡quinas.' },
+  { id: 'SUPPLY', label: 'Abastecimentos', icon: Database, description: 'Consumo de combustível e indicadores L/h.' },
+  { id: 'CHECKLIST', label: 'Checklists', icon: CheckCircle2, description: 'Conformidade técnica pré-operacional.' },
+  { id: 'OPERATIONS', label: 'Atividades', icon: Play, description: 'Rastro de execuções no campo.' },
+  { id: 'PRODUCTION', label: 'Produção', icon: BarChart3, description: 'Volume colhido ou área trabalhada.' },
+  { id: 'TIMELINE', label: 'Linha do Tempo', icon: History, description: 'Visão sequencial de eventos.' },
+  { id: 'MAP', label: 'Relatórios Geográficos', icon: MapPin, description: 'Mapas de calor e rastro GPS.' },
+  { id: 'RANKING', label: 'Ranking', icon: Star, description: 'Benchmarks de operadores e máquinas.' },
 ];
 
 const MODELS: Record<string, string[]> = {
-  HOURS: ['Por Equipamento', 'Por Operador', 'Por Frente', 'Por Fazenda/TalhÃ£o', 'Resumido', 'Detalhado'],
-  EFFICIENCY: ['KPI Global', 'Comparativo MÃ¡quinas', 'EvoluÃ§Ã£o Semanal'],
-  STOPS: ['Top 10 Motivos', 'DuraÃ§Ã£o por Categoria', 'Eventos CrÃ­ticos'],
+  HOURS: ['Por Equipamento', 'Por Operador', 'Por Frente', 'Por Fazenda/Talhão', 'Resumido', 'Detalhado'],
+  EFFICIENCY: ['KPI Global', 'Comparativo Máquinas', 'Evolução Semanal'],
+  STOPS: ['Top 10 Motivos', 'Duração por Categoria', 'Eventos Críticos'],
 };
 
 function ReportsPage() {
@@ -102,8 +102,8 @@ function ReportsPage() {
         <Header />
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
           <PageHeader
-            title="SILO OPS / RelatÃ³rios"
-            description="Motor de anÃ¡lise e exportaÃ§Ã£o de dados operacionais."
+            title="SILO OPS / Relatórios"
+            description="Motor de análise e exportação de dados operacionais."
           />
           <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
@@ -175,15 +175,15 @@ function ReportsPage() {
              {step === 3 && (
                <div className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-[40px] p-10 shadow-2xl relative overflow-hidden">
                  <div className="absolute top-0 right-0 p-10 opacity-5"><Filter size={120} /></div>
-                 <h2 className="text-xl font-black italic tracking-tighter uppercase text-primary mb-8">ParÃ¢metros de GeraÃ§Ã£o</h2>
+                 <h2 className="text-xl font-black italic tracking-tighter uppercase text-primary mb-8">Parâmetros de Geração</h2>
 
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">PerÃ­odo Inicial</label>
+                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Período Inicial</label>
                        <div className="relative"><Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={16} /><input type="date" className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-2xl p-4 pl-12 text-sm focus:border-primary outline-none" /></div>
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">PerÃ­odo Final</label>
+                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Período Final</label>
                        <div className="relative"><Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={16} /><input type="date" className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-2xl p-4 pl-12 text-sm focus:border-primary outline-none" /></div>
                     </div>
                     <div className="space-y-2">
@@ -200,7 +200,7 @@ function ReportsPage() {
 
                  <div className="flex justify-between items-center pt-6 border-t border-[#2d3647]">
                    <button onClick={handleBack} className="flex items-center gap-2 text-xs font-black uppercase text-muted-foreground hover:text-white"><ChevronLeft size={16} /> Voltar</button>
-                   <button onClick={handleNext} className="bg-primary text-[#0a0e27] px-10 py-4 rounded-2xl font-black italic tracking-tighter uppercase shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">Gerar PrÃ©via <TrendingUp size={18} /></button>
+                   <button onClick={handleNext} className="bg-primary text-[#0a0e27] px-10 py-4 rounded-2xl font-black italic tracking-tighter uppercase shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">Gerar Prévia <TrendingUp size={18} /></button>
                  </div>
                </div>
              )}
@@ -211,7 +211,7 @@ function ReportsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                      <PreviewCard label="Registros" value="1.240" />
                      <PreviewCard label="Horas Totais" value="480.5h" color="text-primary" />
-                     <PreviewCard label="EficiÃªncia MÃ©dia" value="84%" />
+                     <PreviewCard label="Eficiência Média" value="84%" />
                      <PreviewCard label="Integridade" value="100%" color="text-emerald-500" />
                   </div>
 
@@ -230,7 +230,7 @@ function ReportsPage() {
 
                   <div className="flex justify-between items-center mt-10">
                     <button onClick={handleBack} className="flex items-center gap-2 text-xs font-black uppercase text-muted-foreground hover:text-white"><ChevronLeft size={16} /> Voltar</button>
-                    <button onClick={handleNext} className="bg-primary text-[#0a0e27] px-10 py-4 rounded-2xl font-black italic tracking-tighter uppercase shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">Configurar ExportaÃ§Ã£o <Download size={18} /></button>
+                    <button onClick={handleNext} className="bg-primary text-[#0a0e27] px-10 py-4 rounded-2xl font-black italic tracking-tighter uppercase shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">Configurar Exportação <Download size={18} /></button>
                   </div>
                </div>
              )}
@@ -241,8 +241,8 @@ function ReportsPage() {
                   <div className="w-24 h-24 rounded-[40px] bg-primary/10 flex items-center justify-center text-primary mb-8 border-2 border-primary/20 shadow-2xl shadow-primary/10">
                      <FileDown size={48} />
                   </div>
-                  <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white mb-4">RelatÃ³rio Pronto!</h2>
-                  <p className="text-muted-foreground text-sm uppercase font-bold tracking-widest mb-12">Selecione o formato de saÃ­da para processamento.</p>
+                  <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white mb-4">Relatório Pronto!</h2>
+                  <p className="text-muted-foreground text-sm uppercase font-bold tracking-widest mb-12">Selecione o formato de saída para processamento.</p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-3xl">
                      <ExportButton label="Excel (XLSX)" icon={<FileText className="text-emerald-500" />} onClick={() => handleExport('XLSX')} />
@@ -250,7 +250,7 @@ function ReportsPage() {
                      <ExportButton label="Documento (PDF)" icon={<FileDown className="text-red-500" />} onClick={() => handleExport('PDF')} />
                   </div>
 
-                  <button onClick={() => setStep(1)} className="mt-20 text-xs font-black uppercase text-primary border-b border-primary border-dashed pb-1 hover:brightness-110">Criar Novo RelatÃ³rio</button>
+                  <button onClick={() => setStep(1)} className="mt-20 text-xs font-black uppercase text-primary border-b border-primary border-dashed pb-1 hover:brightness-110">Criar Novo Relatório</button>
                </div>
              )}
           </div>

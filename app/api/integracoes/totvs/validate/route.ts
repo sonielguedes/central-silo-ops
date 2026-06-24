@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       system: 'TOTVS',
       level: 'INFO',
       event: 'TOTVS_VALIDATION_STARTED',
-      message: 'PrÃ©-validaÃ§Ã£o TOTVS iniciada.',
+      message: 'Pré-validação TOTVS iniciada.',
       metadata: { targetDataType: body.targetDataType, periodStart: body.periodStart, periodEnd: body.periodEnd, filters: body.filters, referenceId: body.referenceId },
       createdBy,
     });
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       system: 'TOTVS',
       level: persisted.status === 'SUCCESS' ? 'INFO' : 'WARN',
       event: persisted.status === 'SUCCESS' ? 'TOTVS_VALIDATION_SUCCESS' : 'TOTVS_VALIDATION_WARNING',
-      message: persisted.status === 'SUCCESS' ? 'PrÃ©-validaÃ§Ã£o TOTVS concluÃ­da sem pendÃªncias.' : 'PrÃ©-validaÃ§Ã£o TOTVS concluÃ­da com alertas.',
+      message: persisted.status === 'SUCCESS' ? 'Pré-validação TOTVS concluída sem pendências.' : 'Pré-validação TOTVS concluída com alertas.',
       metadata: { validationResultId: persisted.id, issueCount: persisted.issues.length, targetDataType: persisted.targetDataType },
       createdBy,
     });

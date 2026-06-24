@@ -130,7 +130,7 @@ function TimelinePage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <Header />
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <PageHeader title="Timeline Operacional" description="Rastro CronolÃ³gico de Eventos e Atividades de Frota" />
+          <PageHeader title="Timeline Operacional" description="Rastro Cronológico de Eventos e Atividades de Frota" />
 
           {/* Filters Bar */}
           <div className="bg-[#0a0e27]/60 border border-[#2d3647] p-4 rounded-2xl mb-8 flex flex-wrap gap-4 items-center">
@@ -247,11 +247,11 @@ function TimelinePage() {
                    <div className="text-center py-20 bg-[#0a0e27]/20 rounded-3xl border border-dashed border-[#2d3647]">
                       <History size={48} className="mx-auto mb-4 text-muted-foreground opacity-20" />
                       <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">
-                        {hasAnyFilter ? "Nenhum evento corresponde aos filtros atuais" : "Nenhum evento registrado no perÃ­odo"}
+                        {hasAnyFilter ? "Nenhum evento corresponde aos filtros atuais" : "Nenhum evento registrado no período"}
                       </p>
                       {hasAnyFilter && (
                          <p className="text-[10px] text-muted-foreground/60 mt-2 uppercase font-bold">
-                           Existem eventos no storage, mas os filtros estÃ£o restringindo a visualizaÃ§Ã£o. <br/>
+                           Existem eventos no storage, mas os filtros estão restringindo a visualização. <br/>
                            Tente ajustar a frota, operador ou jornada.
                          </p>
                       )}
@@ -298,10 +298,10 @@ function TimelinePage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                     <InfoItem label="HorÃ¡rio Real" value={selectedEvent.timestamp ? new Date(selectedEvent.timestamp).toLocaleString('pt-BR') : '-'} />
+                     <InfoItem label="Horário Real" value={selectedEvent.timestamp ? new Date(selectedEvent.timestamp).toLocaleString('pt-BR') : '-'} />
                      <InfoItem label="Severidade" value={selectedEvent.severity || 'INFO'} />
                      <InfoItem label="Frota" value={selectedEvent.metadata?.fleetCode || selectedEvent.metadata?.equipmentCode || '-'} />
-                     <InfoItem label="MatrÃ­cula" value={selectedEvent.metadata?.operatorRegistration || selectedEvent.metadata?.registration || '-'} />
+                     <InfoItem label="Matrícula" value={selectedEvent.metadata?.operatorRegistration || selectedEvent.metadata?.registration || '-'} />
                      <InfoItem label="Jornada" value={selectedEvent.metadata?.journeyId || '-'} />
                      <InfoItem label="ID Evento" value={selectedEvent.id} />
                   </div>
