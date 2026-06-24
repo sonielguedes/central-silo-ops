@@ -52,3 +52,9 @@ tsconfig.tsbuildinfo
 *.bak-*
 *.save
 backups/
+
+# VPS local backups
+*.bak
+*.bak-*
+*.save
+backups/
