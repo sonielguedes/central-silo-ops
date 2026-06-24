@@ -85,10 +85,12 @@ function isInconsistent(record: FuelingRecord): boolean {
       record.gpsLongitude === 0
     );
 
+  const hasHourmeter = record.hourmeter != null && Number.isFinite(record.hourmeter) && record.hourmeter > 0;
+  const hasOdometer = record.odometer != null && Number.isFinite(record.odometer) && record.odometer > 0;
+
   return !Number.isFinite(record.dieselLiters) ||
     record.dieselLiters <= 0 ||
-    !Number.isFinite(record.hourmeter) ||
-    record.hourmeter <= 0 ||
+    (!hasHourmeter && !hasOdometer) ||
     hasInvalidGps;
 }
 

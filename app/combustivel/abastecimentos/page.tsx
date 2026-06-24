@@ -67,9 +67,9 @@ function formatLiters(value?: number): string {
   return `${(value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 }
 
-function formatMetric(value?: number): string {
-  if (!Number.isFinite(value ?? NaN)) return '—';
-  return (value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+function formatMetric(value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
 function getOrigin(record: FuelingRecord): OrigemTag {

@@ -113,10 +113,12 @@ function formatLiters(value?: number): string {
 }
 
 function isInconsistent(record: FuelingRecord): boolean {
+  const hasHourmeter = record.hourmeter != null && Number.isFinite(record.hourmeter) && record.hourmeter > 0;
+  const hasOdometer = record.odometer != null && Number.isFinite(record.odometer) && record.odometer > 0;
+
   return !Number.isFinite(record.dieselLiters) ||
     record.dieselLiters <= 0 ||
-    !Number.isFinite(record.hourmeter) ||
-    record.hourmeter <= 0 ||
+    (!hasHourmeter && !hasOdometer) ||
     ((record.gpsLatitude != null || record.gpsLongitude != null) &&
       (
         !Number.isFinite(record.gpsLatitude as number) ||
