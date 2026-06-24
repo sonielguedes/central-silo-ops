@@ -245,11 +245,13 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
     };
 
-    console.info(
-      '[dashboard/summary] tenant=' + tenantId +
-      ' fleet=' + totalFleet + ' online=' + onlineCount +
-      ' ops=' + activeOperations + ' alerts=' + criticalAlerts,
-    );
+    if (process.env.SILO_DEBUG_LOGS === 'true') {
+      console.debug(
+        '[dashboard/summary] tenant=' + tenantId +
+        ' fleet=' + totalFleet + ' online=' + onlineCount +
+        ' ops=' + activeOperations + ' alerts=' + criticalAlerts,
+      );
+    }
 
     return NextResponse.json(summary, {
       headers: { 'Cache-Control': 'no-store' },

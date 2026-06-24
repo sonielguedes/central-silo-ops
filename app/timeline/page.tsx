@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
@@ -46,11 +46,7 @@ function TimelinePage() {
   });
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [filters.equipmentId, filters.fleetCode, filters.journeyId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -76,7 +72,11 @@ function TimelinePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters.equipmentId, filters.fleetCode, filters.journeyId, filters.operatorRegistration]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const filteredEvents = data.filter(evt => {
     if (filters.search) {
