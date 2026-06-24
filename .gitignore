@@ -58,3 +58,6 @@ backups/
 *.bak-*
 *.save
 backups/
+
+# VPS local backup files with date suffix
+*.bak.*
