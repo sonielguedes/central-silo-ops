@@ -46,3 +46,9 @@ node_modules/
 .env*.local
 .idea/
 tsconfig.tsbuildinfo
+
+# VPS local backups
+*.bak
+*.bak-*
+*.save
+backups/
