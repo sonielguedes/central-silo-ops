@@ -67,9 +67,16 @@ function formatLiters(value?: number): string {
   return `${(value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 }
 
-function formatMetric(value?: number | null): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  return value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+function formatMetric(value?: number | string | null): string {
+  if (value === null || value === undefined || value === '') return '—';
+
+  const numericValue = typeof value === 'number'
+    ? value
+    : Number(String(value).replace(',', '.'));
+
+  if (!Number.isFinite(numericValue)) return '—';
+
+  return numericValue.toFixed(1);
 }
 
 function getOrigin(record: FuelingRecord): OrigemTag {
