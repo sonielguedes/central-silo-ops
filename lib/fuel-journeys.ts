@@ -396,6 +396,30 @@ function groupKey(event: JourneyBaseEvent): string {
   return `${event.tenantId}::${event.journeyId}`;
 }
 
+function resolveInconsistencyReasons(input: {
+  orphan: boolean;
+  hasStart: boolean;
+  hasEnd: boolean;
+  comboioFleetCode?: string;
+  syncStatus: FuelJourneySyncStatus;
+  diferenca: number;
+  fuelings: FuelJourneyFuelingItem[];
+  hasDuplicate?: boolean;
+}): string[] {
+  const reasons: string[] = [];
+
+  if (input.orphan) reasons.push('Abastecimento sem jornada vinculada');
+  if (!input.hasStart) reasons.push('Sem evento JOURNEY_START');
+  if (!input.hasEnd) reasons.push('Sem evento JOURNEY_END');
+  if (!clean(input.comboioFleetCode)) reasons.push('Sem comboio informado');
+  if (input.fuelings.length > 0 && input.orphan) reasons.push('FUEL_SUPPLY sem jornada correspondente');
+  if (Math.abs(input.diferenca) >= 0.1) reasons.push('Diferença entre saldo real e saldo teórico');
+  if (input.syncStatus !== 'SYNCED') reasons.push('Sincronismo pendente ou com erro');
+  if (input.hasDuplicate) reasons.push('Jornada ativa duplicada para o mesmo comboio');
+
+  return Array.from(new Set(reasons));
+}
+
 function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
   const base = events[0];
   const start = events.find((event) => event.type === 'JOURNEY_START');
@@ -490,6 +514,18 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
     syncStatus !== 'SYNCED'
   );
 
+  const comboioFleetCode = clean(startPayload.comboioFleetCode) || clean(endPayload.comboioFleetCode) || undefined;
+
+  const inconsistencyReasons = resolveInconsistencyReasons({
+    orphan,
+    hasStart,
+    hasEnd,
+    comboioFleetCode,
+    syncStatus,
+    diferenca,
+    fuelings,
+  });
+
   const startedAt = clean(startPayload.startedAt) || base.occurredAt;
   const finishedAt = clean(endPayload.finishedAt) || (hasEnd ? end?.occurredAt : undefined);
 
@@ -501,7 +537,7 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
     syncStatus,
     calculationMode,
     calculationModeLabel: formatModeLabel(calculationMode ?? '') || undefined,
-    comboioFleetCode: clean(startPayload.comboioFleetCode) || clean(endPayload.comboioFleetCode) || undefined,
+    comboioFleetCode,
     comboioDescription: clean(startPayload.comboioDescription) || clean(endPayload.comboioDescription) || undefined,
     driverRegistration: clean(startPayload.driverRegistration) || clean(endPayload.driverRegistration) || undefined,
     driverName: clean(startPayload.driverName) || clean(endPayload.driverName) || undefined,
@@ -530,6 +566,7 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
     divergent,
     orphan,
     hasDuplicate: false,
+    inconsistencyReasons,
     timeline,
     fuelings,
   };
