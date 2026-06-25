@@ -26,11 +26,19 @@ type JourneySummary = {
   tanqueInicial?: number;
   totalCarregadoPosto?: number;
   totalAbastecidoMaquinas?: number;
+  tankInitialLiters?: number;
+  totalLoadedLiters?: number;
+  totalSuppliedLiters?: number;
+  theoreticalFinalBalanceLiters?: number;
+  realFinalBalanceLiters?: number;
+  divergenceLiters?: number;
+  diferenca?: number;
   saldoFinalAutomatico?: number;
   source?: string;
   status: 'FINALIZADA' | 'ATIVA' | 'INCONSISTENTE';
   syncStatus: 'SYNCED' | 'PENDENTE_SYNC' | 'ERRO_SYNC';
   calculationModeLabel?: string;
+  inconsistencyReasons?: string[];
 };
 
 type JourneyKpis = {
@@ -247,7 +255,7 @@ function JornadasPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#2d3647]">
-                {['Data Início', 'Data Fim', 'Comboio', 'Motorista', 'Turno', 'KM Inicial', 'KM Final', 'Distância', 'Tanque Inicial', 'Total Carregado', 'Total Abastecido', 'Saldo Final', 'Origem', 'Status', 'Ações'].map((h) => (
+                {['Data Início', 'Data Fim', 'Comboio', 'Motorista', 'Turno', 'KM Inicial', 'KM Final', 'Distância', 'Tanque Inicial', 'Total Carregado', 'Total Abastecido', 'Saldo Final', 'Divergência', 'Origem', 'Status', 'Ações'].map((h) => (
                   <th key={h} className="whitespace-nowrap px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">{h}</th>
                 ))}
               </tr>
@@ -255,7 +263,7 @@ function JornadasPage() {
             <tbody>
               {!loading && !hasData ? (
                 <tr>
-                  <td colSpan={15} className="px-4 py-16 text-center">
+                  <td colSpan={16} className="px-4 py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <BadgeInfo size={36} className="opacity-20" />
                       <p className="text-sm font-black text-white/60">Nenhuma jornada encontrada</p>
@@ -273,18 +281,26 @@ function JornadasPage() {
                   <td className="px-4 py-3 text-white/80">{item.kmInicial ?? '—'}</td>
                   <td className="px-4 py-3 text-white/80">{item.kmFinal ?? '—'}</td>
                   <td className="px-4 py-3 text-white/80">{kilometers(item.distanciaPercorrida)}</td>
-                  <td className="px-4 py-3 text-white/80">{money(item.tanqueInicial)}</td>
-                  <td className="px-4 py-3 text-white/80">{money(item.totalCarregadoPosto)}</td>
-                  <td className="px-4 py-3 text-white/80">{money(item.totalAbastecidoMaquinas)}</td>
-                  <td className={`px-4 py-3 font-bold ${((item.saldoFinalAutomatico ?? 0) < 0) ? 'text-red-300' : 'text-white/80'}`}>{money(item.saldoFinalAutomatico)}</td>
+                  <td className="px-4 py-3 text-white/80">{money(item.tanqueInicial ?? item.tankInitialLiters)}</td>
+                  <td className="px-4 py-3 text-white/80">{money(item.totalCarregadoPosto ?? item.totalLoadedLiters)}</td>
+                  <td className="px-4 py-3 text-white/80">{money(item.totalAbastecidoMaquinas ?? item.totalSuppliedLiters)}</td>
+                  <td className={`px-4 py-3 font-bold ${Math.abs(item.divergenceLiters ?? item.diferenca ?? 0) > 0.05 ? 'text-amber-300' : 'text-white/80'}`}>{money(item.realFinalBalanceLiters ?? item.saldoFinalAutomatico)}</td>
+                  <td className={`px-4 py-3 font-bold ${Math.abs(item.divergenceLiters ?? item.diferenca ?? 0) > 0.05 ? 'text-red-300' : 'text-white/70'}`}>{money(item.divergenceLiters ?? item.diferenca)}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">{item.source ?? 'APK'}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${badge(item.status)}`}>{item.status}</span>
-                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${syncBadge(item.syncStatus)}`}>{item.syncStatus}</span>
-                      {item.calculationModeLabel ? <span className="inline-flex items-center rounded-md border border-blue-500/30 bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">{item.calculationModeLabel}</span> : null}
+                    <div className="flex max-w-[260px] flex-col gap-1.5">
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${badge(item.status)}`}>{item.status}</span>
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${syncBadge(item.syncStatus)}`}>{item.syncStatus}</span>
+                        {item.calculationModeLabel ? <span className="inline-flex items-center rounded-md border border-blue-500/30 bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">{item.calculationModeLabel}</span> : null}
+                      </div>
+                      {item.status === 'INCONSISTENTE' ? (
+                        <span className="line-clamp-2 text-[10px] font-semibold leading-snug text-red-200/90">
+                          {item.inconsistencyReasons?.[0] ?? 'Inconsistência operacional sem motivo detalhado'}
+                        </span>
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-4 py-3">
