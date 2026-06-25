@@ -89,6 +89,7 @@ export interface FuelJourneySummary {
   divergent: boolean;
   orphan: boolean;
   hasDuplicate: boolean;
+    inconsistencyReasons: string[];
   timeline: FuelJourneyTimelineItem[];
   fuelings: FuelJourneyFuelingItem[];
 }

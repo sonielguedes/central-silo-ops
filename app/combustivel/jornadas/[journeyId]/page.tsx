@@ -32,6 +32,7 @@ type FuelJourneyDetail = {
     saldoFinalAutomatico?: number;
     diferenca?: number;
     fuelingCount: number;
+      inconsistencyReasons?: string[];
   };
   timeline: Array<{ offlineId: string; type: string; summary: string; occurredAtLabel: string; source: string; syncStatus: string }>;
   fuelings: Array<{ offlineId: string; occurredAtLabel: string; fleetCode: string; operatorName?: string; operatorRegistration?: string; pumpCode?: string; product?: string; meterStart?: number; meterEnd?: number; liters: number; hourmeter?: number; odometer?: number; syncStatus: string }>;
@@ -167,6 +168,21 @@ function JourneyDetailPage() {
             <div className="grid gap-4 xl:grid-cols-2">
               <div className="rounded-2xl border border-[#2d3647] bg-[#0d1426] p-5">
                 <h2 className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Resumo Operacional</h2>
+                  {item.summary.status === 'INCONSISTENTE' ? (
+                    <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-300">Motivo da Inconsistência</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(item.summary.inconsistencyReasons && item.summary.inconsistencyReasons.length > 0
+                          ? item.summary.inconsistencyReasons
+                          : ['Inconsistência operacional sem motivo detalhado']
+                        ).map((reason) => (
+                          <span key={reason} className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-200">
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 <div className="mt-4 grid gap-3 text-sm">
                   <Row icon={<Fuel size={14} />} label="Total carregado no posto" value={liters(item.summary.totalCarregadoPosto)} />
                   <Row icon={<Fuel size={14} />} label="Total abastecido em máquinas" value={liters(item.summary.totalAbastecidoMaquinas)} />
