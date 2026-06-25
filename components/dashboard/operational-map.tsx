@@ -20,7 +20,25 @@ const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
   )
 });
 
-export function OperationalMap() {
+type OperationalMapProps = {
+  totalFleet?: number;
+  fleetStatusCounts?: {
+    OPERANDO?: number;
+    ONLINE?: number;
+    PARADO?: number;
+    FINALIZADO?: number;
+    OFFLINE?: number;
+  };
+};
+
+export function OperationalMap({ totalFleet = 0, fleetStatusCounts }: OperationalMapProps) {
+  const trabalhando = (fleetStatusCounts?.OPERANDO ?? 0) + (fleetStatusCounts?.ONLINE ?? 0);
+  const deslocando = 0;
+  const parada = fleetStatusCounts?.PARADO ?? 0;
+  const alerta = 0;
+  const offline = fleetStatusCounts?.OFFLINE ?? 0;
+  const total = totalFleet || trabalhando + deslocando + parada + alerta + offline + (fleetStatusCounts?.FINALIZADO ?? 0);
+
   return (
     <div className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-xl overflow-hidden flex flex-col relative min-h-[500px] h-full group shadow-2xl select-none">
       {/* Header Overlay */}
@@ -62,16 +80,16 @@ export function OperationalMap() {
             Legenda
           </span>
           <span className="rounded-full border border-slate-600/40 bg-slate-900/70 px-2 py-0.5 text-[10px] font-black text-slate-200">
-            37 equipamentos
+            {total} {total === 1 ? 'equipamento' : 'equipamentos'}
           </span>
         </div>
         <div className="space-y-2">
           <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Status</p>
-          <StatusItem color="#10b981" label="Trabalhando" count={12} />
-          <StatusItem color="#fbbf24" label="Deslocando" count={5} />
-          <StatusItem color="#f97316" label="Parada" count={3} />
-          <StatusItem color="#ef4444" label="Alerta" count={2} />
-          <StatusItem color="#6b7280" label="Offline" count={15} />
+          <StatusItem color="#10b981" label="Trabalhando" count={trabalhando} />
+          <StatusItem color="#fbbf24" label="Deslocando" count={deslocando} />
+          <StatusItem color="#f97316" label="Parada" count={parada} />
+          <StatusItem color="#ef4444" label="Alerta" count={alerta} />
+          <StatusItem color="#6b7280" label="Offline" count={offline} />
         </div>
       </div>
     </div>

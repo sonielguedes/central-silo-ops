@@ -336,7 +336,7 @@ function DashboardPage() {
 
               <section className="grid grid-cols-12 gap-6">
                 <div className="col-span-12 xl:col-span-8">
-                  <OperationalMap />
+                  <OperationalMap totalFleet={data.totalFleet} fleetStatusCounts={data.fleetStatusCounts} />
                 </div>
                 <div className="col-span-12 xl:col-span-4 min-h-[450px]">
                   <ActiveFleetPanel fleet={data.activeFleet} />
