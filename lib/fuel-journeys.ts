@@ -125,6 +125,10 @@ function asNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 function isUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
@@ -396,7 +400,8 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
   const base = events[0];
   const start = events.find((event) => event.type === 'JOURNEY_START');
   const end = [...events].reverse().find((event) => event.type === 'JOURNEY_END');
-  const fuelings = events.filter((event) => event.type === 'FUEL_SUPPLY').map(makeFuelingItem);
+  const productLoads = events.filter((event) => event.type === 'PRODUCT_LOAD');
+  const fuelings = dedupeByEventId(events.filter((event) => event.type === 'FUEL_SUPPLY')).map(makeFuelingItem);
   const timeline = dedupeByEventId(events).map(makeTimelineItem).sort((a, b) => {
     const aTime = Date.parse(a.occurredAt);
     const bTime = Date.parse(b.occurredAt);
@@ -407,18 +412,86 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
   const hasStart = Boolean(start);
   const hasEnd = Boolean(end);
   const orphan = !hasStart && events.length > 0;
+
   const syncStatus = events.some((event) => event.syncStatus === 'ERRO_SYNC')
     ? 'ERRO_SYNC'
     : events.some((event) => event.syncStatus === 'PENDENTE_SYNC')
       ? 'PENDENTE_SYNC'
       : 'SYNCED';
+
   const status: FuelJourneyStatus = orphan ? 'INCONSISTENTE' : hasEnd ? 'FINALIZADA' : 'ATIVA';
+
   const startPayload = start?.payload ?? {};
   const endPayload = end?.payload ?? {};
 
-  const saldoFinalAutomatico = asNumber(endPayload.saldoFinalAutomatico);
-  const totalLiters = fuelings.reduce((sum, item) => sum + (Number(item.liters) || 0), 0);
-  const divergent = Boolean(orphan || (saldoFinalAutomatico != null && saldoFinalAutomatico < 0) || syncStatus !== 'SYNCED');
+  const calculationMode = clean(endPayload.calculationMode) || undefined;
+
+  const totalSuppliedByEvents = round1(
+    fuelings.reduce((sum, item) => sum + (Number(item.liters) || 0), 0)
+  );
+
+  const payloadTotalSupplied =
+    asNumber(endPayload.totalAbastecidoMaquinas) ??
+    asNumber(endPayload.totalSuppliedLiters) ??
+    asNumber(endPayload.totalSupplied);
+
+  const totalAbastecidoMaquinas =
+    fuelings.length > 0 ? totalSuppliedByEvents : round1(payloadTotalSupplied ?? 0);
+
+  const totalLoadedByEvents = round1(productLoads.reduce((sum, event) => {
+    return sum + (
+      asNumber(event.payload.liters) ??
+      asNumber(event.payload.loadedLiters) ??
+      asNumber(event.payload.totalLoadedLiters) ??
+      asNumber(event.payload.totalCarregadoPosto) ??
+      0
+    );
+  }, 0));
+
+  const tanqueInicial =
+    asNumber(startPayload.tanqueInicial) ??
+    asNumber(startPayload.tankInitialLiters) ??
+    asNumber(startPayload.tankStartLiters) ??
+    asNumber(endPayload.tanqueInicial) ??
+    asNumber(endPayload.tankInitialLiters) ??
+    asNumber(endPayload.tankStartLiters) ??
+    0;
+
+  const payloadLoaded =
+    asNumber(endPayload.totalCarregadoPosto) ??
+    asNumber(endPayload.totalLoadedLiters) ??
+    asNumber(endPayload.totalLoaded);
+
+  const totalCarregadoPosto =
+    totalLoadedByEvents > 0 ? totalLoadedByEvents : round1(payloadLoaded ?? 0);
+
+  const saldoTeorico = round1(tanqueInicial + totalCarregadoPosto - totalAbastecidoMaquinas);
+
+  const isAutomaticCalculation =
+    !calculationMode || calculationMode.toUpperCase().includes('AUTO');
+
+  const payloadRealFinal =
+    asNumber(endPayload.realFinalBalanceLiters) ??
+    asNumber(endPayload.tankFinalLiters) ??
+    asNumber(endPayload.tanqueFinal) ??
+    asNumber(endPayload.saldoFinalAutomatico);
+
+  const saldoFinalAutomatico = round1(
+    isAutomaticCalculation ? saldoTeorico : (payloadRealFinal ?? saldoTeorico)
+  );
+
+  const tanqueFinal = saldoFinalAutomatico;
+  const diferenca = round1(tanqueFinal - saldoTeorico);
+  const totalLiters = totalAbastecidoMaquinas;
+
+  const divergent = Boolean(
+    orphan ||
+    Math.abs(diferenca) >= 0.1 ||
+    syncStatus !== 'SYNCED'
+  );
+
+  const startedAt = clean(startPayload.startedAt) || base.occurredAt;
+  const finishedAt = clean(endPayload.finishedAt) || (hasEnd ? end?.occurredAt : undefined);
 
   return {
     tenantId: base.tenantId,
@@ -426,8 +499,8 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
     journeyId: base.journeyId,
     status,
     syncStatus,
-    calculationMode: clean(endPayload.calculationMode) || undefined,
-    calculationModeLabel: formatModeLabel(clean(endPayload.calculationMode)) || undefined,
+    calculationMode,
+    calculationModeLabel: formatModeLabel(calculationMode ?? '') || undefined,
     comboioFleetCode: clean(startPayload.comboioFleetCode) || clean(endPayload.comboioFleetCode) || undefined,
     comboioDescription: clean(startPayload.comboioDescription) || clean(endPayload.comboioDescription) || undefined,
     driverRegistration: clean(startPayload.driverRegistration) || clean(endPayload.driverRegistration) || undefined,
@@ -435,25 +508,23 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
     shift: clean(startPayload.shift) || clean(endPayload.shift) || undefined,
     deviceId: clean(base.payload.deviceId) || undefined,
     source: clean(endPayload.source) || clean(startPayload.source) || 'APK',
-    startedAt: clean(startPayload.startedAt) || base.occurredAt,
-    startedAtLabel: formatDateTime(clean(startPayload.startedAt) || base.occurredAt),
-    finishedAt: clean(endPayload.finishedAt) || (hasEnd ? end?.occurredAt : undefined),
-    finishedAtLabel: clean(endPayload.finishedAt) || (hasEnd ? end?.occurredAt : undefined)
-      ? formatDateTime(clean(endPayload.finishedAt) || (hasEnd ? end?.occurredAt : undefined))
-      : 'Em andamento',
+    startedAt,
+    startedAtLabel: formatDateTime(startedAt),
+    finishedAt,
+    finishedAtLabel: finishedAt ? formatDateTime(finishedAt) : 'Em andamento',
     kmInicial: asNumber(startPayload.kmInicial) ?? asNumber(endPayload.kmInicial),
     kmFinal: asNumber(endPayload.kmFinal),
     distanciaPercorrida: asNumber(endPayload.distanciaPercorrida),
-    tanqueInicial: asNumber(startPayload.tanqueInicial) ?? asNumber(endPayload.tanqueInicial),
-    totalCarregadoPosto: asNumber(endPayload.totalCarregadoPosto),
-    totalAbastecidoMaquinas: asNumber(endPayload.totalAbastecidoMaquinas),
-    saldoTeorico: asNumber(endPayload.saldoTeorico),
+    tanqueInicial,
+    totalCarregadoPosto,
+    totalAbastecidoMaquinas,
+    saldoTeorico,
     saldoFinalAutomatico,
-    tanqueFinal: asNumber(endPayload.tanqueFinal),
-    diferenca: asNumber(endPayload.diferenca),
+    tanqueFinal,
+    diferenca,
     fuelingCount: fuelings.length,
-    dieselLiters: Math.round(totalLiters * 10) / 10,
-    totalLiters: Math.round(totalLiters * 10) / 10,
+    dieselLiters: round1(totalLiters),
+    totalLiters: round1(totalLiters),
     eventCount: events.length,
     timelineCount: timeline.length,
     divergent,
