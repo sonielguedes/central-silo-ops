@@ -105,6 +105,8 @@ function JourneyDetailPage() {
 
   const item = data.item;
   const timeline = useMemo(() => item?.timeline ?? [], [item]);
+  const startEvent = timeline.find((event) => event.type === 'JOURNEY_START');
+  const endEvent = timeline.find((event) => event.type === 'JOURNEY_END');
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#060c1a] text-white">
@@ -147,8 +149,8 @@ function JourneyDetailPage() {
                   <Row icon={<CalendarDays size={14} />} label="Data/hora início" value={item.summary.startedAtLabel} />
                   <Row icon={<Activity size={14} />} label="KM inicial" value={item.summary.kmInicial ?? '—'} />
                   <Row icon={<Fuel size={14} />} label="Tanque inicial" value={liters(item.summary.tanqueInicial)} />
-                  <Row icon={<Clock3 size={14} />} label="Evento" value="JOURNEY_START" />
-                  <Row icon={<BadgeInfo size={14} />} label="offlineId" value={item.timeline.find((event) => event.type === 'JOURNEY_START')?.offlineId ?? '—'} />
+                  <Row icon={<Clock3 size={14} />} label="Evento" value={startEvent ? 'JOURNEY_START' : 'Não localizado'} />
+                  <Row icon={<BadgeInfo size={14} />} label="offlineId" value={startEvent?.offlineId ?? '—'} />
                 </div>
               </div>
 
@@ -159,8 +161,8 @@ function JourneyDetailPage() {
                   <Row icon={<Activity size={14} />} label="KM final" value={item.summary.kmFinal ?? '—'} />
                   <Row icon={<MapPinned size={14} />} label="Distância percorrida" value={km(item.summary.distanciaPercorrida)} />
                   <Row icon={<Fuel size={14} />} label="Saldo final automático" value={<span className={Number(item.summary.saldoFinalAutomatico ?? 0) < 0 ? 'text-red-300' : 'text-white'}>{liters(item.summary.saldoFinalAutomatico)}</span>} />
-                  <Row icon={<Clock3 size={14} />} label="Evento" value="JOURNEY_END" />
-                  <Row icon={<BadgeInfo size={14} />} label="offlineId" value={item.timeline.find((event) => event.type === 'JOURNEY_END')?.offlineId ?? '—'} />
+                  <Row icon={<Clock3 size={14} />} label="Evento" value={endEvent ? 'JOURNEY_END' : 'Não localizado'} />
+                  <Row icon={<BadgeInfo size={14} />} label="offlineId" value={endEvent?.offlineId ?? '—'} />
                 </div>
               </div>
             </div>
