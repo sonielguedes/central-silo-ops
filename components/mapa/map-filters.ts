@@ -50,6 +50,11 @@ export type LiveMapItem = EquipmentLiveState & {
   pos: [number, number] | null;
   typeIcon: 'Tractor' | 'Truck' | 'Zap' | 'Navigation';
   iconType: string;
+  equipmentType?: string;
+  equipmentModel?: string;
+  equipmentCategory?: string;
+  heading?: number;
+  alertLevel?: string;
   displayOperator: string;
   displayOperation: string;
   /** Estado semantico de parada (presente quando a API /equipamentos/status for >= hotfix 6.7C.1). */
@@ -73,6 +78,8 @@ export function applyFilters(fleet: LiveMapItem[], filters: MapFilters): LiveMap
       (m.displayOperator || '').toLowerCase().includes(q) ||
       (m.displayOperation || '').toLowerCase().includes(q) ||
       (m.type || '').toLowerCase().includes(q) ||
+      (m.equipmentType || '').toLowerCase().includes(q) ||
+      (m.equipmentModel || '').toLowerCase().includes(q) ||
       (m.name || '').toLowerCase().includes(q)
     );
   }

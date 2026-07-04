@@ -728,6 +728,13 @@ export interface EquipmentLiveState {
   endedAt?: string;
   type?: string;
   name?: string;
+  /** Metadados visuais/cadastrais usados pelo mapa operacional */
+  equipmentType?: string;
+  equipmentModel?: string;
+  equipmentCategory?: string;
+  iconType?: string;
+  typeIcon?: 'Tractor' | 'Truck' | 'Zap' | 'Navigation';
+  displayOperator?: string;
   updatedAt: string;
 
   // ── Campos computados (não armazenados no live-state.json) ──
