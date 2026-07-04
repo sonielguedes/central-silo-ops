@@ -35,17 +35,18 @@ function severityColor(s: string): string {
 }
 
 function statusColor(s: string): string {
-  if (s === 'OPERANDO')   return 'bg-emerald-500';
-  if (s === 'ONLINE')     return 'bg-blue-400';
-  if (s === 'PARADO')     return 'bg-amber-400';
-  if (s === 'FINALIZADO') return 'bg-slate-400';
+  if (s === 'TRABALHANDO') return 'bg-emerald-500';
+  if (s === 'DESLOCANDO')   return 'bg-amber-400';
+  if (s === 'PARADA')       return 'bg-orange-400';
+  if (s === 'ALERTA')       return 'bg-red-400';
+  if (s === 'OFFLINE')      return 'bg-slate-500';
   return 'bg-slate-600';
 }
 
 function statusLabel(s: string): string {
   const map: Record<string, string> = {
-    OPERANDO: 'Operando', ONLINE: 'Online', PARADO: 'Parado',
-    FINALIZADO: 'Finalizado', OFFLINE: 'Offline',
+    TRABALHANDO: 'Trabalhando', DESLOCANDO: 'Deslocando', PARADA: 'Parada',
+    ALERTA: 'Alerta', OFFLINE: 'Offline',
   };
   return map[s] ?? s;
 }
@@ -171,14 +172,14 @@ function ActiveFleetPanel({ fleet }: { fleet: ActiveFleetItem[] }) {
 }
 
 function FleetStatusBar({ counts }: { counts: DashboardSummary['fleetStatusCounts'] }) {
-  const total = Object.values(counts).reduce((s, v) => s + v, 0);
+  const total = counts.total;
   if (total === 0) return null;
   const segments: { key: keyof typeof counts; color: string; label: string }[] = [
-    { key: 'OPERANDO',   color: 'bg-emerald-500', label: 'Operando' },
-    { key: 'ONLINE',     color: 'bg-blue-400',    label: 'Online' },
-    { key: 'PARADO',     color: 'bg-amber-400',   label: 'Parado' },
-    { key: 'FINALIZADO', color: 'bg-slate-400',   label: 'Finalizado' },
-    { key: 'OFFLINE',    color: 'bg-slate-600',   label: 'Offline' },
+    { key: 'TRABALHANDO', color: 'bg-emerald-500', label: 'Trabalhando' },
+    { key: 'DESLOCANDO',  color: 'bg-amber-400',   label: 'Deslocando' },
+    { key: 'PARADA',      color: 'bg-orange-400',  label: 'Parada' },
+    { key: 'ALERTA',      color: 'bg-red-400',     label: 'Alerta' },
+    { key: 'OFFLINE',     color: 'bg-slate-600',   label: 'Offline' },
   ];
   return (
     <div className="rounded-2xl border border-[#2d3647] bg-[#0d1227] px-5 py-4">
@@ -309,7 +310,7 @@ function DashboardPage() {
                   value={data.activeOperations.toString()}
                   color="emerald"
                   icon={Play}
-                  sub={`${data.fleetStatusCounts.OPERANDO} operando`}
+                  sub={`${data.fleetStatusCounts.TRABALHANDO} trabalhando`}
                 />
                 <KPICard
                   title="Alertas Críticos"
@@ -336,7 +337,7 @@ function DashboardPage() {
 
               <section className="grid grid-cols-12 gap-6">
                 <div className="col-span-12 xl:col-span-8">
-                  <OperationalMap totalFleet={data.totalFleet} fleetStatusCounts={data.fleetStatusCounts} />
+                  <OperationalMap totalFleet={data.totalFleet} counts={data.fleetStatusCounts} />
                 </div>
                 <div className="col-span-12 xl:col-span-4 min-h-[450px]">
                   <ActiveFleetPanel fleet={data.activeFleet} />

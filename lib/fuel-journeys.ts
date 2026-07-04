@@ -38,6 +38,9 @@ export interface FuelJourneyFuelingItem {
   occurredAt: string;
   occurredAtLabel: string;
   fleetCode: string;
+  journeyId?: string;
+  journeyOfflineId?: string;
+  comboioFleetCode?: string;
   fleetDescription?: string;
   operatorName?: string;
   operatorRegistration?: string;
@@ -62,6 +65,7 @@ export interface FuelJourneySummary {
   calculationModeLabel?: string;
   comboioFleetCode?: string;
   comboioDescription?: string;
+  journeyOfflineId?: string;
   driverRegistration?: string;
   driverName?: string;
   shift?: string;
@@ -79,6 +83,12 @@ export interface FuelJourneySummary {
   totalAbastecidoMaquinas?: number;
   saldoTeorico?: number;
   saldoFinalAutomatico?: number;
+  tankInitialLiters?: number;
+  totalLoadedLiters?: number;
+  totalSuppliedLiters?: number;
+  theoreticalFinalBalanceLiters?: number;
+  realFinalBalanceLiters?: number;
+  divergenceLiters?: number;
   tanqueFinal?: number;
   diferenca?: number;
   fuelingCount: number;
@@ -89,7 +99,7 @@ export interface FuelJourneySummary {
   divergent: boolean;
   orphan: boolean;
   hasDuplicate: boolean;
-    inconsistencyReasons: string[];
+  inconsistencyReasons: string[];
   timeline: FuelJourneyTimelineItem[];
   fuelings: FuelJourneyFuelingItem[];
 }
@@ -124,10 +134,6 @@ function asNumber(value: unknown): number | undefined {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 function isUuid(value: string): boolean {
@@ -228,18 +234,23 @@ function normalizeJourneyRecord(record: Awaited<ReturnType<typeof FuelJourneySto
 
 function normalizeFuelingRecord(record: FuelingRecord): JourneyBaseEvent | null {
   const journeyId = clean(record.journeyId);
-  if (!journeyId) return null;
+  const journeyOfflineId = clean(record.journeyOfflineId);
+  if (!journeyId && !journeyOfflineId) return null;
   return {
     tenantId: record.tenantId,
-    companyCode: undefined,
-    journeyId,
+    companyCode: clean(record.companyCode) || undefined,
+    journeyId: journeyId || journeyOfflineId,
     offlineId: clean(record.eventId),
     type: 'FUEL_SUPPLY',
     occurredAt: clean(record.fueledAt),
     source: clean(record.source).toUpperCase() === 'WEB' ? 'WEB' : 'APK',
     syncStatus: record.syncStatus === 'SYNCED' ? 'SYNCED' : 'PENDENTE_SYNC',
     payload: {
+      companyCode: clean(record.companyCode) || undefined,
       fleetCode: record.fleetCode,
+      comboioFleetCode: clean(record.comboioFleetCode) || clean(record.truckFleetCode) || undefined,
+      journeyOfflineId: journeyOfflineId || undefined,
+      journeyId: journeyId || undefined,
       fleetDescription: record.fleetDescription,
       operatorName: record.operatorName,
       operatorRegistration: record.operatorRegistration,
@@ -320,6 +331,9 @@ function makeFuelingItem(event: JourneyBaseEvent): FuelJourneyFuelingItem {
     occurredAt: event.occurredAt,
     occurredAtLabel: formatDateTime(event.occurredAt),
     fleetCode: clean(payload.fleetCode),
+    journeyId: clean(payload.journeyId) || undefined,
+    journeyOfflineId: clean(payload.journeyOfflineId) || undefined,
+    comboioFleetCode: clean(payload.comboioFleetCode) || undefined,
     fleetDescription: clean(payload.fleetDescription) || undefined,
     operatorName: clean(payload.operatorName) || undefined,
     operatorRegistration: clean(payload.operatorRegistration) || undefined,
@@ -335,19 +349,159 @@ function makeFuelingItem(event: JourneyBaseEvent): FuelJourneyFuelingItem {
   };
 }
 
-function mergeEvents(tenantId: string): JourneyBaseEvent[] {
-  const journeys = dedupeByEventId(
+type JourneyBundle = {
+  tenantId: string;
+  companyCode?: string;
+  journeyId: string;
+  journeyOfflineId?: string;
+  comboioFleetCode?: string;
+  comboioDescription?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  events: JourneyBaseEvent[];
+  fuelings: JourneyBaseEvent[];
+};
+
+function loadJourneyEvents(tenantId: string): JourneyBaseEvent[] {
+  return dedupeByEventId(
     FuelJourneyStorage.getAll(tenantId).map(normalizeJourneyRecord).filter((event): event is JourneyBaseEvent => Boolean(event)),
-  );
-  const fuelings = dedupeByEventId(
-    FuelingStorage.getAll(tenantId).map(normalizeFuelingRecord).filter((event): event is JourneyBaseEvent => Boolean(event)),
-  );
-  return [...journeys, ...fuelings].sort((a, b) => {
+  ).sort((a, b) => {
     const aTime = Date.parse(a.occurredAt);
     const bTime = Date.parse(b.occurredAt);
     if (aTime !== bTime) return aTime - bTime;
     return eventSortWeight(a.type) - eventSortWeight(b.type);
   });
+}
+
+function loadFuelingEvents(tenantId: string): JourneyBaseEvent[] {
+  return dedupeByEventId(
+    FuelingStorage.getAll(tenantId).map(normalizeFuelingRecord).filter((event): event is JourneyBaseEvent => Boolean(event)),
+  ).sort((a, b) => {
+    const aTime = Date.parse(a.occurredAt);
+    const bTime = Date.parse(b.occurredAt);
+    if (aTime !== bTime) return aTime - bTime;
+    return eventSortWeight(a.type) - eventSortWeight(b.type);
+  });
+}
+
+function makeJourneyBundleFromEvents(events: JourneyBaseEvent[]): JourneyBundle {
+  const start = events.find((event) => event.type === 'JOURNEY_START');
+  const end = [...events].reverse().find((event) => event.type === 'JOURNEY_END');
+  const startPayload = start?.payload ?? {};
+  const endPayload = end?.payload ?? {};
+  const base = events[0] as JourneyBaseEvent;
+  return {
+    tenantId: base.tenantId,
+    companyCode: events.find((event) => event.companyCode)?.companyCode || clean(startPayload.companyCode) || clean(endPayload.companyCode) || undefined,
+    journeyId: base.journeyId,
+    journeyOfflineId: clean(startPayload.journeyOfflineId) || clean(endPayload.journeyOfflineId) || undefined,
+    comboioFleetCode: clean(startPayload.comboioFleetCode) || clean(startPayload.comboio) || clean(endPayload.comboioFleetCode) || clean(endPayload.comboio) || undefined,
+    comboioDescription: clean(startPayload.comboioDescription) || clean(endPayload.comboioDescription) || undefined,
+    startedAt: clean(startPayload.startedAt) || base.occurredAt,
+    finishedAt: clean(endPayload.finishedAt) || clean(endPayload.endedAt) || (end ? end.occurredAt : undefined),
+    events,
+    fuelings: [],
+  };
+}
+
+function bundleComboioKey(bundle: JourneyBundle): string {
+  return normalizeComboioKey(bundle.comboioFleetCode) || normalizeComboioKey(bundle.comboioDescription);
+}
+
+function fuelingComboioKey(event: JourneyBaseEvent): string {
+  return normalizeComboioKey(clean(event.payload.comboioFleetCode) || clean(event.payload.comboio) || clean(event.payload.truckFleetCode));
+}
+
+function fuelingJourneyId(event: JourneyBaseEvent): string {
+  return clean(event.payload.journeyId);
+}
+
+function fuelingJourneyOfflineId(event: JourneyBaseEvent): string {
+  return clean(event.payload.journeyOfflineId);
+}
+
+function eventOccursWithinBundleWindow(event: JourneyBaseEvent, bundle: JourneyBundle): boolean {
+  if (!bundle.startedAt) return false;
+  const eventTs = Date.parse(event.occurredAt);
+  const startTs = Date.parse(bundle.startedAt);
+  if (Number.isNaN(eventTs) || Number.isNaN(startTs)) return false;
+  const endTs = bundle.finishedAt ? Date.parse(bundle.finishedAt) : undefined;
+  if (eventTs < startTs) return false;
+  if (endTs != null && !Number.isNaN(endTs) && eventTs > endTs) return false;
+  return true;
+}
+
+function matchFuelingToBundle(event: JourneyBaseEvent, bundles: JourneyBundle[]): JourneyBundle | null {
+  const jid = fuelingJourneyId(event);
+  const joffline = fuelingJourneyOfflineId(event);
+  const comboio = fuelingComboioKey(event);
+  const companyCode = clean(event.payload.companyCode);
+  const eventTs = Date.parse(event.occurredAt);
+
+  let best: { bundle: JourneyBundle; score: number } | null = null;
+  for (const bundle of bundles) {
+    let score = 0;
+    if (jid && bundle.journeyId === jid) score = Math.max(score, 100);
+    if (joffline && bundle.journeyOfflineId && bundle.journeyOfflineId === joffline) score = Math.max(score, 90);
+    const bundleComboio = bundleComboioKey(bundle);
+    if (comboio && bundleComboio && comboio === bundleComboio) score = Math.max(score, 70);
+    if (eventTs && eventOccursWithinBundleWindow(event, bundle)) score = Math.max(score, comboio && bundleComboio && comboio === bundleComboio ? 60 : 40);
+    if (companyCode && bundle.companyCode && companyCode === bundle.companyCode) score += 5;
+    if (score > 0 && (!best || score > best.score)) {
+      best = { bundle, score };
+    }
+  }
+  return best?.bundle ?? null;
+}
+
+function buildJourneyBundles(tenantId: string): JourneyBundle[] {
+  const journeyEvents = loadJourneyEvents(tenantId);
+  const fuelings = loadFuelingEvents(tenantId);
+  const journeyGroups = new Map<string, JourneyBaseEvent[]>();
+  for (const event of journeyEvents) {
+    const list = journeyGroups.get(event.journeyId) ?? [];
+    list.push(event);
+    journeyGroups.set(event.journeyId, list);
+  }
+
+  const bundles = Array.from(journeyGroups.values()).map((events) => makeJourneyBundleFromEvents(events));
+
+  for (const fueling of fuelings) {
+    const matched = matchFuelingToBundle(fueling, bundles.filter((bundle) => bundle.journeyId !== `fueling-${fueling.offlineId}`));
+    if (matched) {
+      matched.fuelings.push(fueling);
+      continue;
+    }
+
+    const syntheticJourneyId = fuelingJourneyId(fueling) || fuelingJourneyOfflineId(fueling) || `fueling-${fueling.offlineId}`;
+    let synthetic = bundles.find((bundle) => bundle.journeyId === syntheticJourneyId);
+    if (!synthetic) {
+      synthetic = {
+        tenantId,
+        companyCode: clean(fueling.payload.companyCode) || undefined,
+        journeyId: syntheticJourneyId,
+        journeyOfflineId: fuelingJourneyOfflineId(fueling) || undefined,
+        comboioFleetCode: fuelingComboioKey(fueling) || undefined,
+        comboioDescription: undefined,
+        startedAt: undefined,
+        finishedAt: undefined,
+        events: [],
+        fuelings: [],
+      };
+      bundles.push(synthetic);
+    }
+    synthetic.fuelings.push(fueling);
+  }
+
+  return bundles.map((bundle) => ({
+    ...bundle,
+    fuelings: dedupeByEventId(bundle.fuelings).sort((a, b) => {
+      const aTime = Date.parse(a.occurredAt);
+      const bTime = Date.parse(b.occurredAt);
+      if (aTime !== bTime) return aTime - bTime;
+      return eventSortWeight(a.type) - eventSortWeight(b.type);
+    }),
+  }));
 }
 
 function journeyIdentityKey(item: FuelJourneySummary): string {
@@ -361,7 +515,29 @@ function cloneSummary(item: FuelJourneySummary): FuelJourneySummary {
     ...item,
     timeline: [...item.timeline],
     fuelings: [...item.fuelings],
+    inconsistencyReasons: [...(item.inconsistencyReasons ?? [])],
   };
+}
+
+function resolveInconsistencyReasons(input: {
+  orphan: boolean;
+  hasStart: boolean;
+  hasEnd: boolean;
+  comboioFleetCode?: string;
+  syncStatus: FuelJourneySyncStatus;
+  diferenca: number;
+  fuelings: FuelJourneyFuelingItem[];
+  hasDuplicate?: boolean;
+}): string[] {
+  const reasons: string[] = [];
+  if (input.orphan) reasons.push('Evento sem JOURNEY_START associado');
+  if (!input.hasStart && input.hasEnd) reasons.push('Jornada sem evento de início');
+  if (!input.hasEnd && input.hasStart && input.fuelings.length > 0) reasons.push('Jornada em andamento com abastecimentos vinculados');
+  if (!input.comboioFleetCode) reasons.push('Comboio não identificado');
+  if (input.syncStatus !== 'SYNCED') reasons.push(`Sincronização ${input.syncStatus}`);
+  if (Math.abs(input.diferenca) >= 0.1) reasons.push(`Divergência contábil de ${Math.abs(input.diferenca).toFixed(1)} L`);
+  if (input.hasDuplicate) reasons.push('Jornada ativa duplicada para o mesmo comboio');
+  return Array.from(new Set(reasons));
 }
 
 function enforceSingleActiveJourneyPerComboio(items: FuelJourneySummary[]): FuelJourneySummary[] {
@@ -387,47 +563,22 @@ function enforceSingleActiveJourneyPerComboio(items: FuelJourneySummary[]): Fuel
       target.status = 'INCONSISTENTE';
       target.divergent = true;
       target.hasDuplicate = true;
+      target.inconsistencyReasons = Array.from(new Set([...(target.inconsistencyReasons ?? []), 'Jornada ativa duplicada para o mesmo comboio']));
     }
   }
 
   return items.map((item) => byJourneyId.get(item.journeyId) ?? cloneSummary(item));
 }
 
-function groupKey(event: JourneyBaseEvent): string {
-  return `${event.tenantId}::${event.journeyId}`;
-}
-
-function resolveInconsistencyReasons(input: {
-  orphan: boolean;
-  hasStart: boolean;
-  hasEnd: boolean;
-  comboioFleetCode?: string;
-  syncStatus: FuelJourneySyncStatus;
-  diferenca: number;
-  fuelings: FuelJourneyFuelingItem[];
-  hasDuplicate?: boolean;
-}): string[] {
-  const reasons: string[] = [];
-
-  if (input.orphan) reasons.push('Abastecimento sem jornada vinculada');
-  if (!input.hasStart) reasons.push('Sem evento JOURNEY_START');
-  if (!input.hasEnd) reasons.push('Sem evento JOURNEY_END');
-  if (!clean(input.comboioFleetCode)) reasons.push('Sem comboio informado');
-  if (input.fuelings.length > 0 && input.orphan) reasons.push('FUEL_SUPPLY sem jornada correspondente');
-  if (Math.abs(input.diferenca) >= 0.1) reasons.push('Diferença entre saldo real e saldo teórico');
-  if (input.syncStatus !== 'SYNCED') reasons.push('Sincronismo pendente ou com erro');
-  if (input.hasDuplicate) reasons.push('Jornada ativa duplicada para o mesmo comboio');
-
-  return Array.from(new Set(reasons));
-}
-
-function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
-  const base = events[0];
-  const start = events.find((event) => event.type === 'JOURNEY_START');
-  const end = [...events].reverse().find((event) => event.type === 'JOURNEY_END');
-  const productLoads = events.filter((event) => event.type === 'PRODUCT_LOAD');
-  const fuelings = dedupeByEventId(events.filter((event) => event.type === 'FUEL_SUPPLY')).map(makeFuelingItem);
-  const timeline = dedupeByEventId(events).map(makeTimelineItem).sort((a, b) => {
+function toSummary(bundle: JourneyBundle): FuelJourneySummary {
+  const base = bundle.events[0] ?? bundle.fuelings[0];
+  if (!base) {
+    throw new Error(`Journey bundle without base event: ${bundle.journeyId}`);
+  }
+  const start = bundle.events.find((event) => event.type === 'JOURNEY_START');
+  const end = [...bundle.events].reverse().find((event) => event.type === 'JOURNEY_END');
+  const fuelings = bundle.fuelings.map(makeFuelingItem);
+  const timeline = dedupeByEventId([...bundle.events, ...bundle.fuelings]).map(makeTimelineItem).sort((a, b) => {
     const aTime = Date.parse(a.occurredAt);
     const bTime = Date.parse(b.occurredAt);
     if (aTime !== bTime) return aTime - bTime;
@@ -436,11 +587,10 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
 
   const hasStart = Boolean(start);
   const hasEnd = Boolean(end);
-  const orphan = !hasStart && events.length > 0;
-
-  const syncStatus = events.some((event) => event.syncStatus === 'ERRO_SYNC')
+  const orphan = !hasStart && (bundle.events.length + bundle.fuelings.length) > 0;
+  const syncStatus = [...bundle.events, ...bundle.fuelings].some((event) => event.syncStatus === 'ERRO_SYNC')
     ? 'ERRO_SYNC'
-    : events.some((event) => event.syncStatus === 'PENDENTE_SYNC')
+    : [...bundle.events, ...bundle.fuelings].some((event) => event.syncStatus === 'PENDENTE_SYNC')
       ? 'PENDENTE_SYNC'
       : 'SYNCED';
 
@@ -449,120 +599,74 @@ function toSummary(events: JourneyBaseEvent[]): FuelJourneySummary {
   const startPayload = start?.payload ?? {};
   const endPayload = end?.payload ?? {};
 
-  const calculationMode = clean(endPayload.calculationMode) || undefined;
-
-  const totalSuppliedByEvents = round1(
-    fuelings.reduce((sum, item) => sum + (Number(item.liters) || 0), 0)
-  );
-
-  const payloadTotalSupplied =
-    asNumber(endPayload.totalAbastecidoMaquinas) ??
-    asNumber(endPayload.totalSuppliedLiters) ??
-    asNumber(endPayload.totalSupplied);
-
-  const totalAbastecidoMaquinas =
-    fuelings.length > 0 ? totalSuppliedByEvents : round1(payloadTotalSupplied ?? 0);
-
-  const totalLoadedByEvents = round1(productLoads.reduce((sum, event) => {
-    return sum + (
-      asNumber(event.payload.liters) ??
-      asNumber(event.payload.loadedLiters) ??
-      asNumber(event.payload.totalLoadedLiters) ??
-      asNumber(event.payload.totalCarregadoPosto) ??
-      0
-    );
-  }, 0));
-
-  const tanqueInicial =
-    asNumber(startPayload.tanqueInicial) ??
-    asNumber(startPayload.tankInitialLiters) ??
-    asNumber(startPayload.tankStartLiters) ??
-    asNumber(endPayload.tanqueInicial) ??
-    asNumber(endPayload.tankInitialLiters) ??
-    asNumber(endPayload.tankStartLiters) ??
-    0;
-
-  const payloadLoaded =
-    asNumber(endPayload.totalCarregadoPosto) ??
-    asNumber(endPayload.totalLoadedLiters) ??
-    asNumber(endPayload.totalLoaded);
-
-  const totalCarregadoPosto =
-    totalLoadedByEvents > 0 ? totalLoadedByEvents : round1(payloadLoaded ?? 0);
-
-  const saldoTeorico = round1(tanqueInicial + totalCarregadoPosto - totalAbastecidoMaquinas);
-
-  const isAutomaticCalculation =
-    !calculationMode || calculationMode.toUpperCase().includes('AUTO');
-
-  const payloadRealFinal =
-    asNumber(endPayload.realFinalBalanceLiters) ??
-    asNumber(endPayload.tankFinalLiters) ??
-    asNumber(endPayload.tanqueFinal) ??
-    asNumber(endPayload.saldoFinalAutomatico);
-
-  const saldoFinalAutomatico = round1(
-    isAutomaticCalculation ? saldoTeorico : (payloadRealFinal ?? saldoTeorico)
-  );
-
-  const tanqueFinal = saldoFinalAutomatico;
-  const diferenca = round1(tanqueFinal - saldoTeorico);
-  const totalLiters = totalAbastecidoMaquinas;
-
-  const divergent = Boolean(
-    orphan ||
-    Math.abs(diferenca) >= 0.1 ||
-    syncStatus !== 'SYNCED'
-  );
-
-  const comboioFleetCode = clean(startPayload.comboioFleetCode) || clean(endPayload.comboioFleetCode) || undefined;
-
+  const tankInitialLiters = asNumber(startPayload.tankInitialLiters ?? startPayload.tankStartLiters ?? startPayload.tanqueInicial ?? endPayload.tankInitialLiters ?? endPayload.tankStartLiters ?? endPayload.tanqueInicial);
+  const totalLoadedFromEvents = bundle.events
+    .filter((event) => event.type === 'PRODUCT_LOAD')
+    .reduce((sum, event) => sum + (asNumber(event.payload.liters) ?? 0), 0);
+  const totalLoadedLiters = totalLoadedFromEvents || (asNumber(endPayload.totalLoadedLiters ?? endPayload.totalCarregadoPosto ?? endPayload.totalLoaded) ?? 0);
+  const totalSuppliedLiters = fuelings.reduce((sum, item) => sum + (Number(item.liters) || 0), 0);
+  const theoreticalFinalBalanceLiters = Math.round(((tankInitialLiters ?? 0) + totalLoadedLiters - totalSuppliedLiters) * 10) / 10;
+  const explicitRealFinal = asNumber(endPayload.realFinalBalanceLiters ?? endPayload.saldoFinalReal);
+  const automaticFinal = asNumber(endPayload.saldoFinalAutomatico);
+  const realFinalBalanceLiters = explicitRealFinal ?? theoreticalFinalBalanceLiters;
+  const divergenceLiters = Math.round((realFinalBalanceLiters - theoreticalFinalBalanceLiters) * 10) / 10;
+  const automaticMismatch = automaticFinal != null && Math.abs(automaticFinal - theoreticalFinalBalanceLiters) > 0.05;
+  const divergent = Boolean(orphan || syncStatus !== 'SYNCED' || automaticMismatch || Math.abs(divergenceLiters) > 0.05);
+  const finalBalanceLegacy = automaticFinal ?? realFinalBalanceLiters;
+  const comboioFleetCode = bundle.comboioFleetCode || clean(startPayload.comboioFleetCode) || clean(startPayload.comboio) || clean(endPayload.comboioFleetCode) || clean(endPayload.comboio) || undefined;
   const inconsistencyReasons = resolveInconsistencyReasons({
     orphan,
     hasStart,
     hasEnd,
     comboioFleetCode,
     syncStatus,
-    diferenca,
+    diferenca: divergenceLiters,
     fuelings,
+    hasDuplicate: false,
   });
-
-  const startedAt = clean(startPayload.startedAt) || base.occurredAt;
-  const finishedAt = clean(endPayload.finishedAt) || (hasEnd ? end?.occurredAt : undefined);
 
   return {
     tenantId: base.tenantId,
-    companyCode: events.find((event) => event.companyCode)?.companyCode,
-    journeyId: base.journeyId,
+    companyCode: bundle.companyCode || bundle.events.find((event) => event.companyCode)?.companyCode || bundle.fuelings.find((event) => event.companyCode)?.companyCode,
+    journeyId: bundle.journeyId,
     status,
     syncStatus,
-    calculationMode,
-    calculationModeLabel: formatModeLabel(calculationMode ?? '') || undefined,
+    calculationMode: clean(endPayload.calculationMode) || (explicitRealFinal != null ? 'MANUAL' : 'AUTOMATICO'),
+    calculationModeLabel: formatModeLabel(clean(endPayload.calculationMode) || (explicitRealFinal != null ? 'MANUAL' : 'AUTOMATICO')),
     comboioFleetCode,
     comboioDescription: clean(startPayload.comboioDescription) || clean(endPayload.comboioDescription) || undefined,
+    journeyOfflineId: bundle.journeyOfflineId || clean(startPayload.journeyOfflineId) || clean(endPayload.journeyOfflineId) || undefined,
     driverRegistration: clean(startPayload.driverRegistration) || clean(endPayload.driverRegistration) || undefined,
     driverName: clean(startPayload.driverName) || clean(endPayload.driverName) || undefined,
     shift: clean(startPayload.shift) || clean(endPayload.shift) || undefined,
     deviceId: clean(base.payload.deviceId) || undefined,
     source: clean(endPayload.source) || clean(startPayload.source) || 'APK',
-    startedAt,
-    startedAtLabel: formatDateTime(startedAt),
-    finishedAt,
-    finishedAtLabel: finishedAt ? formatDateTime(finishedAt) : 'Em andamento',
-    kmInicial: asNumber(startPayload.kmInicial) ?? asNumber(endPayload.kmInicial),
+    startedAt: clean(startPayload.startedAt) || base.occurredAt,
+    startedAtLabel: formatDateTime(clean(startPayload.startedAt) || base.occurredAt),
+    finishedAt: clean(endPayload.finishedAt) || clean(endPayload.endedAt) || (hasEnd ? end?.occurredAt : undefined),
+    finishedAtLabel: clean(endPayload.finishedAt) || clean(endPayload.endedAt) || (hasEnd ? end?.occurredAt : undefined)
+      ? formatDateTime(clean(endPayload.finishedAt) || clean(endPayload.endedAt) || (hasEnd ? end?.occurredAt : undefined))
+      : 'Em andamento',
+    kmInicial: asNumber(startPayload.kmInicial ?? startPayload.kmStart ?? startPayload.kmInitial) ?? asNumber(endPayload.kmInicial ?? endPayload.kmStart ?? endPayload.kmInitial),
     kmFinal: asNumber(endPayload.kmFinal),
-    distanciaPercorrida: asNumber(endPayload.distanciaPercorrida),
-    tanqueInicial,
-    totalCarregadoPosto,
-    totalAbastecidoMaquinas,
-    saldoTeorico,
-    saldoFinalAutomatico,
-    tanqueFinal,
-    diferenca,
+    distanciaPercorrida: asNumber(endPayload.distanciaPercorrida ?? endPayload.distanceKm),
+    tanqueInicial: tankInitialLiters,
+    tankInitialLiters,
+    totalCarregadoPosto: totalLoadedLiters,
+    totalLoadedLiters,
+    totalAbastecidoMaquinas: totalSuppliedLiters,
+    totalSuppliedLiters,
+    saldoTeorico: theoreticalFinalBalanceLiters,
+    theoreticalFinalBalanceLiters,
+    saldoFinalAutomatico: finalBalanceLegacy,
+    realFinalBalanceLiters,
+    divergenceLiters,
+    tanqueFinal: finalBalanceLegacy,
+    diferenca: divergenceLiters,
     fuelingCount: fuelings.length,
-    dieselLiters: round1(totalLiters),
-    totalLiters: round1(totalLiters),
-    eventCount: events.length,
+    dieselLiters: Math.round(totalSuppliedLiters * 10) / 10,
+    totalLiters: Math.round(totalSuppliedLiters * 10) / 10,
+    eventCount: dedupeByEventId([...bundle.events, ...bundle.fuelings]).length,
     timelineCount: timeline.length,
     divergent,
     orphan,
@@ -637,17 +741,8 @@ export function resolveJourneyStatus(events: Array<{ type: FuelJourneyEventType;
 }
 
 export function listFuelJourneys(filters: FuelJourneyFilters): FuelJourneySummary[] {
-  const events = mergeEvents(filters.tenantId);
-  const groups = new Map<string, JourneyBaseEvent[]>();
-  for (const event of events) {
-    if (filters.journeyId && event.journeyId !== filters.journeyId) continue;
-    const key = groupKey(event);
-    const list = groups.get(key) ?? [];
-    list.push(event);
-    groups.set(key, list);
-  }
-
-  const items = Array.from(groups.values()).map(toSummary).filter((item) => withinRange(item, filters.from, filters.to) && matchesFilter(item, filters));
+  const bundles = buildJourneyBundles(filters.tenantId).filter((bundle) => !filters.journeyId || bundle.journeyId === filters.journeyId);
+  const items = bundles.map(toSummary).filter((item) => withinRange(item, filters.from, filters.to) && matchesFilter(item, filters));
   return enforceSingleActiveJourneyPerComboio(
     items.sort((a, b) => (b.startedAt || b.finishedAt || '').localeCompare(a.startedAt || a.finishedAt || '') || b.journeyId.localeCompare(a.journeyId)),
   );
@@ -679,7 +774,7 @@ export function calculateJourneyKpis(journeys: FuelJourneySummary[], date?: stri
   const finalized = journeys.filter((journey) => journey.status === 'FINALIZADA').length;
   const active = journeys.filter((journey) => journey.status === 'ATIVA').length;
   const dieselLiters = Math.round(journeys.reduce((sum, journey) => sum + journey.dieselLiters, 0) * 10) / 10;
-  const saldoFinalTotal = Math.round(journeys.reduce((sum, journey) => sum + (journey.status === 'FINALIZADA' ? (journey.saldoFinalAutomatico ?? 0) : 0), 0) * 10) / 10;
+  const saldoFinalTotal = Math.round(journeys.reduce((sum, journey) => sum + (journey.status === 'FINALIZADA' ? (journey.realFinalBalanceLiters ?? journey.saldoFinalAutomatico ?? 0) : 0), 0) * 10) / 10;
   const divergences = journeys.filter((journey) => journey.divergent).length;
   const inconsistent = journeys.filter((journey) => journey.status === 'INCONSISTENTE').length;
   const pendingSync = journeys.filter((journey) => journey.syncStatus === 'PENDENTE_SYNC').length;

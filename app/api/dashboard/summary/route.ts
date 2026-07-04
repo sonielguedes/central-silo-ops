@@ -3,17 +3,21 @@ import { requireTenant } from '@/lib/auth/api-guard';
 import { requirePermission } from '@/lib/auth/rbac-server';
 import { ServerStorage, MobileEvent } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
+import { buildDashboardFleetSnapshot } from '@/lib/dashboard-fleet';
+import { createLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
+const logger = createLogger('dashboard/summary');
 
 // ── Types ─────────────────────────────────────────────────────────────────────────────
 
 export interface FleetStatusCounts {
-  OPERANDO:   number;
-  ONLINE:     number;
-  PARADO:     number;
-  FINALIZADO: number;
-  OFFLINE:    number;
+  total: number;
+  TRABALHANDO: number;
+  DESLOCANDO: number;
+  PARADA: number;
+  ALERTA: number;
+  OFFLINE: number;
 }
 
 export interface RecentAlert {
@@ -135,27 +139,18 @@ export async function GET(req: NextRequest) {
     const { from, to } = todayRange();
 
     const fleet = ServerStorage.getLiveFleet(tenantId);
+    const equipmentCatalog = CadastroStorage.getAll(tenantId, 'equipamentos') as Array<Record<string, unknown>>;
+    const fleetSnapshot = buildDashboardFleetSnapshot({ catalog: equipmentCatalog, liveFleet: fleet });
 
-    const totalFleet       = fleet.length;
-    const onlineCount      = fleet.filter(m => m.status !== 'OFFLINE').length;
-    const activeOperations = fleet.filter(m => m.status === 'OPERANDO').length;
+    const totalFleet       = fleetSnapshot.counts.total;
+    const onlineCount      = totalFleet - fleetSnapshot.counts.OFFLINE;
+    const activeOperations = fleetSnapshot.counts.TRABALHANDO;
     const openStops = fleet.filter(m => {
       const raw = m as unknown as Record<string, unknown>;
       if (m.status === 'FINALIZADO') return false;
       return (m.stopCode || m.stopDescription || raw['stopReason']) && !raw['stopEndedAt'];
     }).length;
-
-    const fleetStatusCounts: FleetStatusCounts = {
-      OPERANDO:   0,
-      ONLINE:     0,
-      PARADO:     0,
-      FINALIZADO: 0,
-      OFFLINE:    0,
-    };
-    for (const m of fleet) {
-      const k = m.status as keyof FleetStatusCounts;
-      if (k in fleetStatusCounts) fleetStatusCounts[k]++;
-    }
+    const fleetStatusCounts: FleetStatusCounts = fleetSnapshot.counts;
 
     interface RawAlert {
       id: string;
@@ -245,19 +240,17 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
     };
 
-    if (process.env.SILO_DEBUG_LOGS === 'true') {
-      console.debug(
-        '[dashboard/summary] tenant=' + tenantId +
-        ' fleet=' + totalFleet + ' online=' + onlineCount +
-        ' ops=' + activeOperations + ' alerts=' + criticalAlerts,
-      );
-    }
+    logger.debug(
+      'tenant=' + tenantId +
+      ' fleet=' + totalFleet + ' online=' + onlineCount +
+      ' ops=' + activeOperations + ' alerts=' + criticalAlerts,
+    );
 
     return NextResponse.json(summary, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    console.error('[dashboard/summary] error', error);
+    logger.error('error', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

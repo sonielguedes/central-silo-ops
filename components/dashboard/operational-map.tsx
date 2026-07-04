@@ -7,6 +7,7 @@ import {
   Filter,
   Map as MapIcon,
 } from 'lucide-react';
+import type { FleetStatusCounts } from '@/app/api/dashboard/summary/route';
 
 const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
   ssr: false,
@@ -20,25 +21,16 @@ const FullMap = dynamic(() => import('@/components/mapa/full-map-enterprise'), {
   )
 });
 
-type OperationalMapProps = {
-  totalFleet?: number;
-  fleetStatusCounts?: {
-    OPERANDO?: number;
-    ONLINE?: number;
-    PARADO?: number;
-    FINALIZADO?: number;
-    OFFLINE?: number;
-  };
-};
+const STATUS_META: Array<{ key: keyof FleetStatusCounts; color: string; label: string }> = [
+  { key: 'TRABALHANDO', color: '#10b981', label: 'Trabalhando' },
+  { key: 'DESLOCANDO', color: '#fbbf24', label: 'Deslocando' },
+  { key: 'PARADA', color: '#f97316', label: 'Parada' },
+  { key: 'ALERTA', color: '#ef4444', label: 'Alerta' },
+  { key: 'OFFLINE', color: '#6b7280', label: 'Offline' },
+];
 
-export function OperationalMap({ totalFleet = 0, fleetStatusCounts }: OperationalMapProps) {
-  const trabalhando = (fleetStatusCounts?.OPERANDO ?? 0) + (fleetStatusCounts?.ONLINE ?? 0);
-  const deslocando = 0;
-  const parada = fleetStatusCounts?.PARADO ?? 0;
-  const alerta = 0;
-  const offline = fleetStatusCounts?.OFFLINE ?? 0;
-  const total = totalFleet || trabalhando + deslocando + parada + alerta + offline + (fleetStatusCounts?.FINALIZADO ?? 0);
-
+export function OperationalMap({ totalFleet = 0, counts }: { totalFleet?: number; counts?: FleetStatusCounts }) {
+  const resolvedCounts = counts ?? { total: totalFleet, TRABALHANDO: 0, DESLOCANDO: 0, PARADA: 0, ALERTA: 0, OFFLINE: 0 };
   return (
     <div className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-xl overflow-hidden flex flex-col relative min-h-[500px] h-full group shadow-2xl select-none">
       {/* Header Overlay */}
@@ -80,16 +72,14 @@ export function OperationalMap({ totalFleet = 0, fleetStatusCounts }: Operationa
             Legenda
           </span>
           <span className="rounded-full border border-slate-600/40 bg-slate-900/70 px-2 py-0.5 text-[10px] font-black text-slate-200">
-            {total} {total === 1 ? 'equipamento' : 'equipamentos'}
+            {resolvedCounts.total} equipamento{resolvedCounts.total === 1 ? '' : 's'}
           </span>
         </div>
         <div className="space-y-2">
           <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Status</p>
-          <StatusItem color="#10b981" label="Trabalhando" count={trabalhando} />
-          <StatusItem color="#fbbf24" label="Deslocando" count={deslocando} />
-          <StatusItem color="#f97316" label="Parada" count={parada} />
-          <StatusItem color="#ef4444" label="Alerta" count={alerta} />
-          <StatusItem color="#6b7280" label="Offline" count={offline} />
+          {STATUS_META.map((item) => (
+            <StatusItem key={item.key} color={item.color} label={item.label} count={resolvedCounts[item.key]} />
+          ))}
         </div>
       </div>
     </div>
