@@ -461,7 +461,7 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
       )}>
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 opacity-80 transition-all group-hover:w-2", status.tailwind, isSelected && "w-2")} />
       <div className={cn("p-2.5 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-110", status.tailwind.replace('bg-', 'bg-').replace('500', '500/10'), status.text.replace('text-', 'border-').replace('500', '500/20'))}>
-        <EquipmentIcon type={machine.iconType} size={18} />
+              <EquipmentIcon type={machine.iconType} size={20} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">

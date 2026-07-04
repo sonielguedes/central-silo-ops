@@ -6,6 +6,7 @@
 
 import React, { memo, useMemo } from 'react';
 import { Layers3 } from 'lucide-react';
+import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import {
   type EquipmentIconType,
   STATUS_COLORS,
@@ -95,9 +96,14 @@ export const MapLegend = memo<MapLegendProps>(({ items }) => {
           .slice(0, 6)
           .map(([type, count]) => (
             <div key={type} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.03] px-2.5 py-2">
-              <span className="truncate text-xs font-bold text-slate-100">
-                {EQUIPMENT_ICON_LABELS[type as EquipmentIconType] || type}
-              </span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/5 text-slate-100">
+                  <EquipmentIcon type={type as EquipmentIconType} size={15} />
+                </span>
+                <span className="truncate text-xs font-bold text-slate-100">
+                  {EQUIPMENT_ICON_LABELS[type as EquipmentIconType] || type}
+                </span>
+              </div>
               <span className="text-xs font-black text-white">{count}</span>
             </div>
           ))}
