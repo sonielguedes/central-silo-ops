@@ -1,77 +1,229 @@
 "use client";
-/* ─────────────────────────────────────────────────────────────────────────────
- * SILO OPS — Equipment Map Marker
- * Cria L.divIcon com SVG do equipamento + anel de status colorido.
- * Leaflet é carregado apenas no client (guarded por typeof window).
- * ────────────────────────────────────────────────────────────────────────── */
 
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import {
-  type EquipmentIconType,
-  type EquipmentMapStatus,
-  STATUS_COLORS,
   resolveIconType,
   resolveMapStatus,
+  STATUS_COLORS,
+  type EquipmentIconType,
+  type EquipmentMapStatus,
 } from '@/lib/equipment-icon-types';
-import { ICON_MAP } from '@/components/icons/equipment-icons';
 
-/* ── createEquipmentMarkerIcon ──────────────────────────────────────────── */
+type AlertLevel = 'INFO' | 'WARNING' | 'ALARM' | 'HEARTBEAT' | 'OFFLINE' | string;
 
-export interface MarkerOptions {
-  iconType: EquipmentIconType | string | null | undefined;
-  status: EquipmentMapStatus | string | null | undefined;
-  label?: string;
-  /** tamanho do pin (default 48) */
+export interface EquipmentMapMarkerProps {
+  iconType?: EquipmentIconType | string | null | undefined;
+  status?: EquipmentMapStatus | string | null | undefined;
+  heading?: number | null | undefined;
+  fleetCode?: string | null | undefined;
+  alertLevel?: AlertLevel | null | undefined;
+  selected?: boolean;
   pinSize?: number;
 }
 
-/**
- * Cria um L.DivIcon com SVG inline do equipamento dentro de um pin
- * com anel colorido pelo status operacional.
- *
- * Retorna undefined se chamado no servidor (SSR-safe).
- */
+function normalizeHeading(heading?: number | null): number {
+  if (heading == null || !Number.isFinite(heading)) return 0;
+  return ((heading % 360) + 360) % 360;
+}
+
+function alertTheme(alertLevel?: AlertLevel | null) {
+  const value = String(alertLevel ?? '').toUpperCase();
+  if (!value) return null;
+  if (value.includes('ALARM') || value.includes('FAIL') || value.includes('OFFLINE')) return { label: '!', ring: '#ef4444', bg: '#7f1d1d' };
+  if (value.includes('HEART')) return { label: '•', ring: '#ef4444', bg: '#7f1d1d' };
+  if (value.includes('WARN')) return { label: '!', ring: '#f59e0b', bg: '#78350f' };
+  return { label: 'i', ring: '#3b82f6', bg: '#1d4ed8' };
+}
+
+export const EquipmentMapMarker = React.memo(({
+  iconType,
+  status,
+  heading,
+  fleetCode,
+  alertLevel,
+  selected = false,
+  pinSize = 52,
+}: EquipmentMapMarkerProps) => {
+  const resolvedIcon = resolveIconType(iconType);
+  const resolvedStatus = resolveMapStatus(status);
+  const theme = STATUS_COLORS[resolvedStatus];
+  const alert = alertTheme(alertLevel);
+  const iconSize = Math.round(pinSize * 0.44);
+  const headingDeg = normalizeHeading(heading);
+  const coreSize = Math.round(pinSize * 0.9);
+  const fleetLabel = String(fleetCode || '—').toUpperCase();
+  const iconSvg = renderToString(<EquipmentIcon type={resolvedIcon} size={iconSize} color="#ffffff" />);
+
+  return (
+    <div
+      style={{
+        width: `${pinSize}px`,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        pointerEvents: 'auto',
+        filter: selected ? 'drop-shadow(0 0 18px rgba(34,197,94,0.45))' : 'drop-shadow(0 10px 18px rgba(0,0,0,0.45))',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          width: `${pinSize}px`,
+          height: `${pinSize}px`,
+          borderRadius: '999px',
+          background: `${theme.ring}18`,
+          transform: 'scale(1.18)',
+          filter: 'blur(10px)',
+          opacity: selected ? 0.95 : 0.7,
+        }}
+      />
+      <div
+        style={{
+          position: 'relative',
+          width: `${pinSize}px`,
+          height: `${Math.round(pinSize * 1.08)}px`,
+          transform: selected ? 'translateY(-1px)' : 'none',
+          zIndex: selected ? 10 : 1,
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: selected ? '0px' : '4px',
+            borderRadius: '18px',
+            background: theme.bg,
+            boxShadow: selected
+              ? `0 0 0 2px ${theme.ring}, 0 0 24px ${theme.ring}55, inset 0 0 0 1px rgba(255,255,255,0.06)`
+              : `0 0 0 1.5px ${theme.ring}CC, inset 0 0 0 1px rgba(255,255,255,0.06)`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: selected ? '6px' : '9px',
+            borderRadius: '16px',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))',
+            border: '1px solid rgba(255,255,255,0.04)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: '0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: `rotate(${headingDeg}deg)`,
+          }}
+        >
+          <div
+            style={{
+              width: `${coreSize}px`,
+              height: `${coreSize}px`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '16px',
+              background: 'rgba(15,23,42,0.82)',
+              border: `1px solid ${theme.ring}55`,
+              boxShadow: selected ? `0 0 0 1px ${theme.ring}55, inset 0 0 18px rgba(255,255,255,0.04)` : 'inset 0 0 18px rgba(255,255,255,0.03)',
+            }}
+            dangerouslySetInnerHTML={{ __html: iconSvg }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '-5px',
+              left: '50%',
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: `9px solid ${theme.ring}`,
+              transform: `translateX(-50%) rotate(${headingDeg}deg)`,
+              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
+            }}
+          />
+        </div>
+
+        {alert && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '2px',
+              right: '2px',
+              minWidth: '16px',
+              height: '16px',
+              padding: '0 4px',
+              borderRadius: '999px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: alert.bg,
+              color: '#fff',
+              fontSize: '10px',
+              fontWeight: 900,
+              border: '1px solid rgba(255,255,255,0.25)',
+              boxShadow: '0 4px 10px rgba(0,0,0,0.35)',
+            }}
+          >
+            {alert.label}
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          marginTop: '-2px',
+          minWidth: '44px',
+          maxWidth: '72px',
+          padding: '2px 8px 3px',
+          borderRadius: '999px',
+          border: `1px solid ${theme.ring}55`,
+          background: 'rgba(8,13,30,0.94)',
+          boxShadow: selected ? `0 0 0 1px ${theme.ring}44, 0 8px 18px rgba(0,0,0,0.45)` : '0 8px 18px rgba(0,0,0,0.35)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        <div
+          style={{
+            color: '#fff',
+            fontSize: '9px',
+            fontWeight: 900,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            textAlign: 'center',
+            lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {fleetLabel}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+EquipmentMapMarker.displayName = 'EquipmentMapMarker';
+
+export interface MarkerOptions extends EquipmentMapMarkerProps {}
+
 export function createEquipmentMarkerIcon(opts: MarkerOptions) {
   if (typeof window === 'undefined') return undefined;
 
   const L = require('leaflet');
-
-  const resolved = resolveIconType(opts.iconType);
-  const mapStatus = resolveMapStatus(opts.status as string);
-  const colors = STATUS_COLORS[mapStatus];
-  const ps = opts.pinSize || 48;
-  const iconSvgSize = Math.round(ps * 0.45);
-  const label = opts.label || '';
-
-  const IconComponent = ICON_MAP[resolved];
-  const iconSvg = renderToString(
-    <IconComponent size={iconSvgSize} color="white" />
-  );
-
-  const html = `
-    <div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto">
-      <div style="position:relative;width:${ps}px;height:${Math.round(ps * 1.17)}px;display:flex;align-items:center;justify-content:center">
-        <svg width="${ps}" height="${Math.round(ps * 1.17)}" viewBox="0 0 48 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M24 56C24 56 48 36.4 48 24C48 10.7452 37.2548 0 24 0C10.7452 0 0 10.7452 0 24C0 36.4 24 56 24 56Z" fill="${colors.bg}"/>
-          <circle cx="24" cy="24" r="21" fill="black" fill-opacity="0.15"/>
-          <circle cx="24" cy="24" r="20" stroke="${colors.ring}" stroke-width="2.5" stroke-opacity="0.9"/>
-        </svg>
-        <div style="position:absolute;top:${Math.round(ps * 0.2)}px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center">
-          ${iconSvg}
-        </div>
-      </div>
-      ${label ? `<div style="margin-top:-6px;background:rgba(10,14,39,0.92);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);box-shadow:0 2px 8px rgba(0,0,0,0.4);z-index:20;position:relative">
-        <span style="font-size:9px;font-weight:900;color:white;font-style:italic;letter-spacing:-0.5px;text-transform:uppercase;white-space:nowrap">${label}</span>
-      </div>` : ''}
-    </div>
-  `;
+  const pinSize = opts.pinSize ?? 52;
+  const html = renderToString(<EquipmentMapMarker {...opts} pinSize={pinSize} />);
 
   return L.divIcon({
     className: 'silo-equipment-marker',
     html,
-    iconSize: [ps, Math.round(ps * 1.4)],
-    iconAnchor: [ps / 2, Math.round(ps * 1.17)],
-    popupAnchor: [0, -Math.round(ps * 0.9)],
+    iconSize: [pinSize, Math.round(pinSize * 1.42)],
+    iconAnchor: [pinSize / 2, Math.round(pinSize * 0.92)],
+    popupAnchor: [0, -Math.round(pinSize * 0.78)],
   });
 }

@@ -24,14 +24,23 @@ const STATUS_OPTIONS = [
   { key: 'ONLINE',     label: 'Online',     tw: 'bg-blue-500'    },
   { key: 'OPERANDO',   label: 'Operando',   tw: 'bg-emerald-500' },
   { key: 'PARADO',     label: 'Parado',     tw: 'bg-orange-500'  },
+  { key: 'ALERTA',     label: 'Alerta',     tw: 'bg-red-500'     },
   { key: 'FINALIZADO', label: 'Finalizado', tw: 'bg-gray-500'    },
+  { key: 'INCONSISTENTE', label: 'Inconsistente', tw: 'bg-amber-500' },
   { key: 'OFFLINE',    label: 'Offline',    tw: 'bg-gray-500'    },
 ];
 
 const STATUS_CONFIG = {
   online:     { label: 'Online',     tailwind: 'bg-blue-500',    text: 'text-blue-500'    },
   operando:   { label: 'Operando',   tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  movimento:  { label: 'Movimento',  tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  deslocando: { label: 'Deslocando', tailwind: 'bg-blue-500',    text: 'text-blue-500'    },
   parado:     { label: 'Parado',     tailwind: 'bg-orange-500',  text: 'text-orange-500'  },
+  alarme:     { label: 'Alarme',     tailwind: 'bg-red-500',     text: 'text-red-500'     },
+  alerta:     { label: 'Alerta',     tailwind: 'bg-red-500',     text: 'text-red-500'     },
+  falha:      { label: 'Falha',      tailwind: 'bg-red-500',     text: 'text-red-500'     },
+  sem_heartbeat: { label: 'Sem heartbeat', tailwind: 'bg-red-500', text: 'text-red-500' },
+  manutencao: { label: 'Manutenção', tailwind: 'bg-purple-500',  text: 'text-purple-500'  },
   finalizado: { label: 'Finalizado', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
   offline:    { label: 'Offline',    tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
 };
@@ -133,7 +142,7 @@ function MapaOperacionalPage() {
 
       {/* ── Fleet sidebar ──────────────────────────────────────────── */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 lg:static w-full sm:w-[380px] bg-[#0a0e27]/95 border-r border-[#2d3647] flex flex-col z-[1500] shadow-[10px_0_30px_rgba(0,0,0,0.5)] transition-transform duration-300 lg:translate-x-0",
+        "fixed inset-y-0 left-0 lg:static w-full sm:w-[392px] bg-[#0a0e27]/96 border-r border-[#2d3647] flex flex-col z-[1500] shadow-[10px_0_40px_rgba(0,0,0,0.55)] transition-transform duration-300 lg:translate-x-0",
         isFleetSidebarOpen ? "translate-x-0" : "-translate-x-full lg:hidden"
       )}>
         <button onClick={() => setIsFleetSidebarOpen(false)}
@@ -142,7 +151,7 @@ function MapaOperacionalPage() {
         </button>
 
         {/* Header */}
-        <div className="p-6 border-b border-[#2d3647]">
+        <div className="p-6 border-b border-[#2d3647] bg-gradient-to-b from-white/[0.02] to-transparent">
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-lg font-black tracking-tighter">
               SILO <span className="text-primary italic">OPS</span> <span className="font-normal opacity-40">Central</span>
@@ -153,7 +162,7 @@ function MapaOperacionalPage() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-2 p-4 bg-[#050812]/50">
+        <div className="grid grid-cols-3 gap-2 p-4 bg-[#050812]/65">
           {kpis.map((kpi) => (
             <div key={kpi.label}
               className="bg-[#1a1f3a]/30 border border-[#2d3647] p-3 rounded-xl flex flex-col items-center group hover:border-primary/30 transition-all cursor-pointer">
@@ -318,7 +327,7 @@ function MapaOperacionalPage() {
 
       {/* ── Map area ───────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        <header className="absolute top-4 left-4 right-4 h-14 bg-[#0a0e27]/80 backdrop-blur-xl border border-[#2d3647] rounded-2xl flex items-center justify-between px-4 sm:px-6 z-[1400] shadow-2xl">
+        <header className="absolute top-4 left-4 right-4 h-14 bg-[#0a0e27]/85 backdrop-blur-2xl border border-[#2d3647] rounded-2xl flex items-center justify-between px-4 sm:px-6 z-[1400] shadow-[0_20px_50px_rgba(0,0,0,0.45)]">
           <div className="flex items-center gap-3 sm:gap-6">
             <button onClick={toggle}
               className="lg:hidden p-2 hover:bg-[#1a1f3a] rounded-lg text-muted-foreground hover:text-white transition-colors">
@@ -435,7 +444,10 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
   type ExtMachine = LiveMapItem & { operationalStatus?: string; communicationStatus?: string; isOnline?: boolean };
   const ext = machine as ExtMachine;
   // Usar operationalStatus quando disponível; cair em status para retrocompat
-  const opStatusKey = (ext.operationalStatus ?? machine.status).toLowerCase() as keyof typeof STATUS_CONFIG;
+  const opStatusKey = (ext.operationalStatus ?? machine.status)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') as keyof typeof STATUS_CONFIG;
   const status = STATUS_CONFIG[opStatusKey] || STATUS_CONFIG.offline;
   // Comunicação: isOnline quando disponível (computado em getLiveFleet), fallback em status
   const isOnline = ext.isOnline !== undefined ? ext.isOnline : machine.status !== 'OFFLINE';
@@ -445,7 +457,7 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
     <button type="button" onClick={() => onSelect(machine)}
       className={cn(
         "group w-full relative flex items-center gap-4 p-4 border rounded-2xl transition-all cursor-pointer shadow-lg overflow-hidden text-left",
-        isSelected ? "bg-primary/10 border-primary/60 shadow-primary/10" : "bg-[#1a1f3a]/30 border-[#2d3647] hover:border-primary/50 hover:bg-[#1a1f3a]/50"
+        isSelected ? "bg-primary/10 border-primary/70 shadow-[0_0_0_1px_rgba(34,197,94,0.25),0_0_24px_rgba(34,197,94,0.12)] ring-1 ring-primary/30" : "bg-[#1a1f3a]/30 border-[#2d3647] hover:border-primary/50 hover:bg-[#1a1f3a]/50"
       )}>
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 opacity-80 transition-all group-hover:w-2", status.tailwind, isSelected && "w-2")} />
       <div className={cn("p-2.5 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-110", status.tailwind.replace('bg-', 'bg-').replace('500', '500/10'), status.text.replace('text-', 'border-').replace('500', '500/20'))}>

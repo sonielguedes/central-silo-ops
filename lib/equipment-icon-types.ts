@@ -1,8 +1,3 @@
-/* ─────────────────────────────────────────────────────────────────────────────
- * SILO OPS — Equipment Icon Types
- * Tipagem central para ícones operacionais de equipamento.
- * ────────────────────────────────────────────────────────────────────────── */
-
 export const EQUIPMENT_ICON_TYPES = [
   'TRATOR',
   'COLHEDORA',
@@ -63,55 +58,73 @@ export const EQUIPMENT_ICON_LABELS: Record<EquipmentIconType, string> = {
   PADRAO_GENERICO:     'Padrão / Genérico',
 };
 
-/* Categorias para filtro no picker */
 export const EQUIPMENT_ICON_CATEGORIES: Record<string, EquipmentIconType[]> = {
-  'Agrícola':      ['TRATOR', 'COLHEDORA', 'TRANSBORDO', 'PLANTADEIRA', 'PULVERIZADOR',
-                    'IMPLEMENTO', 'GRADE_IMPLEMENTO', 'SULCADOR', 'COMBOIO', 'BOMBA_COMBUSTIVEL'],
-  'Transporte':    ['CAMINHAO', 'CAMINHAO_BASCULANTE', 'CAMINHAO_PIPA', 'CARRETA_PRANCHA', 'VEICULO', 'MOTO'],
-  'Construção':    ['PA_CARREGADEIRA', 'MOTONIVELADORA', 'ESCAVADEIRA', 'TRATOR_ESTEIRA'],
-  'Infraestrutura':['SILO', 'TORRE', 'LEITOR_RFID', 'MOBILE', 'PLUVIOMETRO', 'PADRAO_GENERICO'],
-  'Outros':        [],
+  Agrícola:      ['TRATOR', 'COLHEDORA', 'TRANSBORDO', 'PLANTADEIRA', 'PULVERIZADOR', 'IMPLEMENTO', 'GRADE_IMPLEMENTO', 'SULCADOR', 'COMBOIO', 'BOMBA_COMBUSTIVEL'],
+  Transporte:    ['CAMINHAO', 'CAMINHAO_BASCULANTE', 'CAMINHAO_PIPA', 'CARRETA_PRANCHA', 'VEICULO', 'MOTO'],
+  Construção:    ['PA_CARREGADEIRA', 'MOTONIVELADORA', 'ESCAVADEIRA', 'TRATOR_ESTEIRA'],
+  Infraestrutura:['SILO', 'TORRE', 'LEITOR_RFID', 'MOBILE', 'PLUVIOMETRO', 'PADRAO_GENERICO'],
+  Outros:        [],
 };
-
-/* ── Status operacional no mapa ─────────────────────────────────────────── */
 
 export const EQUIPMENT_OPERATIONAL_STATUSES = [
   'OPERANDO',
+  'MOVIMENTO',
+  'DESLOCANDO',
   'PARADO',
   'ALERTA',
+  'ALARME',
+  'FALHA',
+  'SEM_HEARTBEAT',
   'OFFLINE',
   'MANUTENCAO',
   'ABASTECIMENTO',
+  'INCONSISTENTE',
 ] as const;
 
 export type EquipmentMapStatus = (typeof EQUIPMENT_OPERATIONAL_STATUSES)[number];
 
 export const STATUS_COLORS: Record<EquipmentMapStatus, { ring: string; bg: string; label: string }> = {
-  OPERANDO:      { ring: '#22c55e', bg: '#16a34a', label: 'Operando'      },
-  PARADO:        { ring: '#f59e0b', bg: '#d97706', label: 'Parado'        },
-  ALERTA:        { ring: '#ef4444', bg: '#dc2626', label: 'Alerta'        },
-  OFFLINE:       { ring: '#6b7280', bg: '#4b5563', label: 'Offline'       },
-  MANUTENCAO:    { ring: '#a855f7', bg: '#9333ea', label: 'Manutenção'    },
-  ABASTECIMENTO: { ring: '#06b6d4', bg: '#0891b2', label: 'Abastecimento' },
+  OPERANDO:      { ring: '#22c55e', bg: '#0f172a', label: 'Operando' },
+  MOVIMENTO:     { ring: '#22c55e', bg: '#0f172a', label: 'Movimento' },
+  DESLOCANDO:    { ring: '#3b82f6', bg: '#0f172a', label: 'Deslocando' },
+  PARADO:        { ring: '#f59e0b', bg: '#111827', label: 'Parado' },
+  ALERTA:        { ring: '#ef4444', bg: '#111827', label: 'Alerta' },
+  ALARME:        { ring: '#ef4444', bg: '#111827', label: 'Alarme' },
+  FALHA:         { ring: '#ef4444', bg: '#111827', label: 'Falha' },
+  SEM_HEARTBEAT: { ring: '#ef4444', bg: '#111827', label: 'Sem heartbeat' },
+  OFFLINE:       { ring: '#64748b', bg: '#0f172a', label: 'Offline' },
+  MANUTENCAO:    { ring: '#a855f7', bg: '#111827', label: 'Manutenção' },
+  ABASTECIMENTO: { ring: '#06b6d4', bg: '#0f172a', label: 'Abastecimento' },
+  INCONSISTENTE: { ring: '#f97316', bg: '#111827', label: 'Inconsistente' },
 };
 
-/** Resolve iconType com fallback seguro */
+const normalize = (value: string): string =>
+  value
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s\-\/]+/g, '_');
+
 export function resolveIconType(value: string | null | undefined): EquipmentIconType {
   if (!value) return 'PADRAO_GENERICO';
-  const upper = value.toUpperCase().replace(/[\s\-\/]/g, '_') as EquipmentIconType;
+  const upper = normalize(value) as EquipmentIconType;
   if ((EQUIPMENT_ICON_TYPES as readonly string[]).includes(upper)) return upper;
   return 'PADRAO_GENERICO';
 }
 
-/** Mapeia status legado do sistema para EquipmentMapStatus */
 export function resolveMapStatus(status: string | null | undefined): EquipmentMapStatus {
   if (!status) return 'OFFLINE';
-  const s = status.toUpperCase();
-  if (s === 'OPERANDO' || s === 'TRABALHANDO' || s === 'ONLINE') return 'OPERANDO';
-  if (s === 'PARADO' || s === 'DESLOCANDO' || s === 'FINALIZADO') return 'PARADO';
-  if (s === 'ALARME' || s === 'ALERTA') return 'ALERTA';
-  if (s === 'MANUTENCAO' || s === 'MANUTENÇÃO') return 'MANUTENCAO';
+  const s = normalize(status);
+  if (s === 'OPERANDO' || s === 'TRABALHANDO' || s === 'ONLINE' || s === 'MOVIMENTO') return 'OPERANDO';
+  if (s === 'DESLOCANDO') return 'DESLOCANDO';
+  if (s === 'PARADO' || s === 'FINALIZADO') return 'PARADO';
+  if (s === 'ALERTA') return 'ALERTA';
+  if (s === 'ALARME') return 'ALARME';
+  if (s === 'FALHA') return 'FALHA';
+  if (s === 'SEM_HEARTBEAT' || s === 'SEMHEARTBEAT') return 'SEM_HEARTBEAT';
+  if (s === 'MANUTENCAO') return 'MANUTENCAO';
   if (s === 'ABASTECIMENTO') return 'ABASTECIMENTO';
+  if (s === 'INCONSISTENTE' || s === 'PARADA_INCONSISTENTE') return 'INCONSISTENTE';
   if (s === 'OFFLINE' || s === 'INATIVO') return 'OFFLINE';
   return 'OFFLINE';
 }

@@ -18,7 +18,7 @@ import {
   MapPin, Navigation, PauseCircle, Route, User, Zap, X as XIcon,
 } from 'lucide-react';
 
-import { EquipmentLiveState, EquipmentOperationalStatus, TrailPoint } from '@/lib/types';
+import { EquipmentLiveState, TrailPoint } from '@/lib/types';
 import type { TrailQualitySummary } from '@/lib/trail-quality';
 import { TrailTimelinePanel } from '@/components/mapa/trail-timeline-panel';
 import { createEquipmentMarkerIcon } from '@/components/map/equipment-map-marker';
@@ -52,14 +52,18 @@ const HEARTBEAT_RECENT_MS =  3 * 60 * 1000;
 const REFRESH_INTERVAL_MS = 5 * 1000; // 5s — atualização em tempo real
 const NOT_INFORMED        = 'Nao informado';
 
-const STATUS_CONFIG: Record<
-  Lowercase<EquipmentOperationalStatus>,
-  { label: string; color: string; tailwind: string; text: string }
-> = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; tailwind: string; text: string }> = {
   online:          { label: 'Online',         color: '#3b82f6', tailwind: 'bg-blue-500',    text: 'text-blue-500'    },
   operando:        { label: 'Operando',        color: '#10b981', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  movimento:       { label: 'Movimento',       color: '#10b981', tailwind: 'bg-emerald-500', text: 'text-emerald-500' },
+  deslocando:      { label: 'Deslocando',      color: '#3b82f6', tailwind: 'bg-blue-500',    text: 'text-blue-500'    },
   parado:          { label: 'Parado',          color: '#f97316', tailwind: 'bg-orange-500',  text: 'text-orange-500'  },
   parada_apontada: { label: 'Parada Apontada', color: '#f59e0b', tailwind: 'bg-amber-500',   text: 'text-amber-500'   },
+  alarme:          { label: 'Alarme',          color: '#ef4444', tailwind: 'bg-red-500',      text: 'text-red-500'     },
+  alerta:          { label: 'Alerta',          color: '#ef4444', tailwind: 'bg-red-500',      text: 'text-red-500'     },
+  falha:           { label: 'Falha',           color: '#ef4444', tailwind: 'bg-red-500',      text: 'text-red-500'     },
+  sem_heartbeat:   { label: 'Sem heartbeat',   color: '#ef4444', tailwind: 'bg-red-500',      text: 'text-red-500'     },
+  manutencao:      { label: 'Manutenção',      color: '#a855f7', tailwind: 'bg-purple-500',   text: 'text-purple-500'  },
   finalizado:      { label: 'Finalizado',      color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
   offline:         { label: 'Offline',         color: '#6b7280', tailwind: 'bg-gray-500',    text: 'text-gray-500'    },
 };
@@ -127,22 +131,31 @@ const formatHourmeter = (v?: number | string | null): string => {
 
 const getTypeIcon = (type?: string): LiveMapItem['typeIcon'] => {
   const n = (type || '').toUpperCase();
-  if (n.includes('TRATOR') || n.includes('COLH')) return 'Tractor';
-  if (n.includes('CAM')    || n.includes('TRUCK')) return 'Truck';
-  if (n.includes('CARREG') || n.includes('PA '))   return 'Zap';
+  if (n.includes('TRATOR') || n.includes('COLH') || n.includes('PLANT')) return 'Tractor';
+  if (n.includes('CAM')    || n.includes('TRUCK') || n.includes('COMBOIO')) return 'Truck';
+  if (n.includes('CARREG') || n.includes('PA ') || n.includes('ESCAVA') || n.includes('MOTO')) return 'Zap';
   return 'Navigation';
 };
 
-const getStatus = (status: EquipmentOperationalStatus) =>
-  STATUS_CONFIG[status.toLowerCase() as Lowercase<EquipmentOperationalStatus>] || STATUS_CONFIG.offline;
+const getStatus = (status: string) => {
+  const key = status
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return STATUS_CONFIG[key] || STATUS_CONFIG.offline;
+};
 
 const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   ...item,
   id:               item.equipmentId,
   code:             item.fleetCode || item.equipmentId,
   pos:              hasValidPosition(item) ? [item.latitude, item.longitude] : null,
-  typeIcon:         getTypeIcon(item.type),
-  iconType:         (item as unknown as Record<string, string>).iconType || resolveIconType(item.type),
+  type:             item.type || item.name || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel,
+  typeIcon:         getTypeIcon(item.type || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel),
+  iconType:         (item as unknown as Record<string, string>).iconType || resolveIconType((item as unknown as Record<string, string>).equipmentType || item.type || item.name),
+  equipmentType:    (item as unknown as Record<string, string>).equipmentType,
+  equipmentModel:   (item as unknown as Record<string, string>).equipmentModel,
+  equipmentCategory: (item as unknown as Record<string, string>).equipmentCategory,
   displayOperator:  formatValue(item.currentOperator || item.operatorName),
   displayOperation: formatValue(item.currentOperation || item.operationName),
 });
@@ -659,9 +672,30 @@ export default function FullMapEnterprise({
 
         {fleet.filter(m => m.pos !== null).map(machine => {
           const sCfg = getStatus(machine.status);
+          const heading = (machine as unknown as Record<string, unknown>).heading ??
+            (machine as unknown as Record<string, unknown>).bearing ??
+            (machine as unknown as Record<string, unknown>).course ??
+            (machine as unknown as Record<string, unknown>).azimuth ??
+            (machine as unknown as Record<string, unknown>).direction ??
+            null;
+          const alertLevel =
+            machine.hourmeterInconsistent ? 'ALARM' :
+            machine.stop?.state === 'PARADA_INCONSISTENTE' ? 'ALARM' :
+            machine.hasRecentHeartbeat === false ? 'HEARTBEAT' :
+            machine.hasRecentGps === false ? 'WARNING' :
+            machine.displayStatus === 'OFFLINE' ? 'OFFLINE' :
+            null;
           return (
             <Marker key={machine.id} position={machine.pos!}
-              icon={createEquipmentMarkerIcon({ iconType: machine.iconType, status: machine.status, label: machine.code })}
+              icon={createEquipmentMarkerIcon({
+                iconType: machine.iconType,
+                status: machine.operationalStatus || machine.status,
+                fleetCode: machine.code,
+                heading: typeof heading === 'number' ? heading : undefined,
+                alertLevel: alertLevel ?? undefined,
+                selected: selectedId === machine.id,
+              })}
+              zIndexOffset={selectedId === machine.id ? 1000 : 0}
               eventHandlers={{
                 add:    (e) => { markerRefs.current[machine.id] = e.target as L.Marker; },
                 remove: ()  => { delete markerRefs.current[machine.id]; },
@@ -817,10 +851,10 @@ function OperationalPopup({
   const implement = formatValue((machine as unknown as Record<string,string>).implementName || machine.implementCode);
 
   return (
-    <div className="bg-[#0a0e27] text-white rounded-xl border border-[#2d3647] font-sans shadow-2xl overflow-hidden" style={{ width: 320 }}>
-      <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3 border-b border-[#2d3647]/60">
+    <div className="bg-gradient-to-b from-[#0d1232] to-[#0a0e27] text-white rounded-2xl border border-[#2d3647] font-sans shadow-2xl overflow-hidden" style={{ width: 332 }}>
+      <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3 border-b border-[#2d3647]/60 bg-white/[0.02]">
         <div className="flex items-start gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0" style={{ backgroundColor: statusCfg.color }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg shrink-0 ring-1 ring-white/10" style={{ backgroundColor: statusCfg.color }}>
             <Navigation size={20} />
           </div>
           <div className="flex flex-col min-w-0">
@@ -828,7 +862,7 @@ function OperationalPopup({
             <span className="mt-1 text-[9px] uppercase text-muted-foreground font-bold tracking-widest truncate">{formatValue(machine.type || machine.name)}</span>
           </div>
         </div>
-        <div className="shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border" style={{ color: statusCfg.color, borderColor: statusCfg.color + '40', backgroundColor: statusCfg.color + '15' }}>
+        <div className="shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border backdrop-blur" style={{ color: statusCfg.color, borderColor: statusCfg.color + '40', backgroundColor: statusCfg.color + '15' }}>
           {statusCfg.label}
         </div>
       </div>
@@ -841,7 +875,7 @@ function OperationalPopup({
           <CompactMetric icon={<MapPin size={11} />} label="Precisão GPS" value={accuracy} />
         </div>
 
-        <div className="rounded-xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
+        <div className="rounded-2xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
           <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Operação</p>
           <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
             <PField icon={<User size={11} />} label="Operador" value={machine.displayOperator} />
@@ -851,7 +885,7 @@ function OperationalPopup({
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
+        <div className="rounded-2xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
           <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Parada</p>
           <StopBlock stop={machine.stop} stopDesc={machine.stopDescription ?? machine.stopReason} stopCode={machine.stopCode} />
         </div>
