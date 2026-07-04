@@ -22,7 +22,7 @@ import { EquipmentLiveState, TrailPoint } from '@/lib/types';
 import type { TrailQualitySummary } from '@/lib/trail-quality';
 import { TrailTimelinePanel } from '@/components/mapa/trail-timeline-panel';
 import { createEquipmentMarkerIcon } from '@/components/map/equipment-map-marker';
-import { resolveIconType } from '@/lib/equipment-icon-types';
+import { resolveEquipmentIconTypeFromContext } from '@/lib/equipment-icon-resolution';
 import type { FichaOperador } from '@/lib/operator-sheet-builder';
 import {
   applyFilters,
@@ -152,7 +152,27 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   pos:              hasValidPosition(item) ? [item.latitude, item.longitude] : null,
   type:             item.type || item.name || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel,
   typeIcon:         getTypeIcon(item.type || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel),
-  iconType:         (item as unknown as Record<string, string>).iconType || resolveIconType((item as unknown as Record<string, string>).equipmentType || item.type || item.name),
+  iconType:         resolveEquipmentIconTypeFromContext(
+    {
+      type: item.type,
+      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
+      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
+      metadata: { equipmentType: (item as unknown as Record<string, string>).equipmentType ?? null },
+      name: item.name,
+      brand: item.currentOperation ?? item.operationName ?? null,
+      code: item.fleetCode,
+      iconType: (item as unknown as Record<string, string>).iconType ?? null,
+    },
+    {
+      iconType: (item as unknown as Record<string, string>).iconType ?? null,
+      type: item.type,
+      name: item.name,
+      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
+      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
+      brand: item.currentOperation ?? item.operationName ?? null,
+      manufacturer: item.currentOperator ?? item.operatorName ?? null,
+    },
+  ),
   equipmentType:    (item as unknown as Record<string, string>).equipmentType,
   equipmentModel:   (item as unknown as Record<string, string>).equipmentModel,
   equipmentCategory: (item as unknown as Record<string, string>).equipmentCategory,
