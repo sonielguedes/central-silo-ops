@@ -10,12 +10,15 @@ export interface FuelingRecord {
   id: string;
   eventId: string;
   tenantId: string;
+  companyCode?: string;
   fleetCode: string;
   truckFleetCode?: string;
+  comboioFleetCode?: string;
+  journeyOfflineId?: string;
   pumpCode?: string;
   equipmentId: string;
   dieselLiters: number;
-  hourmeter?: number | null;
+  hourmeter: number | null;
   fuelType?: string;
   fleetDescription?: string;
   gpsLatitude?: number;
@@ -38,11 +41,14 @@ export interface FuelingRecord {
 export interface FuelingRecordInput {
   eventId: string;
   tenantId: string;
+  companyCode?: string;
   equipmentId: string;
   fleetCode: string;
   truckFleetCode?: string;
+  comboioFleetCode?: string;
+  journeyOfflineId?: string;
   dieselLiters: number;
-  hourmeter?: number | null;
+  hourmeter: number | null;
   fuelType?: string;
   fleetDescription?: string;
   gpsLatitude?: number;
@@ -103,8 +109,11 @@ export class FuelingStorage {
       id: `fuel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       eventId: input.eventId,
       tenantId: input.tenantId,
+      companyCode: input.companyCode,
       fleetCode: input.fleetCode,
       truckFleetCode: input.truckFleetCode ?? input.pumpCode,
+      comboioFleetCode: input.comboioFleetCode,
+      journeyOfflineId: input.journeyOfflineId,
       pumpCode: input.pumpCode ?? input.truckFleetCode,
       equipmentId: input.equipmentId,
       dieselLiters: input.dieselLiters,
