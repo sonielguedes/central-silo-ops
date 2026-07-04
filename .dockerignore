@@ -1,0 +1,72 @@
+# Git / VCS
+.git
+.gitignore
+
+# Dependencies / build output
+node_modules
+.next
+.turbo
+.cache
+.vercel
+coverage
+dist
+build
+out
+
+# Logs / temp / editor
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.save
+*.orig
+*.rej
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# Environment files / secrets
+.env
+.env.*
+!.env.production
+
+# Local docs and archives not needed for web build
+docs/
+tests/
+**/__tests__/
+**/*.test.*
+**/*.spec.*
+scripts/
+*.md
+*.txt
+docs.7z
+*.7z
+*.zip
+*.rar
+*.tar
+*.gz
+*.bz2
+*.xz
+*.docx
+*.pdf
+*.pptx
+*.xlsx
+
+# Local screenshots / images not needed for the web build context
+screenshots/
+prints/
+tmp/
+temp/
+!public/**/*
+
+# Android / Kotlin artifacts not used by the Next.js build
+kotlin/
+*.kt
+*.kts
+*.apk
+*.aab
