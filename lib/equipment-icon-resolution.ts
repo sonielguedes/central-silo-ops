@@ -19,6 +19,10 @@ type ResolutionInput = {
   brand?: string | null;
   code?: string | null;
   iconType?: string | null;
+  implementName?: string | null;
+  implementCode?: string | null;
+  operation?: string | null;
+  currentOperation?: string | null;
 };
 
 const KEYWORDS: Array<{ test: RegExp; iconType: EquipmentIconType }> = [
@@ -93,6 +97,8 @@ export function resolveEquipmentIconTypeFromContext(
 
   const keywordCandidate = keywordResolve(
     toText(
+      input.implementName,
+      input.implementCode,
       input.type,
       input.model,
       input.category,
@@ -100,6 +106,8 @@ export function resolveEquipmentIconTypeFromContext(
       input.name,
       input.brand,
       input.code,
+      input.operation,
+      input.currentOperation,
       catalog?.type,
       catalog?.model,
       catalog?.category,
