@@ -16,7 +16,7 @@ import {
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 import type { FuelingRecord } from '@/lib/fueling-storage';
-import { resolveComboioBomba } from '@/lib/fueling-display';
+import { resolveComboioBomba, resolveFuelProduct, resolveOperatorDisplay } from '@/lib/fueling-display';
 
 type ApiResponse = {
   summary?: {
@@ -259,12 +259,13 @@ Registrar abastecimento
                       <div className="text-white font-semibold">{record.fleetCode}</div>
                       {record.fleetDescription ? <div className="text-[10px] text-muted-foreground">{record.fleetDescription}</div> : null}
                     </td>
-                    <td className="px-4 py-3 text-white/80">{record.operatorName ?? record.operatorRegistration ?? '—'}</td>
+                    <td className="px-4 py-3 text-white/80">{resolveOperatorDisplay(record)}</td>
                     <td className="px-4 py-3 text-white/80">{resolveComboioBomba({
+                      comboioFleetCode: record.comboioFleetCode,
+                      truckFleetCode: record.truckFleetCode,
                       pumpCode: record.pumpCode,
-                      comboioFleetCode: record.truckFleetCode ?? record.targetFleetCode,
                     })}</td>
-                    <td className="px-4 py-3 text-white/80">{record.fuelType ?? '—'}</td>
+                    <td className="px-4 py-3 text-white/80">{resolveFuelProduct(record)}</td>
                     <td className="px-4 py-3 text-white/80">{formatLiters(record.dieselLiters)}</td>
                     <td className="px-4 py-3 text-white/80">{record.syncStatus ?? 'SYNCED'}</td>
                   </tr>
