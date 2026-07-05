@@ -1,10 +1,8 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
-import { PageHeader } from '@/components/shared/page-header';
-import { StatusBadge } from '@/components/shared/status-badge';
 import { EquipmentService, EquipmentTypeService, EquipmentModelService } from '@/services/master.service';
 import { Equipment, EquipmentType, EquipmentModel } from '@/lib/types';
 import { useForm } from 'react-hook-form';
@@ -15,9 +13,11 @@ import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
 import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { MasterDataShell } from '@/components/master-data/master-data-shell';
+import { MasterDataToolbar } from '@/components/master-data/master-data-toolbar';
+import { MasterDataStatusBadge } from '@/components/master-data/master-data-status-badge';
 import {
   Truck,
-  Search,
   Filter,
   Plus,
   Edit,
@@ -118,7 +118,7 @@ function EquipamentosPage() {
       } else {
         const all = await EquipmentService.getAll(true);
         if (all.some(e => e.code === formData.code && e.entityStatus !== 'ARQUIVADO')) {
-           throw new Error('Código de frota já cadastrado e ativo.');
+           throw new Error('CÃ³digo de frota jÃ¡ cadastrado e ativo.');
         }
         await EquipmentService.create({ ...formData, lastSignal: 'Agora' });
       }
@@ -163,36 +163,31 @@ function EquipamentosPage() {
       <Sidebar className="hidden lg:flex shrink-0" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <Header />
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <PageHeader
+        <main className="flex-1 overflow-y-auto custom-scrollbar p-6">          <MasterDataShell
             title="Equipamentos"
             description="Gestão de Ativos e Telemetria de Frota"
+            actions={
+              <button
+                onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"
+              >
+                <Plus size={16} strokeWidth={3} /> Novo Equipamento
+              </button>
+            }
           >
-            <button
-              onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"
-            >
-              <Plus size={16} strokeWidth={3} /> Novo Equipamento
-            </button>
-          </PageHeader>
 
           <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Buscar por código, modelo ou tipo..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40 shadow-inner"
-              />
-            </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-xs font-bold hover:bg-[#252d4a] transition-all">
-              <Filter size={16} className="text-primary" /> Filtros
-            </button>
-          </div>
+          <MasterDataToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Buscar por código, modelo ou tipo..."
+            actions={
+              <button className="flex items-center gap-2 px-4 py-3 bg-[#1a1f3a] border border-[#2d3647] rounded-2xl text-xs font-bold hover:bg-[#252d4a] transition-all">
+                <Filter size={16} className="text-primary" /> Filtros
+              </button>
+            }
+          />
 
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -200,7 +195,7 @@ function EquipamentosPage() {
               <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Sincronizando Frota...</p>
             </div>
           ) : filteredData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-[#2d3647] rounded-3xl">
+            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-[#2d3647] rounded-3xl bg-[#0a0e27]/60">
               <Truck size={48} className="text-muted-foreground mb-4 opacity-20" />
               <p className="text-muted-foreground font-bold uppercase text-xs">Nenhum equipamento encontrado</p>
             </div>
@@ -211,7 +206,7 @@ function EquipamentosPage() {
                 const model = models.find(m => m.id === item.modelId);
                 const iconType = getEquipmentIconType(item);
                 return (
-                  <div key={item.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-5 hover:border-primary/40 transition-all group relative overflow-hidden">
+                  <div key={item.id} className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all group relative overflow-hidden">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-4">
                         <div className={cn("w-12 h-12 rounded-2xl bg-[#1a1f3a] flex items-center justify-center text-primary shadow-lg border border-[#2d3647]")}>
@@ -244,21 +239,21 @@ function EquipamentosPage() {
                         <span className="text-xs font-bold text-white uppercase">{type?.name}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-muted-foreground uppercase font-black">Série/Placa</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-black">SÃ©rie/Placa</span>
                         <span className="text-xs font-bold text-white uppercase">{item.plateOrSerial || '-'}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-muted-foreground uppercase font-black">Horímetro</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-black">HorÃ­metro</span>
                         <span className="text-xs font-black italic text-primary tracking-tighter">{item.hourmeter}h</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] text-muted-foreground uppercase font-black">Status</span>
-                        <StatusBadge status={item.status} />
+                        <MasterDataStatusBadge status={item.status} />
                       </div>
                     </div>
 
                     <div className="pt-4 border-t border-[#2d3647] flex items-center justify-between">
-                      <span className="text-[9px] text-muted-foreground font-bold uppercase">Último Sinal: {item.lastSignal}</span>
+                      <span className="text-[9px] text-muted-foreground font-bold uppercase">Ãšltimo Sinal: {item.lastSignal}</span>
                       <button className="text-[10px] font-black text-primary uppercase hover:underline">Telemetria</button>
                     </div>
                   </div>
@@ -266,6 +261,7 @@ function EquipamentosPage() {
               })}
             </div>
           )}
+          </MasterDataShell>
         </main>
       </div>
 
@@ -280,7 +276,7 @@ function EquipamentosPage() {
                   {selectedItem ? 'Editar Equipamento' : 'Novo Equipamento'}
                 </h2>
                 {selectedItem && (
-                   <p className="text-[10px] text-primary font-bold uppercase">Versão {selectedItem.version}</p>
+                   <p className="text-[10px] text-primary font-bold uppercase">VersÃ£o {selectedItem.version}</p>
                 )}
               </div>
               <div className="flex gap-2">
@@ -306,7 +302,7 @@ function EquipamentosPage() {
                 <EntityAuditInfo entity={selectedItem} />
               ) : (
                 <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-                  <FormField label="Código da Frota" error={errors.code?.message} required>
+                  <FormField label="CÃ³digo da Frota" error={errors.code?.message} required>
                     <input
                       {...register('code')}
                       className={cn(
@@ -351,7 +347,7 @@ function EquipamentosPage() {
                       </select>
                     </FormField>
 
-                    <FormField label="Série / Placa" error={errors.plateOrSerial?.message}>
+                    <FormField label="SÃ©rie / Placa" error={errors.plateOrSerial?.message}>
                        <input
                         {...register('plateOrSerial')}
                         className={cn(
@@ -363,7 +359,7 @@ function EquipamentosPage() {
                     </FormField>
                   </div>
 
-                  <FormField label="Horímetro Atual" error={errors.hourmeter?.message} required>
+                  <FormField label="HorÃ­metro Atual" error={errors.hourmeter?.message} required>
                     <input
                       type="number"
                       step="0.1"
@@ -383,7 +379,7 @@ function EquipamentosPage() {
                     >
                       <option value="ATIVO">ATIVO</option>
                       <option value="INATIVO">INATIVO</option>
-                      <option value="manutencao">MANUTENÇÃO</option>
+                      <option value="manutencao">MANUTENÃ‡ÃƒO</option>
                       <option value="trabalhando">Trabalhando</option>
                       <option value="deslocando">Deslocando</option>
                       <option value="parada">Parada</option>
@@ -396,7 +392,7 @@ function EquipamentosPage() {
                   <div className="pt-4 border-t border-[#2d3647] space-y-4">
                     <div className="flex items-center justify-between bg-[#1a1f3a]/40 p-3 rounded-xl border border-[#2d3647]">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-black uppercase text-white tracking-widest">Comunicação Mobile</span>
+                        <span className="text-[10px] font-black uppercase text-white tracking-widest">ComunicaÃ§Ã£o Mobile</span>
                         <span className="text-[8px] text-muted-foreground font-bold uppercase">Habilitar APK</span>
                       </div>
                       <input
@@ -418,7 +414,7 @@ function EquipamentosPage() {
                     )}
                   </div>
 
-                  <FormField label="Observações" error={errors.observations?.message}>
+                  <FormField label="ObservaÃ§Ãµes" error={errors.observations?.message}>
                     <textarea
                       {...register('observations')}
                       rows={4}
@@ -441,7 +437,7 @@ function EquipamentosPage() {
                       className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
                     >
                       {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                      {selectedItem ? 'Salvar Alterações' : 'Criar Equipamento'}
+                      {selectedItem ? 'Salvar AlteraÃ§Ãµes' : 'Criar Equipamento'}
                     </button>
                   </div>
                 </form>
@@ -464,3 +460,10 @@ function EquipamentosPage() {
 }
 
 export default withAuth(EquipamentosPage, { module: 'EQUIPAMENTOS' });
+
+
+
+
+
+
+

@@ -1,15 +1,15 @@
-"use client";
+﻿"use client";
 /**
- * SILO OPS — Operações Ativas Reais (Etapa 6.7)
+ * SILO OPS â€” OperaÃ§Ãµes Ativas Reais (Etapa 6.7)
  *
  * Consome /api/operacoes/ativas que combina live-state + ficha operador.
- * Sem dados fake. Sem mock estático.
+ * Sem dados fake. Sem mock estÃ¡tico.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
-import { PageHeader } from '@/components/shared/page-header';
+import { MasterDataShell } from '@/components/master-data/master-data-shell';
 import { withAuth } from '@/components/shared/with-auth';
 import {
   Activity,
@@ -34,37 +34,37 @@ import { cn } from '@/lib/utils';
 import type { ActiveOperationItem, ActiveOperationsResponse } from '@/app/api/operacoes/ativas/route';
 import type { ResolvedStop } from '@/lib/operational/resolve-active-operations';
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** Formata YYYY-MM-DD → DD/MM/YYYY sem usar new Date(dateString). */
+/** Formata YYYY-MM-DD â†’ DD/MM/YYYY sem usar new Date(dateString). */
 function formatDateBR(s: string): string {
   const p = s.split('-');
   if (p.length !== 3) return s;
   return `${p[2]}/${p[1]}/${p[0]}`;
 }
 
-/** Data operacional de hoje em BRT (UTC-3) sem conversão de fuso. */
+/** Data operacional de hoje em BRT (UTC-3) sem conversÃ£o de fuso. */
 function todayBRT(): string {
   return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-/** Formata timestamp ISO → hora local. */
+/** Formata timestamp ISO â†’ hora local. */
 function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
   try {
     return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   } catch {
-    return '—';
+    return 'â€”';
   }
 }
 
-/** Formata horímetro. */
+/** Formata horÃ­metro. */
 function fmtH(n: number | null | undefined): string {
-  if (n === null || n === undefined) return '—';
+  if (n === null || n === undefined) return 'â€”';
   return `${n.toFixed(1)} h`;
 }
 
-// ── Status config ──────────────────────────────────────────────────────────────
+// â”€â”€ Status config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface StatusCfg {
   label: string;
@@ -97,7 +97,7 @@ function statusConfig(s: string): StatusCfg {
   };
 }
 
-// ── KPI card ───────────────────────────────────────────────────────────────────
+// â”€â”€ KPI card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function KpiCard({ label, value, color = 'text-primary', icon }: {
   label: string;
@@ -106,7 +106,7 @@ function KpiCard({ label, value, color = 'text-primary', icon }: {
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl p-4 flex flex-col gap-1">
+    <div className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-4 flex flex-col gap-1 shadow-lg shadow-black/10">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon && <span className="opacity-60">{icon}</span>}
         <span className="text-[9px] font-black uppercase tracking-[0.15em]">{label}</span>
@@ -116,7 +116,7 @@ function KpiCard({ label, value, color = 'text-primary', icon }: {
   );
 }
 
-// ── Field helper ───────────────────────────────────────────────────────────────
+// â”€â”€ Field helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function Field({ label, icon, children, span }: {
   label: string;
@@ -135,11 +135,11 @@ function Field({ label, icon, children, span }: {
   );
 }
 
-// ── Stop block ─────────────────────────────────────────────────────────────────
+// â”€â”€ Stop block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Bloco PARADA semantico — exibe estado resolvido da parada.
- * Nunca exibe "NÃO INFORMADO". Sempre visivel (mesmo sem parada ativa).
+ * Bloco PARADA semantico â€” exibe estado resolvido da parada.
+ * Nunca exibe "NÃƒO INFORMADO". Sempre visivel (mesmo sem parada ativa).
  */
 function StopBlock({ stop }: { stop?: ResolvedStop }) {
   // Fallback seguro: sem stop object -> trata como SEM_PARADA_ATIVA
@@ -151,7 +151,7 @@ function StopBlock({ stop }: { stop?: ResolvedStop }) {
     content = (
       <div className="space-y-0.5">
         {stop?.code && (
-          <p className="text-xs font-bold text-orange-300 uppercase">Código: {stop.code}</p>
+          <p className="text-xs font-bold text-orange-300 uppercase">CÃ³digo: {stop.code}</p>
         )}
         {stop?.reason && (
           <p className="text-xs font-bold text-white/90 uppercase truncate">Motivo: {stop.reason}</p>
@@ -165,7 +165,7 @@ function StopBlock({ stop }: { stop?: ResolvedStop }) {
     content = (
       <div className="space-y-0.5">
         <p className="text-xs font-bold text-amber-300 uppercase">Aguardando apontamento de parada</p>
-        <p className="text-xs font-bold text-white/50 uppercase">Código: —</p>
+        <p className="text-xs font-bold text-white/50 uppercase">CÃ³digo: â€”</p>
       </div>
     );
   } else if (state === 'PARADA_INCONSISTENTE') {
@@ -195,7 +195,7 @@ function StopBlock({ stop }: { stop?: ResolvedStop }) {
   );
 }
 
-// ── Action button ──────────────────────────────────────────────────────────────
+// â”€â”€ Action button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ActionButton({ onClick, icon, children, disabled, title }: {
   onClick?: () => void;
@@ -222,7 +222,7 @@ function ActionButton({ onClick, icon, children, disabled, title }: {
   );
 }
 
-// ── Operation card ─────────────────────────────────────────────────────────────
+// â”€â”€ Operation card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function OpCard({ item, selectedDate }: { item: ActiveOperationItem; selectedDate: string }) {
   const cfg = statusConfig(item.liveStatus);
@@ -274,41 +274,41 @@ function OpCard({ item, selectedDate }: { item: ActiveOperationItem; selectedDat
 
       <div className="grid grid-cols-2 gap-y-3 gap-x-4 pl-2 mb-4">
         <Field label="Operador" icon={<User size={9} />}>
-          {item.operatorName ?? '—'}
+          {item.operatorName ?? 'â€”'}
         </Field>
-        <Field label="Matrícula">
-          {item.operatorRegistration ?? '—'}
+        <Field label="MatrÃ­cula">
+          {item.operatorRegistration ?? 'â€”'}
         </Field>
         <Field label="O.S.">
-          {item.workOrderNumber ?? '—'}
+          {item.workOrderNumber ?? 'â€”'}
         </Field>
-        <Field label="Horímetro">
+        <Field label="HorÃ­metro">
           {fmtH(item.hourmeterCurrent)}
         </Field>
-        <Field label="Operação" span>
+        <Field label="OperaÃ§Ã£o" span>
           {item.operationName
-            ? `${item.operationCode ? item.operationCode + ' · ' : ''}${item.operationName}`
-            : (item.operationCode ?? '—')}
+            ? `${item.operationCode ? item.operationCode + ' Â· ' : ''}${item.operationName}`
+            : (item.operationCode ?? 'â€”')}
         </Field>
         <Field label="Centro de Custo">
-          {item.costCenterName ?? '—'}
+          {item.costCenterName ?? 'â€”'}
         </Field>
         <Field label="Implemento">
           {item.implementName
-            ? `${item.implementCode ? item.implementCode + ' · ' : ''}${item.implementName}`
-            : (item.implementCode ?? '—')}
+            ? `${item.implementCode ? item.implementCode + ' Â· ' : ''}${item.implementName}`
+            : (item.implementCode ?? 'â€”')}
         </Field>
         <Field label="Data Operacional">
           {formatDateBR(item.date)}
         </Field>
         <StopBlock stop={item.stop} />
         <Field label="Jornada ID">
-          {item.journeyId ?? '—'}
+          {item.journeyId ?? 'â€”'}
         </Field>
-        <Field label="Última Atualiz.">
+        <Field label="Ãšltima Atualiz.">
           {fmtTime(item.updatedAt)}
         </Field>
-        <Field label="Último GPS">
+        <Field label="Ãšltimo GPS">
           {item.latitude !== null ? fmtTime(item.lastGpsAt) : 'Sem GPS'}
         </Field>
         <Field label="Origem" span>
@@ -337,7 +337,7 @@ function OpCard({ item, selectedDate }: { item: ActiveOperationItem; selectedDat
   );
 }
 
-// ── Filters ────────────────────────────────────────────────────────────────────
+// â”€â”€ Filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ALL_STATUSES = [
   'OPERANDO', 'EM_ANDAMENTO', 'TRABALHANDO', 'EM_MOVIMENTO',
@@ -357,7 +357,7 @@ function initialFilters(): Filters {
   return { search: '', date: todayBRT(), status: '', onlyActive: false, onlyInconsistency: false };
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────────
+// â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function OperacoesPage() {
   const [response, setResponse] = useState<ActiveOperationsResponse | null>(null);
@@ -382,7 +382,7 @@ function OperacoesPage() {
       setLastFetch(new Date());
     } catch (err) {
       console.error('[operacoes] fetch error', err);
-      setError(err instanceof Error ? err.message : 'Erro ao carregar operações.');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar operaÃ§Ãµes.');
     } finally {
       setLoading(false);
     }
@@ -441,30 +441,31 @@ function OperacoesPage() {
         <Header />
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
 
-          <PageHeader
+                    <MasterDataShell
             title="Operações Ativas"
             description="Monitoramento em tempo real — live-state + ficha operador"
+            actions={
+              <button
+                onClick={() => fetchData(filters.date, filters.onlyActive)}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 text-primary rounded-xl text-xs font-black uppercase hover:bg-primary/20 transition-all disabled:opacity-40"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                Atualizar
+              </button>
+            }
           >
-            <button
-              onClick={() => fetchData(filters.date, filters.onlyActive)}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 text-primary rounded-xl text-xs font-black uppercase hover:bg-primary/20 transition-all disabled:opacity-40"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Atualizar
-            </button>
-          </PageHeader>
 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
             <KpiCard label="Ativas"            value={kpis?.totalAtivas ?? 0}        color="text-emerald-400" icon={<Activity size={12} />} />
-            <KpiCard label="Em Operação"       value={kpis?.frotasEmOperacao ?? 0}   color="text-blue-400"    icon={<Truck size={12} />} />
+            <KpiCard label="Em OperaÃ§Ã£o"       value={kpis?.frotasEmOperacao ?? 0}   color="text-blue-400"    icon={<Truck size={12} />} />
             <KpiCard label="Operadores"        value={kpis?.operadoresAtivos ?? 0}   color="text-primary"     icon={<User size={12} />} />
             <KpiCard label="Paradas"           value={kpis?.paradas ?? 0}            color="text-orange-400"  icon={<ZapOff size={12} />} />
             <KpiCard label="Offline/Sem Sinal" value={kpis?.offlineOuSemSinal ?? 0} color="text-gray-400"    icon={<WifiOff size={12} />} />
-            <KpiCard label="Inconsistências"   value={kpis?.inconsistencias ?? 0}    color="text-amber-400"   icon={<AlertTriangle size={12} />} />
+            <KpiCard label="InconsistÃªncias"   value={kpis?.inconsistencias ?? 0}    color="text-amber-400"   icon={<AlertTriangle size={12} />} />
             <KpiCard
-              label="Última Sinc."
-              value={kpis?.ultimaSincronizacao ? fmtTime(kpis.ultimaSincronizacao) : '—'}
+              label="Ãšltima Sinc."
+              value={kpis?.ultimaSincronizacao ? fmtTime(kpis.ultimaSincronizacao) : 'â€”'}
               color="text-muted-foreground"
               icon={<Clock size={12} />}
             />
@@ -476,7 +477,7 @@ function OperacoesPage() {
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Buscar frota, operador, operação, implemento..."
+                  placeholder="Buscar frota, operador, operaÃ§Ã£o, implemento..."
                   value={filters.search}
                   onChange={(e) => setFilter('search', e.target.value)}
                   className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-2.5 pl-11 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40"
@@ -542,7 +543,7 @@ function OperacoesPage() {
                     onChange={(e) => setFilter('onlyInconsistency', e.target.checked)}
                     className="accent-amber-500 w-4 h-4"
                   />
-                  <span className="text-xs font-bold text-white/70">Com inconsistência</span>
+                  <span className="text-xs font-bold text-white/70">Com inconsistÃªncia</span>
                 </label>
                 <button
                   onClick={resetFilters}
@@ -558,7 +559,7 @@ function OperacoesPage() {
             <div className="flex flex-col items-center justify-center h-64 gap-4">
               <Loader2 size={40} className="text-primary animate-spin" />
               <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">
-                Sincronizando operações reais...
+                Sincronizando operaÃ§Ãµes reais...
               </p>
             </div>
 
@@ -581,11 +582,11 @@ function OperacoesPage() {
               </div>
               <div className="space-y-1 opacity-60">
                 <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">
-                  Nenhuma operação ativa encontrada
+                  Nenhuma operaÃ§Ã£o ativa encontrada
                 </p>
                 <p className="text-xs text-muted-foreground/70">para os filtros selecionados.</p>
                 <p className="text-xs text-muted-foreground/50">
-                  Verifique a data operacional ({formatDateBR(filters.date)}), a frota ou a sincronização do APK.
+                  Verifique a data operacional ({formatDateBR(filters.date)}), a frota ou a sincronizaÃ§Ã£o do APK.
                 </p>
               </div>
               {activeFilterCount > 0 && (
@@ -600,10 +601,10 @@ function OperacoesPage() {
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs text-muted-foreground">
                   <span className="text-white font-black">{items.length}</span>{' '}
-                  {items.length !== 1 ? 'operações' : 'operação'} — {formatDateBR(filters.date)}
+                  {items.length !== 1 ? 'operaÃ§Ãµes' : 'operaÃ§Ã£o'} â€” {formatDateBR(filters.date)}
                   {lastFetch && (
                     <span className="ml-2 opacity-50">
-                      · atualizado às {fmtTime(lastFetch.toISOString())}
+                      Â· atualizado Ã s {fmtTime(lastFetch.toISOString())}
                     </span>
                   )}
                 </p>
@@ -620,6 +621,7 @@ function OperacoesPage() {
             </>
           )}
 
+          </MasterDataShell>
         </main>
       </div>
     </div>
@@ -627,3 +629,5 @@ function OperacoesPage() {
 }
 
 export default withAuth(OperacoesPage, { module: 'OPERACOES' });
+
+

@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
-import { PageHeader } from '@/components/shared/page-header';
+import { MasterDataShell } from '@/components/master-data/master-data-shell';
 import { FarmService, FieldService } from '@/services/api-service';
 import { Farm, Field } from '@/lib/types';
 import { useForm } from 'react-hook-form';
@@ -90,22 +90,26 @@ function FazendasPage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <Header />
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <PageHeader title="Fazendas e Talhões" description="Gestão de Áreas e Estrutura Geográfica">
-            <div className="flex gap-3">
-               <button
-                onClick={() => { setSelectedFarm(null); setIsFarmDrawerOpen(true); }}
-                className="flex items-center gap-2 px-4 py-2 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[#252d4a] transition-all"
-              >
-                <Plus size={14} /> Nova Fazenda
-              </button>
-              <button
-                onClick={() => { setSelectedField(null); setIsFieldDrawerOpen(true); }}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:scale-105 transition-transform"
-              >
-                <Plus size={14} strokeWidth={3} /> Novo Talhão
-              </button>
-            </div>
-          </PageHeader>
+                    <MasterDataShell
+            title="Fazendas e Talhões"
+            description="Gestão de Áreas e Estrutura Geográfica"
+            actions={
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setSelectedFarm(null); setIsFarmDrawerOpen(true); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[#252d4a] transition-all"
+                >
+                  <Plus size={14} /> Nova Fazenda
+                </button>
+                <button
+                  onClick={() => { setSelectedField(null); setIsFieldDrawerOpen(true); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:scale-105 transition-transform"
+                >
+                  <Plus size={14} strokeWidth={3} /> Novo Talhão
+                </button>
+              </div>
+            }
+          >
 
           <div className="flex items-center justify-between mb-6">
              <div className="flex bg-[#0a0e27] border border-[#2d3647] p-1 rounded-2xl">
@@ -119,7 +123,7 @@ function FazendasPage() {
                   onClick={() => setActiveTab('FIELDS')}
                   className={cn("px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all", activeTab === 'FIELDS' ? "bg-primary text-[#0a0e27]" : "text-muted-foreground hover:text-white")}
                 >
-                  Talhões
+                  TalhÃµes
                 </button>
              </div>
              <div className="relative w-64">
@@ -137,12 +141,12 @@ function FazendasPage() {
           {loading ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4">
               <Loader2 size={40} className="text-primary animate-spin" />
-              <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Mapeando Território...</p>
+              <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Mapeando TerritÃ³rio...</p>
             </div>
           ) : activeTab === 'FARMS' ? (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredFarms.map(farm => (
-                   <div key={farm.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-6 group">
+                   <div key={farm.id} className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-6 group hover:border-primary/30 hover:shadow-lg hover:shadow-black/10 transition-all overflow-hidden">
                       <div className="flex items-start justify-between mb-4">
                          <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20 text-primary">
                             <Factory size={24} />
@@ -155,7 +159,7 @@ function FazendasPage() {
                       <h3 className="text-lg font-black italic tracking-tighter uppercase text-white group-hover:text-primary transition-colors">{farm.name}</h3>
                       <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest flex items-center gap-1 mt-1"><MapPin size={10} /> {farm.municipality}</p>
                       <div className="mt-6 pt-4 border-t border-[#2d3647] flex items-center justify-between">
-                         <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Área Total</span>
+                         <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Ãrea Total</span>
                          <span className="text-sm font-black italic text-primary">{farm.totalArea} ha</span>
                       </div>
                    </div>
@@ -166,20 +170,20 @@ function FazendasPage() {
                 {filteredFields.map(field => {
                    const farm = farms.find(f => f.id === field.farmId);
                    return (
-                      <div key={field.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-6 group">
+                      <div key={field.id} className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-6 group hover:border-primary/30 hover:shadow-lg hover:shadow-black/10 transition-all overflow-hidden">
                          <div className="flex items-start justify-between mb-4">
                             <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-500">
                                <Sprout size={24} />
                             </div>
                             <div className="flex gap-1">
                                <button onClick={() => { setSelectedField(field); setIsFieldDrawerOpen(true); }} className="p-2 text-muted-foreground hover:text-white rounded-lg hover:bg-[#1a1f3a]"><Edit size={16} /></button>
-                               <button onClick={async () => { if(confirm('Excluir talhão?')) { await FieldService.archive(field.id); loadData(); } }} className="p-2 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10"><Trash2 size={16} /></button>
+                               <button onClick={async () => { if(confirm('Excluir talhÃ£o?')) { await FieldService.archive(field.id); loadData(); } }} className="p-2 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10"><Trash2 size={16} /></button>
                             </div>
                          </div>
                          <h3 className="text-lg font-black italic tracking-tighter uppercase text-white group-hover:text-primary transition-colors">{field.code}</h3>
                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest flex items-center gap-1 mt-1"><Factory size={10} /> {farm?.name || 'Desconhecido'}</p>
                          <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-[#2d3647]">
-                            <div className="flex flex-col"><span className="text-[9px] text-muted-foreground font-black uppercase">Área</span><span className="text-xs font-black text-white">{field.area} ha</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-muted-foreground font-black uppercase">Ãrea</span><span className="text-xs font-black text-white">{field.area} ha</span></div>
                             <div className="flex flex-col"><span className="text-[9px] text-muted-foreground font-black uppercase">Cultura</span><span className="text-xs font-black text-white">{field.crop}</span></div>
                          </div>
                       </div>
@@ -187,6 +191,7 @@ function FazendasPage() {
                 })}
             </div>
           )}
+          </MasterDataShell>
         </main>
       </div>
 
@@ -200,10 +205,10 @@ function FazendasPage() {
                   <button onClick={() => setIsFarmDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
                </div>
                <form className="space-y-6" onSubmit={farmForm.handleSubmit(onFarmSubmit)}>
-                  <FormField label="Código" error={farmForm.formState.errors.code?.message} required><input {...farmForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                  <FormField label="CÃ³digo" error={farmForm.formState.errors.code?.message} required><input {...farmForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   <FormField label="Nome" error={farmForm.formState.errors.name?.message} required><input {...farmForm.register('name')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
-                  <FormField label="Município" error={farmForm.formState.errors.municipality?.message} required><input {...farmForm.register('municipality')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
-                  <FormField label="Área Total (ha)" error={farmForm.formState.errors.totalArea?.message} required><input type="number" step="0.1" {...farmForm.register('totalArea')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                  <FormField label="MunicÃ­pio" error={farmForm.formState.errors.municipality?.message} required><input {...farmForm.register('municipality')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                  <FormField label="Ãrea Total (ha)" error={farmForm.formState.errors.totalArea?.message} required><input type="number" step="0.1" {...farmForm.register('totalArea')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   <div className="pt-6 flex gap-3">
                     <button type="submit" className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary/20"><Save size={14} /> Salvar Fazenda</button>
                   </div>
@@ -218,7 +223,7 @@ function FazendasPage() {
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsFieldDrawerOpen(false)}></div>
             <div className="relative w-full max-w-md bg-[#0a0e27] border-l border-[#2d3647] shadow-2xl p-8 flex flex-col h-full animate-in slide-in-from-right duration-300">
                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">{selectedField ? 'Editar Talhão' : 'Novo Talhão'}</h2>
+                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">{selectedField ? 'Editar TalhÃ£o' : 'Novo TalhÃ£o'}</h2>
                   <button onClick={() => setIsFieldDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
                </div>
                <form className="space-y-6" onSubmit={fieldForm.handleSubmit(onFieldSubmit)}>
@@ -228,13 +233,13 @@ function FazendasPage() {
                        {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                     </select>
                   </FormField>
-                  <FormField label="Código do Talhão" error={fieldForm.formState.errors.code?.message} required><input {...fieldForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                  <FormField label="CÃ³digo do TalhÃ£o" error={fieldForm.formState.errors.code?.message} required><input {...fieldForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   <div className="grid grid-cols-2 gap-4">
-                     <FormField label="Área (ha)" error={fieldForm.formState.errors.area?.message} required><input type="number" step="0.1" {...fieldForm.register('area')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                     <FormField label="Ãrea (ha)" error={fieldForm.formState.errors.area?.message} required><input type="number" step="0.1" {...fieldForm.register('area')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                      <FormField label="Cultura" error={fieldForm.formState.errors.crop?.message} required><input {...fieldForm.register('crop')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   </div>
                   <div className="pt-6 flex gap-3">
-                    <button type="submit" className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary/20"><Save size={14} /> Salvar Talhão</button>
+                    <button type="submit" className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary/20"><Save size={14} /> Salvar TalhÃ£o</button>
                   </div>
                </form>
             </div>
@@ -245,3 +250,5 @@ function FazendasPage() {
 }
 
 export default withAuth(FazendasPage, { module: 'FAZENDAS' });
+
+

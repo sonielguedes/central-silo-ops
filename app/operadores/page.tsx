@@ -1,9 +1,11 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
-import { PageHeader } from '@/components/shared/page-header';
+import { MasterDataShell } from '@/components/master-data/master-data-shell';
+import { MasterDataToolbar } from '@/components/master-data/master-data-toolbar';
+import { MasterDataStatusBadge } from '@/components/master-data/master-data-status-badge';
 import { OperatorService } from '@/services/api-service';
 import { Operator } from '@/lib/types';
 import { useForm } from 'react-hook-form';
@@ -13,7 +15,6 @@ import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
 import {
   User,
-  Search,
   Plus,
   Edit,
   Trash2,
@@ -124,31 +125,23 @@ function OperadoresPage() {
       <Sidebar className="hidden lg:flex shrink-0" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <Header />
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <PageHeader
+        <main className="flex-1 overflow-y-auto custom-scrollbar p-6">          <MasterDataShell
             title="Operadores"
             description="Gestão de Equipe e Recursos Humanos Operacionais"
+            actions={
+              <button
+                onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"
+              >
+                <Plus size={16} strokeWidth={3} /> Novo Operador
+              </button>
+            }
           >
-            <button
-              onClick={() => { setSelectedItem(null); setIsDrawerOpen(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"
-            >
-              <Plus size={16} strokeWidth={3} /> Novo Operador
-            </button>
-          </PageHeader>
-
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Buscar por matrícula, nome ou função..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40 shadow-inner"
-              />
-            </div>
-          </div>
+          <MasterDataToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Buscar por matrícula, nome ou função..."
+          />
 
           {loading ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -156,14 +149,14 @@ function OperadoresPage() {
               <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Carregando Equipe...</p>
             </div>
           ) : filteredData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-[#2d3647] rounded-3xl">
+            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-[#2d3647] rounded-3xl bg-[#0a0e27]/60">
               <User size={48} className="text-muted-foreground mb-4 opacity-20" />
               <p className="text-muted-foreground font-bold uppercase text-xs">Nenhum operador encontrado</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredData.map((item) => (
-                <div key={item.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-3xl p-5 hover:border-primary/40 transition-all group relative overflow-hidden">
+                <div key={item.id} className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all group relative overflow-hidden">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-[#1a1f3a] flex items-center justify-center text-primary shadow-lg border border-[#2d3647]">
@@ -171,7 +164,7 @@ function OperadoresPage() {
                       </div>
                       <div>
                         <h3 className="text-lg font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors">{item.name}</h3>
-                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Matrícula: {item.registration}</p>
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">MatrÃ­cula: {item.registration}</p>
                       </div>
                     </div>
                     <div className="flex gap-1">
@@ -208,20 +201,14 @@ function OperadoresPage() {
                   </div>
 
                   <div className="pt-4 border-t border-[#2d3647] flex items-center justify-between">
-                    <div className={cn(
-                      "px-2 py-0.5 rounded-full text-[9px] font-black uppercase border",
-                      item.status === 'ATIVO' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                      item.status === 'FERIAS' ? "bg-blue-500/10 text-blue-500 border-blue-500/20" :
-                      "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                    )}>
-                      {item.status}
-                    </div>
-                    <button className="text-[10px] font-black text-primary uppercase hover:underline">Histórico</button>
+                    <MasterDataStatusBadge status={item.status} />
+                    <button className="text-[10px] font-black text-primary uppercase hover:underline">HistÃ³rico</button>
                   </div>
                 </div>
               ))}
             </div>
           )}
+          </MasterDataShell>
         </main>
       </div>
 
@@ -243,7 +230,7 @@ function OperadoresPage() {
                 <EntityAuditInfo entity={selectedItem} />
               ) : (
                 <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-                   <FormField label="Matrícula" error={errors.registration?.message} required>
+                   <FormField label="MatrÃ­cula" error={errors.registration?.message} required>
                     <input
                       {...register('registration')}
                       className={cn(
@@ -261,12 +248,12 @@ function OperadoresPage() {
                         "w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all",
                         errors.name && "border-red-500/50"
                       )}
-                      placeholder="Ex: João da Silva"
+                      placeholder="Ex: JoÃ£o da Silva"
                     />
                   </FormField>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <FormField label="Função" error={errors.role?.message} required>
+                    <FormField label="FunÃ§Ã£o" error={errors.role?.message} required>
                       <input
                         {...register('role')}
                         className={cn(
@@ -296,7 +283,7 @@ function OperadoresPage() {
                         className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none transition-all appearance-none"
                       >
                         <option value="ATIVO">Ativo</option>
-                        <option value="FERIAS">Férias</option>
+                        <option value="FERIAS">FÃ©rias</option>
                         <option value="AFASTADO">Afastado</option>
                         <option value="INATIVO">Inativo</option>
                       </select>
@@ -315,7 +302,7 @@ function OperadoresPage() {
                     </FormField>
                   </div>
 
-                  <FormField label="Observações" error={errors.observations?.message}>
+                  <FormField label="ObservaÃ§Ãµes" error={errors.observations?.message}>
                     <textarea
                       {...register('observations')}
                       rows={4}
@@ -338,7 +325,7 @@ function OperadoresPage() {
                       className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
                     >
                       {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                      {selectedItem ? 'Salvar Alterações' : 'Criar Operador'}
+                      {selectedItem ? 'Salvar AlteraÃ§Ãµes' : 'Criar Operador'}
                     </button>
                   </div>
                 </form>
@@ -352,3 +339,8 @@ function OperadoresPage() {
 }
 
 export default withAuth(OperadoresPage, { module: 'OPERADORES' });
+
+
+
+
+

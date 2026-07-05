@@ -1,15 +1,15 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from 'react';
 import { Package, Plus, Search } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 
-const COLUMNS = ['Código', 'Nome', 'Tipo', 'Unidade', 'Status'];
+const COLUMNS = ['CÃ³digo', 'Nome', 'Tipo', 'Unidade', 'Status'];
 
 const EXEMPLOS = [
-  { code: 'DIESEL_S10',  name: 'Diesel S10',   tipo: 'Combustível', unit: 'L' },
-  { code: 'DIESEL_S500', name: 'Diesel S500',  tipo: 'Combustível', unit: 'L' },
+  { code: 'DIESEL_S10',  name: 'Diesel S10',   tipo: 'CombustÃ­vel', unit: 'L' },
+  { code: 'DIESEL_S500', name: 'Diesel S500',  tipo: 'CombustÃ­vel', unit: 'L' },
   { code: 'ARLA_32',     name: 'Arla 32',      tipo: 'Aditivo',     unit: 'L' },
   { code: 'LUBR_15W40',  name: 'Lubrificante 15W40', tipo: 'Lubrificante', unit: 'L' },
   { code: 'GRAXA_GP',    name: 'Graxa GP',     tipo: 'Lubrificante', unit: 'kg' },
@@ -25,10 +25,10 @@ function CombustivelProdutosPage() {
   );
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#060c1a] text-white">
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#050812] text-white">
       <CombustivelPageHeader
         title="Produtos"
-        subtitle="Combustíveis, lubrificantes e aditivos cadastrados"
+        subtitle="CombustÃ­veis, lubrificantes e aditivos cadastrados"
         currentPage="Produtos"
         actions={
           <>
@@ -38,12 +38,12 @@ function CombustivelProdutosPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar produto..."
-                className="pl-9 pr-4 py-2 bg-[#0d1426] border border-[#2d3647] rounded-xl text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-orange-500/50 w-48"
+                className="pl-9 pr-4 py-2 bg-[#0d1426] border border-[#2d3647] rounded-xl text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-primary/50 w-48"
               />
             </div>
             <button
               onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-[#0a0e27] hover:scale-105 text-xs font-black uppercase tracking-tighter transition-all shadow-lg shadow-primary/20"
             >
               <Plus size={13} />
               Novo Produto
@@ -55,26 +55,26 @@ function CombustivelProdutosPage() {
       <div className="px-8 py-6 space-y-4">
         {/* Form */}
         {showForm && (
-          <div className="bg-[#0d1426] border border-orange-500/30 rounded-xl p-6">
-            <h3 className="text-sm font-black mb-4 text-orange-300">Cadastrar Produto</h3>
+          <div className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-6 shadow-lg shadow-black/10">
+            <h3 className="text-sm font-black mb-4 text-white">Cadastrar Produto</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               {[
-                { label: 'Código', placeholder: 'DIESEL_S10' },
+                { label: 'CÃ³digo', placeholder: 'DIESEL_S10' },
                 { label: 'Nome', placeholder: 'Diesel S10' },
-                { label: 'Tipo', placeholder: 'Combustível / Lubrificante / Aditivo' },
+                { label: 'Tipo', placeholder: 'CombustÃ­vel / Lubrificante / Aditivo' },
                 { label: 'Unidade', placeholder: 'L / kg / unid' },
               ].map(field => (
                 <div key={field.label}>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">{field.label}</label>
                   <input
                     placeholder={field.placeholder}
-                    className="w-full px-3 py-2 bg-[#060c1a] border border-[#2d3647] rounded-lg text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-orange-500/50"
+                    className="w-full px-3 py-2 bg-[#050812] border border-[#2d3647] rounded-xl text-xs text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                   />
                 </div>
               ))}
             </div>
             <div className="flex items-center gap-3">
-              <button className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white rounded-xl transition-all">Salvar</button>
+              <button className="px-4 py-2 bg-primary text-[#0a0e27] hover:scale-105 text-xs font-black uppercase tracking-tighter rounded-xl transition-all shadow-lg shadow-primary/20">Salvar</button>
               <button
                 onClick={() => setShowForm(false)}
                 className="px-4 py-2 bg-[#060c1a] border border-[#2d3647] text-xs font-bold text-muted-foreground hover:text-white rounded-xl transition-all"
@@ -84,13 +84,13 @@ function CombustivelProdutosPage() {
         )}
 
         {/* Info */}
-        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-4 text-[11px] text-orange-200/70">
-          Estes produtos serão usados nos abastecimentos e sincronizados com o aplicativo via código (<code className="text-orange-300">productCode</code>).
-          O código deve ser único por empresa e nunca convertido para número.
+        <div className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-2xl p-4 text-[11px] text-muted-foreground">
+          Estes produtos serÃ£o usados nos abastecimentos e sincronizados com o aplicativo via cÃ³digo (<code className="text-orange-300">productCode</code>).
+          O cÃ³digo deve ser Ãºnico por empresa e nunca convertido para nÃºmero.
         </div>
 
         {/* Table */}
-        <div className="bg-[#0d1426] border border-[#2d3647] rounded-xl overflow-hidden">
+        <div className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl overflow-hidden shadow-lg shadow-black/10">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#2d3647]">
@@ -128,7 +128,7 @@ function CombustivelProdutosPage() {
           </table>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Exibindo {filtered.length} produto(s). Os produtos acima são exemplos de referência — edite ou substitua conforme necessário.
+          Exibindo {filtered.length} produto(s). Os produtos acima sÃ£o exemplos de referÃªncia â€” edite ou substitua conforme necessÃ¡rio.
         </p>
       </div>
     </div>
@@ -136,3 +136,5 @@ function CombustivelProdutosPage() {
 }
 
 export default withAuth(CombustivelProdutosPage, { module: 'COMBUSTIVEL_PRODUTOS' });
+
+

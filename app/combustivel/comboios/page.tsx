@@ -1,21 +1,21 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from 'react';
 import { Truck, Plus, Search, CheckCircle, XCircle } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 
-const COLUMNS = ['Código', 'Descrição', 'Placa', 'Capacidade Total (L)', 'Status', 'Ações'];
+const COLUMNS = ['CÃ³digo', 'DescriÃ§Ã£o', 'Placa', 'Capacidade Total (L)', 'Status', 'AÃ§Ãµes'];
 
 function CombustivelComboiosPage() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#060c1a] text-white">
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#050812] text-white">
       <CombustivelPageHeader
         title="Comboios"
-        subtitle="Cadastro de unidades abastecedoras (caminhão-pipa, reboque, etc.)"
+        subtitle="Cadastro de unidades abastecedoras (caminhÃ£o-pipa, reboque, etc.)"
         currentPage="Comboios"
         actions={
           <>
@@ -25,12 +25,12 @@ function CombustivelComboiosPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar comboio..."
-                className="pl-9 pr-4 py-2 bg-[#0d1426] border border-[#2d3647] rounded-xl text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-orange-500/50 w-48"
+                className="pl-9 pr-4 py-2 bg-[#0d1426] border border-[#2d3647] rounded-xl text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-primary/50 w-48"
               />
             </div>
             <button
               onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-[#0a0e27] hover:scale-105 text-xs font-black uppercase tracking-tighter transition-all shadow-lg shadow-primary/20"
             >
               <Plus size={13} />
               Novo Comboio
@@ -42,30 +42,30 @@ function CombustivelComboiosPage() {
       <div className="px-8 py-6 space-y-4">
         {/* Form */}
         {showForm && (
-          <div className="bg-[#0d1426] border border-orange-500/30 rounded-xl p-6">
-            <h3 className="text-sm font-black mb-4 text-orange-300">Cadastrar Comboio</h3>
+          <div className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-6 shadow-lg shadow-black/10">
+            <h3 className="text-sm font-black mb-4 text-white">Cadastrar Comboio</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               {[
-                { label: 'Código', placeholder: 'CB-01', hint: 'Sempre String' },
-                { label: 'Descrição', placeholder: 'Caminhão Pipa 01' },
+                { label: 'CÃ³digo', placeholder: 'CB-01', hint: 'Sempre String' },
+                { label: 'DescriÃ§Ã£o', placeholder: 'CaminhÃ£o Pipa 01' },
                 { label: 'Placa', placeholder: 'AAA-0000 (opcional)' },
                 { label: 'Capacidade (L)', placeholder: '0,0', type: 'number' },
               ].map(field => (
                 <div key={field.label}>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">
                     {field.label}
-                    {field.hint && <span className="ml-1 text-orange-400/70">({field.hint})</span>}
+                    {field.hint && <span className="ml-1 text-primary/70">({field.hint})</span>}
                   </label>
                   <input
                     type={field.type || 'text'}
                     placeholder={field.placeholder}
-                    className="w-full px-3 py-2 bg-[#060c1a] border border-[#2d3647] rounded-lg text-xs text-white placeholder-muted-foreground focus:outline-none focus:border-orange-500/50"
+                    className="w-full px-3 py-2 bg-[#050812] border border-[#2d3647] rounded-xl text-xs text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                   />
                 </div>
               ))}
             </div>
             <div className="flex items-center gap-3">
-              <button className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-xs font-bold text-white rounded-xl transition-all">
+              <button className="px-4 py-2 bg-primary text-[#0a0e27] hover:scale-105 text-xs font-black uppercase tracking-tighter rounded-xl transition-all shadow-lg shadow-primary/20">
                 Salvar
               </button>
               <button
@@ -79,7 +79,7 @@ function CombustivelComboiosPage() {
         )}
 
         {/* Table */}
-        <div className="bg-[#0d1426] border border-[#2d3647] rounded-xl overflow-hidden">
+        <div className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl overflow-hidden shadow-lg shadow-black/10">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#2d3647]">
@@ -126,3 +126,5 @@ function CombustivelComboiosPage() {
 }
 
 export default withAuth(CombustivelComboiosPage, { module: 'COMBUSTIVEL_COMBOIOS' });
+
+
