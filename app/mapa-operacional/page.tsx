@@ -327,8 +327,8 @@ function MapaOperacionalPage() {
 
       {/* ── Map area ───────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        <header className="absolute top-4 left-4 right-4 z-[1400] h-14 rounded-2xl border border-white/8 bg-[#0a0e27]/88 px-4 sm:px-5 shadow-[0_22px_55px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
-          <div className="flex h-full items-center justify-between gap-4">
+        <header className="absolute top-4 left-4 right-4 z-[1400] h-14 rounded-2xl border border-white/8 bg-[#08101f]/88 px-4 sm:px-5 shadow-[0_22px_55px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+          <div className="grid h-full grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-4">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
               <button
                 onClick={toggle}
@@ -337,58 +337,60 @@ function MapaOperacionalPage() {
                 <Menu size={20} />
               </button>
 
-              <div className="hidden items-center gap-3 sm:flex">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <div className="hidden min-w-0 items-center gap-3 sm:flex">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                   <Globe size={16} />
                 </div>
                 <div className="min-w-0">
                   <span className="block truncate text-[10px] font-black uppercase tracking-[0.22em] text-white">
-                    Visão Geoespacial
+                    Vis?o Geoespacial
                   </span>
                   <span className="block truncate text-[8px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
                     Central operacional ao vivo
                   </span>
                 </div>
               </div>
-
-              <div className="hidden h-8 w-px bg-white/8 md:block" />
-
-              <div className="hidden items-center gap-3 md:flex">
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Data</span>
-                  <span className="text-[11px] font-black uppercase tracking-tight text-white">
-                    {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </span>
-                </div>
-                <div className="h-8 w-px bg-white/8" />
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Hora</span>
-                  <span className="text-[18px] font-black italic tracking-tighter text-white leading-none">
-                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button onClick={() => setIsFleetSidebarOpen(true)}
-              className={cn("lg:hidden rounded-xl border border-white/5 bg-white/[0.03] p-2 text-primary transition-colors hover:border-primary/30 hover:bg-primary/10", isFleetSidebarOpen && "hidden")}>
-              <LayoutGrid size={18} />
-            </button>
-            <div className="hidden items-center gap-2 rounded-full border border-white/5 bg-white/[0.03] px-2 py-1.5 sm:flex">
-              <MapControl icon={<Maximize2 size={15} />} />
-              <MapControl icon={<MapIcon size={15} />} />
-              <MapControl icon={<Settings2 size={15} />} />
             </div>
 
-            <div className="flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-1.5">
-              <div className="hidden text-right sm:block">
-                <p className="text-[11px] font-black italic uppercase tracking-tighter text-white leading-none">Joao Oliveira</p>
-                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-primary">Admin</p>
+            <div className="hidden min-w-0 items-center justify-center gap-3 md:flex">
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Data</span>
+                <span className="text-[11px] font-black uppercase tracking-tight text-white">
+                  {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
               </div>
-              <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-[#1a1f3a] to-[#2d3647] p-[1px] shadow-[0_0_18px_rgba(0,0,0,0.24)]">
-                <div className="flex h-full w-full items-center justify-center rounded-full bg-[#0a0e27] font-black italic text-sm text-primary">JO</div>
+              <div className="h-8 w-px bg-white/8" />
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Hora</span>
+                <span className="text-[18px] font-black italic tracking-tighter leading-none text-white">
+                  {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+              <button
+                onClick={() => setIsFleetSidebarOpen(true)}
+                className={cn(
+                  "lg:hidden rounded-xl border border-white/5 bg-white/[0.03] p-2 text-primary transition-colors hover:border-primary/30 hover:bg-primary/10",
+                  isFleetSidebarOpen && "hidden",
+                )}
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1.5 sm:flex">
+                <MapControl icon={<Maximize2 size={15} />} />
+                <MapControl icon={<MapIcon size={15} />} />
+                <MapControl icon={<Settings2 size={15} />} />
+              </div>
+              <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-2.5 py-1.5">
+                <div className="hidden min-w-0 text-right sm:block">
+                  <p className="truncate text-[11px] font-black italic uppercase tracking-tighter text-white leading-none">Joao Oliveira</p>
+                  <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-primary">Admin</p>
+                </div>
+                <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-tr from-[#1a1f3a] to-[#2d3647] p-[1px] shadow-[0_0_18px_rgba(0,0,0,0.24)]">
+                  <div className="flex h-full w-full items-center justify-center rounded-full bg-[#0a0e27] font-black italic text-sm text-primary">JO</div>
+                </div>
               </div>
             </div>
           </div>
@@ -525,7 +527,7 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
 
 function MapControl({ icon }: { icon: React.ReactNode }) {
   return (
-    <button className="p-2 text-muted-foreground hover:text-white hover:bg-[#1a1f3a] rounded-xl transition-all">
+    <button className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-[#0a0e27]/70 text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-primary/20">
       {icon}
     </button>
   );
