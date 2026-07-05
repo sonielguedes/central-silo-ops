@@ -188,6 +188,17 @@ function getJourneyIdFromPayload(payload: Record<string, unknown>): string | und
   return asString(payload.journeyId) ?? asString(payload.journeyOfflineId);
 }
 
+function translateProductCode(code?: string | null): string | undefined {
+  const normalized = asString(code)?.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!normalized) return undefined;
+  if (normalized === 'DIESELS10') return 'Diesel S-10';
+  if (normalized === 'DIESELS500') return 'Diesel S-500';
+  if (normalized === 'DIESEL') return 'Diesel';
+  if (normalized === 'GASOLINA') return 'Gasolina';
+  if (normalized === 'ETANOL') return 'Etanol';
+  return asString(code);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rl = checkRateLimit(req, RATE_LIMITS.mobileBatch);
@@ -292,15 +303,30 @@ export async function POST(req: NextRequest) {
           companyCode: bodyCompanyCode,
           equipmentId: fleetCode,
           fleetCode,
-          truckFleetCode: asString(payload.pumpCode ?? bodyDeviceId),
+          targetFleetCode: fleetCode,
+          truckFleetCode: asString(payload.comboioFleetCode ?? payload.comboio),
           comboioFleetCode: asString(payload.comboioFleetCode ?? payload.comboio),
           journeyOfflineId: asString(payload.journeyOfflineId),
           pumpCode: asString(payload.pumpCode),
           dieselLiters: liters,
           hourmeter: hasHourmeter ? hourmeter : null,
-          fuelType: asString(payload.productCode ?? payload.productDescription ?? payload.fuelType),
+          fuelType: asString(payload.productDescription)
+            ?? translateProductCode(asString(payload.fuelType))
+            ?? translateProductCode(asString(payload.productCode))
+            ?? asString(payload.fuelType)
+            ?? asString(payload.productCode),
+          productCode: asString(payload.productCode),
+          productDescription:
+            asString(payload.productDescription)
+            ?? translateProductCode(asString(payload.fuelType))
+            ?? translateProductCode(asString(payload.productCode))
+            ?? asString(payload.productCode)
+            ?? asString(payload.fuelType),
           fleetDescription: asString(payload.fleetDescription),
-          operatorName: asString(payload.operatorName),
+          driverName: asString(payload.driverName),
+          driverRegistration: asString(payload.driverRegistration),
+          operatorName: asString(payload.operatorName) ?? asString(payload.driverName),
+          operatorRegistration: asString(payload.operatorRegistration) ?? asString(payload.driverRegistration),
           attendantName: asString(payload.attendantName),
           attendantRegistration: asString(payload.attendantRegistration),
           odometer: hasOdometer ? odometer : null,
@@ -309,6 +335,8 @@ export async function POST(req: NextRequest) {
           journeyId: asString(payload.journeyId),
           fueledAt: occurredAt,
           deviceId: bodyDeviceId,
+          origin: 'APK',
+          status: 'SYNCED',
         });
 
         if (saveResult === 'DUPLICATE') {

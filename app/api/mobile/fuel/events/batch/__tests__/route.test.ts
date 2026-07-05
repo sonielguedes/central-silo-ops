@@ -285,10 +285,21 @@ describe('POST /api/mobile/fuel/events/batch', () => {
       journeyId: 'journey-001',
       journeyOfflineId: 'journey-offline-001',
       fleetCode: '1401',
+      comboioFleetCode: '770',
+      truckFleetCode: '770',
+      pumpCode: 'BOMBA - 01',
+      driverName: 'sony',
+      driverRegistration: '1234',
+      operatorName: 'sony',
+      operatorRegistration: '1234',
+      productCode: 'DIESEL_S10',
+      productDescription: 'Diesel S-10',
       dieselLiters: 5,
       hourmeter: 558,
       odometer: null,
-      fuelType: 'DIESEL_S10',
+      fuelType: 'Diesel S-10',
+      origin: 'APK',
+      status: 'SYNCED',
     });
   });
 

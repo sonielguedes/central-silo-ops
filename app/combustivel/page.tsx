@@ -16,7 +16,7 @@ import {
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 import type { FuelingRecord } from '@/lib/fueling-storage';
-import { resolveComboioBomba, resolveFuelProduct, resolveOperatorDisplay } from '@/lib/fueling-display';
+import { resolveComboioBomba, resolveFuelProduct, resolveFuelSyncStatus, resolveOperatorDisplay } from '@/lib/fueling-display';
 
 type ApiResponse = {
   summary?: {
@@ -131,7 +131,7 @@ function isInconsistent(record: FuelingRecord): boolean {
 function getTopFuel(records: FuelingRecord[]): { fuelType: string; liters: number } {
   const totals = new Map<string, number>();
   for (const record of records) {
-    const key = String(record.fuelType ?? '').trim() || 'Desconhecido';
+    const key = resolveFuelProduct({ productDescription: record.productDescription, fuelType: record.fuelType, productCode: record.productCode }) || 'Desconhecido';
     totals.set(key, (totals.get(key) ?? 0) + (Number(record.dieselLiters) || 0));
   }
   let fuelType = '—';
@@ -267,7 +267,7 @@ Registrar abastecimento
                     })}</td>
                     <td className="px-4 py-3 text-white/80">{resolveFuelProduct(record)}</td>
                     <td className="px-4 py-3 text-white/80">{formatLiters(record.dieselLiters)}</td>
-                    <td className="px-4 py-3 text-white/80">{record.syncStatus ?? 'SYNCED'}</td>
+                    <td className="px-4 py-3 text-white/80">{resolveFuelSyncStatus(record.syncStatus ?? record.status)}</td>
                   </tr>
                 )) : (
                   <tr>

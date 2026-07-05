@@ -35,6 +35,7 @@ export function resolveComboioBomba(record: ComboioBombaSource): string {
   const pumpValid = pump && !UUID_PATTERN.test(pump) ? pump : '';
 
   if (comboioValid && pumpValid) {
+    if (comboioValid === pumpValid) return comboioValid;
     return `${comboioValid} / ${pumpValid}`;
   }
   if (comboioValid) {
@@ -48,34 +49,40 @@ export function resolveComboioBomba(record: ComboioBombaSource): string {
 }
 
 const PRODUCT_LABELS: Record<string, string> = {
-  DIESEL_S10: 'Diesel S-10',
-  DIESEL_S500: 'Diesel S-500',
+  DIESELS10: 'Diesel S-10',
+  DIESELS500: 'Diesel S-500',
   DIESEL: 'Diesel',
   GASOLINA: 'Gasolina',
   ETANOL: 'Etanol',
   FLEX: 'Flex',
   ELETRICO: 'Elétrico',
-  NAO_APLICA: 'Não aplicável',
+  NAOAPLICA: 'Não aplicável',
 };
 
-function normalizeProductCode(value?: string | null): string {
-  return clean(value)
-    .toUpperCase()
-    .replace(/[\s-]+/g, '_')
-    .replace(/[^A-Z0-9_]/g, '');
+function normalizeProductKey(value?: string | null): string {
+  return clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function translateProductCode(value?: string | null): string | null {
+  const normalized = normalizeProductKey(value);
+  return PRODUCT_LABELS[normalized] ?? null;
 }
 
 export function resolveFuelProduct(record: FuelProductSource): string {
   const description = clean(record.productDescription);
-  if (description) return description;
+  if (description) return translateProductCode(description) ?? description;
 
   const fuelType = clean(record.fuelType);
-  if (fuelType) return fuelType;
+  if (fuelType) {
+    const translated = translateProductCode(fuelType);
+    if (translated) return translated;
+    if (!/^[A-Z0-9_\- ]+$/.test(fuelType)) return fuelType;
+  }
 
-  const productCode = normalizeProductCode(record.productCode ?? record.product);
+  const productCode = normalizeProductKey(record.productCode ?? record.product);
   if (!productCode) return 'Não informado';
 
-  return PRODUCT_LABELS[productCode] ?? record.productCode?.trim() ?? record.product?.trim() ?? 'Não informado';
+  return translateProductCode(productCode) ?? record.productCode?.trim() ?? record.product?.trim() ?? 'Não informado';
 }
 
 export function resolveOperatorDisplay(record: OperatorSource): string {
@@ -86,4 +93,12 @@ export function resolveOperatorDisplay(record: OperatorSource): string {
     clean(record.driverRegistration) ||
     '—'
   );
+}
+
+export function resolveFuelSyncStatus(status?: string | null): string {
+  const value = clean(status).toUpperCase();
+  if (value === 'SYNCED') return 'Sincronizado';
+  if (value === 'PENDING' || value === 'PENDENTE_SYNC') return 'Pendente';
+  if (value === 'ERROR' || value === 'ERRO_SYNC') return 'Erro';
+  return status?.trim() || '—';
 }
