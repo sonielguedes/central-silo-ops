@@ -141,9 +141,26 @@ function FazendasPage() {
           {loading ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4">
               <Loader2 size={40} className="text-primary animate-spin" />
-              <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Mapeando TerritÃ³rio...</p>
+              <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Mapeando Território...</p>
             </div>
           ) : activeTab === 'FARMS' ? (
+             filteredFarms.length === 0 ? (
+               <div className="flex flex-col items-center justify-center min-h-[320px] rounded-3xl border border-dashed border-[#2d3647] bg-[#0a0e27]/60 px-6 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4">
+                     <Factory size={28} />
+                  </div>
+                  <h3 className="text-lg font-black uppercase tracking-tighter text-white">Nenhuma fazenda cadastrada</h3>
+                  <p className="mt-2 max-w-xl text-sm text-muted-foreground leading-relaxed">Cadastre fazendas e talhões para estruturar a base territorial da operação agrícola.</p>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <button onClick={() => { setSelectedFarm(null); setIsFarmDrawerOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[#252d4a] transition-all">
+                      <Plus size={14} /> Nova Fazenda
+                    </button>
+                    <button onClick={() => { setSelectedField(null); setIsFieldDrawerOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:scale-105 transition-transform">
+                      <Plus size={14} strokeWidth={3} /> Novo Talhão
+                    </button>
+                  </div>
+               </div>
+             ) : (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredFarms.map(farm => (
                    <div key={farm.id} className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-3xl p-6 group hover:border-primary/30 hover:shadow-lg hover:shadow-black/10 transition-all overflow-hidden">
@@ -159,14 +176,32 @@ function FazendasPage() {
                       <h3 className="text-lg font-black italic tracking-tighter uppercase text-white group-hover:text-primary transition-colors">{farm.name}</h3>
                       <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest flex items-center gap-1 mt-1"><MapPin size={10} /> {farm.municipality}</p>
                       <div className="mt-6 pt-4 border-t border-[#2d3647] flex items-center justify-between">
-                         <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Ãrea Total</span>
+                         <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Área Total</span>
                          <span className="text-sm font-black italic text-primary">{farm.totalArea} ha</span>
                       </div>
                    </div>
                 ))}
              </div>
+             )
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             filteredFields.length === 0 ? (
+               <div className="flex flex-col items-center justify-center min-h-[320px] rounded-3xl border border-dashed border-[#2d3647] bg-[#0a0e27]/60 px-6 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4">
+                     <Sprout size={28} />
+                  </div>
+                  <h3 className="text-lg font-black uppercase tracking-tighter text-white">Nenhum talhão cadastrado</h3>
+                  <p className="mt-2 max-w-xl text-sm text-muted-foreground leading-relaxed">Cadastre talhões vinculados às fazendas para organizar zonas, frentes e áreas operacionais.</p>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <button onClick={() => { setSelectedFarm(null); setIsFarmDrawerOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-[#1a1f3a] border border-[#2d3647] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[#252d4a] transition-all">
+                      <Plus size={14} /> Nova Fazenda
+                    </button>
+                    <button onClick={() => { setSelectedField(null); setIsFieldDrawerOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:scale-105 transition-transform">
+                      <Plus size={14} strokeWidth={3} /> Novo Talhão
+                    </button>
+                  </div>
+               </div>
+             ) : (
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredFields.map(field => {
                    const farm = farms.find(f => f.id === field.farmId);
                    return (
@@ -177,19 +212,20 @@ function FazendasPage() {
                             </div>
                             <div className="flex gap-1">
                                <button onClick={() => { setSelectedField(field); setIsFieldDrawerOpen(true); }} className="p-2 text-muted-foreground hover:text-white rounded-lg hover:bg-[#1a1f3a]"><Edit size={16} /></button>
-                               <button onClick={async () => { if(confirm('Excluir talhÃ£o?')) { await FieldService.archive(field.id); loadData(); } }} className="p-2 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10"><Trash2 size={16} /></button>
+                               <button onClick={async () => { if(confirm('Excluir talhão?')) { await FieldService.archive(field.id); loadData(); } }} className="p-2 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10"><Trash2 size={16} /></button>
                             </div>
                          </div>
                          <h3 className="text-lg font-black italic tracking-tighter uppercase text-white group-hover:text-primary transition-colors">{field.code}</h3>
                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest flex items-center gap-1 mt-1"><Factory size={10} /> {farm?.name || 'Desconhecido'}</p>
                          <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-[#2d3647]">
-                            <div className="flex flex-col"><span className="text-[9px] text-muted-foreground font-black uppercase">Ãrea</span><span className="text-xs font-black text-white">{field.area} ha</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-muted-foreground font-black uppercase">Área</span><span className="text-xs font-black text-white">{field.area} ha</span></div>
                             <div className="flex flex-col"><span className="text-[9px] text-muted-foreground font-black uppercase">Cultura</span><span className="text-xs font-black text-white">{field.crop}</span></div>
                          </div>
                       </div>
                    )
                 })}
             </div>
+             )
           )}
           </MasterDataShell>
         </main>
