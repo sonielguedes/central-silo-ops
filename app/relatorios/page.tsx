@@ -1,357 +1,486 @@
-﻿"use client";
+"use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
-import { PageHeader } from '@/components/shared/page-header';
+import { withAuth } from '@/components/shared/with-auth';
+import { cn } from '@/lib/utils';
+import type { DashboardSummary } from '@/app/api/dashboard/summary/route';
+import type { FuelingRecord } from '@/lib/fueling-storage';
 import {
-  AlertCircle,
-  ArrowRight,
-  BarChart3,
-  Calendar,
+  ArrowUpRight,
+  CalendarRange,
   CheckCircle2,
-  ChevronLeft,
   ChevronRight,
   Database,
-  Download,
-  FileDown,
-  Filter,
-  History,
-  Clock,
-  MapPin,
-  Play,
-  Star,
-  TrendingUp,
+  BookText,
+  Fuel,
+  Layers3,
+  MapPinned,
+  RefreshCw,
+  ShieldAlert,
+  SlidersHorizontal,
+  Sparkles,
+  SplitSquareHorizontal,
+  Gauge,
+  Route,
+  Clock3,
+  AlertTriangle,
+  Radar,
+  Activity,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/lib/context/auth-context';
-import { AuditService } from '@/services/master.service';
-import { withAuth } from '@/components/shared/with-auth';
-import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
 
-type ReportType = 'HOURS' | 'EFFICIENCY' | 'STOPS' | 'SUPPLY' | 'CHECKLIST' | 'OPERATIONS' | 'PRODUCTION' | 'TIMELINE' | 'MAP' | 'RANKING';
-type Step = 1 | 2 | 3 | 4 | 5;
+type ReportStatus = 'Disponível' | 'Em preparação' | 'Requer dados';
 
-const REPORT_TYPES: Array<{
-  id: ReportType;
-  label: string;
-  icon: LucideIcon;
+type ReportCard = {
+  title: string;
   description: string;
-  status: 'Disponível';
-}> = [
-  { id: 'HOURS', label: 'Horas Operacionais', icon: Clock, description: 'Análise de utilização de motor e trabalho.', status: 'Disponível' },
-  { id: 'EFFICIENCY', label: 'Eficiência Operacional', icon: TrendingUp, description: 'Relação entre tempo produtivo e improdutivo.', status: 'Disponível' },
-  { id: 'STOPS', label: 'Motivos de Parada', icon: AlertCircle, description: 'Gargalos e causas de indisponibilidade.', status: 'Disponível' },
-  { id: 'SUPPLY', label: 'Abastecimentos', icon: Database, description: 'Consumo de combustível e indicadores L/h.', status: 'Disponível' },
-  { id: 'CHECKLIST', label: 'Checklists', icon: CheckCircle2, description: 'Conformidade técnica pré-operacional.', status: 'Disponível' },
-  { id: 'OPERATIONS', label: 'Atividades', icon: Play, description: 'Rastro de execuções no campo.', status: 'Disponível' },
-  { id: 'PRODUCTION', label: 'Produção', icon: BarChart3, description: 'Volume colhido ou área trabalhada.', status: 'Disponível' },
-  { id: 'TIMELINE', label: 'Linha do Tempo', icon: History, description: 'Visão sequencial de eventos.', status: 'Disponível' },
-  { id: 'MAP', label: 'Relatórios Geográficos', icon: MapPin, description: 'Mapas de calor e rastro GPS.', status: 'Disponível' },
-  { id: 'RANKING', label: 'Ranking', icon: Star, description: 'Benchmarks de operadores e máquinas.', status: 'Disponível' },
-];
-
-const MODELS: Record<ReportType, string[]> = {
-  HOURS: ['Por Equipamento', 'Por Operador', 'Por Frente', 'Por Fazenda/Talhão', 'Resumido', 'Detalhado'],
-  EFFICIENCY: ['KPI Global', 'Comparativo de Máquinas', 'Evolução Semanal'],
-  STOPS: ['Top 10 Motivos', 'Duração por Categoria', 'Eventos Críticos'],
-  SUPPLY: ['Consumo Diário', 'Comparativo Mensal', 'Eficiência por Frota'],
-  CHECKLIST: ['Pré-operação', 'Conformidade Técnica', 'Execuções Pendentes'],
-  OPERATIONS: ['Rastro Diário', 'Jornada por Frota', 'Eventos de Campo'],
-  PRODUCTION: ['Volume por Área', 'Área Trabalhada', 'Consolidado Mensal'],
-  TIMELINE: ['Linha Completa', 'Por Máquina', 'Por Operador'],
-  MAP: ['Mapa de Calor', 'Trajeto GPS', 'Cobertura por Área'],
-  RANKING: ['Operadores', 'Máquinas', 'Frentes'],
+  fields: string[];
+  href: string;
+  status: ReportStatus;
+  icon: LucideIcon;
+  accent: string;
+  badge: string;
+  actionLabel: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
 };
 
-function ReportsPage() {
-  const { user } = useAuth();
-  const [step, setStep] = useState<Step>(1);
-  const [selectedType, setSelectedType] = useState<ReportType | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<ActionFeedbackMessage | null>(null);
+type FilterChip = {
+  label: string;
+  value: string;
+  icon: LucideIcon;
+};
 
-  const selectedMeta = useMemo(
-    () => REPORT_TYPES.find((type) => type.id === selectedType) ?? null,
-    [selectedType],
-  );
+const REPORT_CARDS: ReportCard[] = [
+  {
+    title: 'Operacional por Frota',
+    description: 'Leitura executiva da frota com status, risco e produtividade operacional.',
+    fields: ['frota', 'equipamento', 'operador atual', 'jornada', 'última sincronização'],
+    href: '/operacoes',
+    status: 'Disponível',
+    icon: Gauge,
+    accent: 'from-sky-500/20',
+    badge: 'Operação',
+    actionLabel: 'Abrir relatório',
+  },
+  {
+    title: 'Jornadas',
+    description: 'Visão consolidada de inícios, fins, duração e inconsistências de jornada.',
+    fields: ['operador', 'frota', 'início/fim', 'horímetro/km', 'status'],
+    href: '/combustivel/jornadas',
+    status: 'Disponível',
+    icon: Route,
+    accent: 'from-emerald-500/20',
+    badge: 'Jornadas',
+    actionLabel: 'Abrir relatório',
+  },
+  {
+    title: 'Paradas',
+    description: 'Motivos, duração e impacto operacional das paradas do dia.',
+    fields: ['motivo', 'frota', 'operador', 'duração', 'justificativa'],
+    href: '/paradas',
+    status: 'Disponível',
+    icon: AlertTriangle,
+    accent: 'from-amber-500/20',
+    badge: 'Paradas',
+    actionLabel: 'Abrir relatório',
+  },
+  {
+    title: 'Combustível',
+    description: 'Abastecimentos com litros, comboio/bomba, produto e origem do evento.',
+    fields: ['frota abastecida', 'comboio/bomba', 'produto', 'litros', 'origem APK'],
+    href: '/combustivel',
+    secondaryHref: '/combustivel/relatorios',
+    secondaryLabel: 'Auditoria de combustível',
+    status: 'Disponível',
+    icon: Fuel,
+    accent: 'from-orange-500/20',
+    badge: 'Combustível',
+    actionLabel: 'Ver módulo',
+  },
+  {
+    title: 'Auditoria',
+    description: 'Inconsistências, jornadas abertas, duplicidades e pendências operacionais.',
+    fields: ['eventos inconsistentes', 'jornadas sem fechamento', 'offlineId', 'pendências', 'divergências'],
+    href: '/relatorios/auditoria',
+    status: 'Disponível',
+    icon: ShieldAlert,
+    accent: 'from-red-500/20',
+    badge: 'Auditoria',
+    actionLabel: 'Abrir relatório',
+  },
+  {
+    title: 'Sincronização / Offline',
+    description: 'Saúde da sincronização, erros, pendências e última comunicação.',
+    fields: ['pendentes', 'enviados', 'erros', 'último sync', 'origem APK/Web'],
+    href: '/sincronizacao',
+    status: 'Disponível',
+    icon: RefreshCw,
+    accent: 'from-violet-500/20',
+    badge: 'Sincronização',
+    actionLabel: 'Abrir relatório',
+  },
+];
 
-  const handleNext = () => step < 5 && setStep((s) => (s + 1) as Step);
-  const handleBack = () => step > 1 && setStep((s) => (s - 1) as Step);
+const FILTERS: FilterChip[] = [
+  { label: 'Período', value: 'Últimos 7 dias', icon: CalendarRange },
+  { label: 'Frente', value: 'Todas', icon: SplitSquareHorizontal },
+  { label: 'Frota', value: 'Todas as frotas', icon: Layers3 },
+  { label: 'Operador', value: 'Todos', icon: BookText },
+  { label: 'Status', value: 'Todos', icon: SlidersHorizontal },
+];
 
-  const handleExport = async (format: string) => {
-    if (!user) return;
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('pt-BR').format(value);
+}
 
-    await AuditService.create({
-      userId: user.id,
-      userName: user.name,
-      module: 'REPORTS',
-      action: 'EXPORT',
-      timestamp: new Date().toISOString(),
-      ip: '127.0.0.1',
-      origin: 'WEB',
-      after: { format, reportType: selectedType, model: selectedModel },
-    });
+function formatRelativeTime(value?: string | null): string {
+  if (!value) return 'Aguardando dados';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Aguardando dados';
+  const diff = Date.now() - date.getTime();
+  if (diff < 60_000) return 'agora';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} h`;
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+}
 
-    setFeedback({
-      type: 'success',
-      message: `Relatório exportado em ${format}. Ação registrada em auditoria.`,
-    });
-  };
+function isFuelingInconsistent(record: FuelingRecord): boolean {
+  const liters = Number(record.dieselLiters);
+  const hasHourmeter = record.hourmeter != null && Number.isFinite(record.hourmeter) && record.hourmeter >= 0;
+  const hasOdometer = record.odometer != null && Number.isFinite(record.odometer) && record.odometer >= 0;
 
+  return !Number.isFinite(liters) || liters <= 0 || (!hasHourmeter && !hasOdometer);
+}
+
+function statusClass(status: ReportStatus): string {
+  if (status === 'Disponível') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
+  if (status === 'Em preparação') return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
+  return 'border-slate-500/20 bg-slate-500/10 text-slate-300';
+}
+
+function StatusBadge({ status }: { status: ReportStatus }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-[#050812] font-sans text-white">
-      <Sidebar className="hidden shrink-0 lg:flex" />
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
-          <PageHeader
-            title="Relatórios"
-            description="Central de análises operacionais, consumo, conformidade e auditoria."
-          />
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]', statusClass(status))}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {status}
+    </span>
+  );
+}
 
-          <ActionFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+function FilterPill({ filter }: { filter: FilterChip }) {
+  const Icon = filter.icon;
+  return (
+    <button className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-left transition-all hover:border-sky-400/30 hover:bg-white/[0.05]">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-[#0d1426] text-sky-300">
+        <Icon size={15} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">{filter.label}</p>
+        <p className="truncate text-sm font-bold text-white">{filter.value}</p>
+      </div>
+    </button>
+  );
+}
 
-          <div className="mx-auto mb-8 flex max-w-6xl items-center justify-between rounded-[28px] border border-white/10 bg-[#0a0e27]/60 p-4 shadow-2xl shadow-black/20">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center">
-                <div
-                  className={cn(
-                    'flex h-10 w-10 items-center justify-center rounded-2xl border text-sm font-extrabold transition-all duration-300',
-                    step >= i
-                      ? 'border-primary/40 bg-primary text-[#0a0e27] shadow-lg shadow-primary/20'
-                      : 'border-white/10 bg-[#1a1f3a] text-muted-foreground',
-                  )}
-                >
-                  {i}
-                </div>
-                {i < 5 && <div className={cn('mx-2 h-0.5 w-12', step > i ? 'bg-primary' : 'bg-white/10')} />}
-              </div>
-            ))}
-          </div>
-
-          <div className="mx-auto max-w-6xl">
-            {step === 1 && (
-              <section>
-                <div className="mb-6 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.35em] text-primary/80">Seleção de relatório</p>
-                    <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">Escolha a análise que quer abrir</h2>
-                  </div>
-                  <p className="max-w-md text-sm leading-6 text-muted-foreground">
-                    Cards mais legíveis, hierarquia clara e ação explícita. Sem teatro tipográfico.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {REPORT_TYPES.map((type) => (
-                    <button
-                      key={type.id}
-                      onClick={() => {
-                        setSelectedType(type.id);
-                        handleNext();
-                      }}
-                      className={cn(
-                        'group flex min-h-[220px] flex-col rounded-[28px] border border-white/10 bg-[#0a0e27]/70 p-6 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/5 hover:shadow-2xl hover:shadow-primary/10',
-                        selectedType === type.id && 'border-primary/60 bg-primary/5 ring-1 ring-primary/20',
-                      )}
-                    >
-                      <div className="mb-5 flex items-start justify-between gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-[#1a1f3a] text-primary transition-transform group-hover:scale-105">
-                          <type.icon size={22} />
-                        </div>
-                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-400">
-                          {type.status}
-                        </span>
-                      </div>
-
-                      <h3 className="text-lg font-extrabold tracking-tight text-white transition-colors group-hover:text-primary">
-                        {type.label}
-                      </h3>
-                      <p className="mt-3 max-w-sm text-sm leading-6 text-slate-300/80">{type.description}</p>
-
-                      <div className="mt-auto flex items-center justify-between pt-8">
-                        <span className="text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground">Abrir relatório</span>
-                        <ChevronRight className="text-primary opacity-70 transition-all group-hover:translate-x-1 group-hover:opacity-100" size={18} />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {step === 2 && selectedType && (
-              <section className="space-y-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.35em] text-primary/80">Modelo</p>
-                    <h2 className="text-2xl font-extrabold tracking-tight text-white">{selectedMeta?.label}</h2>
-                    <p className="mt-2 text-sm text-muted-foreground">{selectedMeta?.description}</p>
-                  </div>
-                  <button onClick={handleBack} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-white">
-                    <ChevronLeft size={16} /> Voltar
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {MODELS[selectedType].map((model) => (
-                    <button
-                      key={model}
-                      onClick={() => {
-                        setSelectedModel(model);
-                        handleNext();
-                      }}
-                      className={cn(
-                        'flex items-center justify-between rounded-[24px] border border-white/10 bg-[#0a0e27]/70 px-5 py-5 text-left transition-all hover:border-primary/35 hover:bg-primary/5',
-                        selectedModel === model && 'border-primary/60 bg-primary/5',
-                      )}
-                    >
-                      <span className="text-sm font-bold tracking-tight text-white">{model}</span>
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1a1f3a] text-muted-foreground transition-colors group-hover:text-primary">
-                        <ArrowRight size={16} />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {step === 3 && (
-              <section className="rounded-[32px] border border-white/10 bg-[#0a0e27]/70 p-6 shadow-2xl shadow-black/20 md:p-10">
-                <div className="absolute right-10 top-10 opacity-5">
-                  <Filter size={120} />
-                </div>
-                <h2 className="mb-8 text-2xl font-extrabold tracking-tight text-primary">Parâmetros de geração</h2>
-
-                <div className="mb-10 grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <Field label="Período inicial" icon={<Calendar size={16} />} control={<input type="date" className="w-full rounded-2xl border border-white/10 bg-[#1a1f3a] p-4 text-sm outline-none transition focus:border-primary" />} />
-                  <Field label="Período final" icon={<Calendar size={16} />} control={<input type="date" className="w-full rounded-2xl border border-white/10 bg-[#1a1f3a] p-4 text-sm outline-none transition focus:border-primary" />} />
-                  <Field label="Frente de trabalho" icon={<MapPin size={16} />} control={<select className="w-full appearance-none rounded-2xl border border-white/10 bg-[#1a1f3a] p-4 text-sm font-bold outline-none transition focus:border-primary"><option>Todas as frentes</option><option>Frente 01</option><option>Frente 02</option></select>} />
-                  <Field
-                    label="Origem de dados"
-                    icon={<Database size={16} />}
-                    control={
-                      <div className="flex gap-2">
-                        {['APK', 'MQTT', 'API', 'PIMS'].map((origin) => (
-                          <button key={origin} className="rounded-xl border border-white/10 bg-[#1a1f3a] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.2em] text-white transition hover:border-primary/40">
-                            {origin}
-                          </button>
-                        ))}
-                      </div>
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between border-t border-white/10 pt-6">
-                  <button onClick={handleBack} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-white">
-                    <ChevronLeft size={16} /> Voltar
-                  </button>
-                  <button onClick={handleNext} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-8 py-4 text-xs font-extrabold uppercase tracking-[0.22em] text-[#0a0e27] shadow-lg shadow-primary/20 transition hover:scale-[1.02]">
-                    Gerar prévia <TrendingUp size={18} />
-                  </button>
-                </div>
-              </section>
-            )}
-
-            {step === 4 && (
-              <section className="space-y-6">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                  <PreviewCard label="Registros" value="1.240" />
-                  <PreviewCard label="Horas totais" value="480,5h" color="text-primary" />
-                  <PreviewCard label="Eficiência média" value="84%" />
-                  <PreviewCard label="Integridade" value="100%" color="text-emerald-400" />
-                </div>
-
-                <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#0a0e27]/70 shadow-2xl shadow-black/20">
-                  <table className="w-full text-left">
-                    <thead className="border-b border-white/10 bg-[#1a1f3a]/50 text-[10px] font-extrabold uppercase tracking-[0.25em] text-muted-foreground">
-                      <tr>
-                        <th className="px-6 py-4">Data</th>
-                        <th className="px-6 py-4">Equipamento</th>
-                        <th className="px-6 py-4">Operador</th>
-                        <th className="px-6 py-4">Horas</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 text-sm">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <tr key={i} className="transition-colors hover:bg-primary/5">
-                          <td className="px-6 py-4 text-white/80">04/06/2024</td>
-                          <td className="px-6 py-4 font-bold text-primary">605112</td>
-                          <td className="px-6 py-4 text-white/70">Ricardo Silva</td>
-                          <td className="px-6 py-4 text-white/80">08:00h</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <button onClick={handleBack} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-white">
-                    <ChevronLeft size={16} /> Voltar
-                  </button>
-                  <button onClick={handleNext} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-8 py-4 text-xs font-extrabold uppercase tracking-[0.22em] text-[#0a0e27] shadow-lg shadow-primary/20 transition hover:scale-[1.02]">
-                    Configurar exportação <Download size={18} />
-                  </button>
-                </div>
-              </section>
-            )}
-
-            {step === 5 && (
-              <section className="flex flex-col items-center justify-center rounded-[32px] border border-white/10 bg-[#0a0e27]/70 px-6 py-20 text-center shadow-2xl shadow-black/20">
-                <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[40px] border border-primary/20 bg-primary/10 text-primary shadow-2xl shadow-primary/10">
-                  <FileDown size={48} />
-                </div>
-                <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-white">Relatório pronto</h2>
-                <p className="mb-12 max-w-xl text-sm leading-6 text-muted-foreground">Selecione o formato de saída para processamento.</p>
-
-                <div className="grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
-                  <ExportButton label="Excel (XLSX)" icon={<FileDown className="text-emerald-400" />} onClick={() => handleExport('XLSX')} />
-                  <ExportButton label="Dados (CSV)" icon={<Database className="text-sky-400" />} onClick={() => handleExport('CSV')} />
-                  <ExportButton label="Documento (PDF)" icon={<FileDown className="text-red-400" />} onClick={() => handleExport('PDF')} />
-                </div>
-
-                <button onClick={() => setStep(1)} className="mt-16 border-b border-dashed border-primary pb-1 text-xs font-bold uppercase tracking-[0.2em] text-primary transition hover:brightness-110">
-                  Criar novo relatório
-                </button>
-              </section>
-            )}
-          </div>
-        </main>
+function KpiCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/8 bg-[#0a1020]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">{label}</p>
+          <p className="mt-2 text-3xl font-black tracking-tight text-white">{value}</p>
+          <p className="mt-2 text-[11px] text-slate-400">{sub}</p>
+        </div>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-sky-300">
+          <Icon size={18} />
+        </div>
       </div>
     </div>
   );
 }
 
-function Field({ label, icon, control }: { label: string; icon: React.ReactNode; control: React.ReactNode }) {
+function ReportCardView({ card }: { card: ReportCard }) {
+  const Icon = card.icon;
+
   return (
-    <div className="space-y-2">
-      <label className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.25em] text-muted-foreground">
-        {icon} {label}
-      </label>
-      {control}
+    <div className="group relative overflow-hidden rounded-[30px] border border-white/8 bg-[#08101f]/95 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] transition-all hover:-translate-y-0.5 hover:border-white/14">
+      <div className={cn('pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b opacity-90', card.accent, 'to-transparent')} />
+      <div className="relative flex h-full flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-white">
+              <Icon size={20} className="text-sky-300" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.24em] text-slate-500">{card.badge}</p>
+                <StatusBadge status={card.status} />
+              </div>
+              <h3 className="mt-2 text-lg font-black tracking-tight text-white">{card.title}</h3>
+            </div>
+          </div>
+          <ArrowUpRight className="shrink-0 text-slate-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white" size={18} />
+        </div>
+
+        <p className="max-w-xl text-sm leading-6 text-slate-300">{card.description}</p>
+
+        <div className="flex flex-wrap gap-2">
+          {card.fields.map((field) => (
+            <span key={field} className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-300">
+              {field}
+            </span>
+          ))}
+        </div>
+
+        <div className="mt-auto flex flex-col gap-3 pt-2">
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+            <CheckCircle2 size={12} className="text-emerald-300" />
+            {card.actionLabel}
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-400">
+              {card.secondaryHref ? 'Inclui acesso ao relatório de auditoria de combustível' : 'Acesso direto ao módulo'}
+            </span>
+            <Link href={card.href} className="inline-flex items-center gap-1 text-sm font-bold text-white">
+              Abrir
+              <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </div>
+          {card.secondaryHref && (
+            <Link
+              href={card.secondaryHref}
+              className="inline-flex items-center gap-2 self-start rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-300 transition-all hover:border-sky-400/30 hover:text-white"
+            >
+              {card.secondaryLabel}
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function PreviewCard({ label, value, color = 'text-white' }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="rounded-[24px] border border-white/10 bg-[#0a0e27]/70 p-5">
-      <span className="text-[10px] font-extrabold uppercase tracking-[0.25em] text-muted-foreground">{label}</span>
-      <span className={cn('mt-2 block text-2xl font-extrabold tracking-tight', color)}>{value}</span>
-    </div>
-  );
-}
+function ReportsPage() {
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
+  const [fuelings, setFuelings] = useState<FuelingRecord[]>([]);
+  const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-function ExportButton({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick?: () => void }) {
+  useEffect(() => {
+    let mounted = true;
+
+    const load = async () => {
+      try {
+        const [summaryRes, fuelingRes] = await Promise.allSettled([
+          fetch('/api/dashboard/summary', { cache: 'no-store', credentials: 'include' }),
+          fetch('/api/abastecimentos', { cache: 'no-store', credentials: 'include' }),
+        ]);
+
+        if (!mounted) return;
+
+        if (summaryRes.status === 'fulfilled' && summaryRes.value.ok) {
+          const summary = (await summaryRes.value.json()) as DashboardSummary;
+          setDashboardSummary(summary);
+        }
+
+        if (fuelingRes.status === 'fulfilled' && fuelingRes.value.ok) {
+          const payload = (await fuelingRes.value.json()) as { records?: FuelingRecord[] };
+          setFuelings(payload.records ?? []);
+        }
+      } finally {
+        if (mounted) {
+          setLoadedAt(new Date().toISOString());
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const metrics = useMemo(() => {
+    const syncedEvents = dashboardSummary?.syncSummary.totalEventsToday ?? 0;
+    const fuelingCount = fuelings.length;
+    const inconsistencies = fuelings.filter(isFuelingInconsistent).length;
+    const lastUpdate = dashboardSummary?.syncSummary.lastEventAt ?? dashboardSummary?.generatedAt ?? loadedAt;
+    const availableReports = REPORT_CARDS.filter((card) => card.status === 'Disponível').length;
+
+    return {
+      availableReports,
+      syncedEvents,
+      fuelingCount,
+      inconsistencies,
+      lastUpdate,
+    };
+  }, [dashboardSummary, fuelings, loadedAt]);
+
   return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-4 rounded-[28px] border border-white/10 bg-[#0a0e27] p-8 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-2xl hover:shadow-primary/10"
-    >
-      <div className="rounded-3xl bg-[#1a1f3a] p-4">{icon}</div>
-      <span className="text-xs font-extrabold uppercase tracking-[0.2em] text-white">{label}</span>
-    </button>
+    <div className="flex h-screen overflow-hidden bg-[#050812] text-white">
+      <Sidebar className="hidden shrink-0 lg:flex" />
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-y-auto custom-scrollbar px-5 py-6 lg:px-6">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+            <section className="rounded-[32px] border border-white/8 bg-[#07101f]/90 p-6 shadow-[0_30px_120px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:p-8">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+                <div className="max-w-3xl">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-slate-300">
+                    <Sparkles size={10} className="text-emerald-300" />
+                    Painel comercial
+                  </div>
+                  <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">Relatórios</h1>
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+                    Visão consolidada da operação, combustível, jornadas, paradas e auditoria para apresentação executiva e piloto pago.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/combustivel/relatorios"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-300 transition-all hover:border-sky-400/30 hover:text-white"
+                  >
+                    <Fuel size={14} />
+                    Auditoria de combustível
+                  </Link>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-[#0d1426] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-300 transition-all hover:border-white/14 hover:text-white"
+                    aria-disabled
+                  >
+                    <Database size={14} />
+                    Exportação futura
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <KpiCard
+                label="Relatórios disponíveis"
+                value={formatNumber(metrics.availableReports)}
+                sub="Páginas principais prontas para apresentação"
+                icon={Layers3}
+              />
+              <KpiCard
+                label="Eventos sincronizados"
+                value={formatNumber(metrics.syncedEvents)}
+                sub="Base operacional do tenant carregada hoje"
+                icon={Activity}
+              />
+              <KpiCard
+                label="Abastecimentos registrados"
+                value={formatNumber(metrics.fuelingCount)}
+                sub="Eventos FUEL_SUPPLY persistidos na Central"
+                icon={Fuel}
+              />
+              <KpiCard
+                label="Inconsistências operacionais"
+                value={formatNumber(metrics.inconsistencies)}
+                sub="Eventos com dados incompletos ou divergentes"
+                icon={ShieldAlert}
+              />
+              <KpiCard
+                label="Última atualização"
+                value={loading ? '...' : formatRelativeTime(metrics.lastUpdate)}
+                sub="Fonte consolidada do painel"
+                icon={Clock3}
+              />
+            </section>
+
+            <section className="rounded-[28px] border border-white/8 bg-[#07101f]/90 p-5 shadow-[0_24px_100px_rgba(0,0,0,0.24)]">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Filtros visuais</p>
+                  <h2 className="mt-1 text-lg font-black tracking-tight text-white">Preparado para segmentar por contexto operacional</h2>
+                </div>
+                <div className="text-[11px] text-slate-400">UI pronta para filtros reais em próxima etapa</div>
+              </div>
+              <div className="mt-5 grid gap-3 xl:grid-cols-5">
+                {FILTERS.map((filter) => (
+                  <FilterPill key={filter.label} filter={filter} />
+                ))}
+              </div>
+            </section>
+
+            <section className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Relatórios principais</p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-white">Catálogo executivo</h2>
+              </div>
+              <Link
+                href="/mapa-operacional"
+                className="hidden items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-300 transition-all hover:border-sky-400/30 hover:text-white md:inline-flex"
+              >
+                <MapPinned size={14} />
+                Mapa operacional
+              </Link>
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {REPORT_CARDS.map((card) => (
+                <ReportCardView key={card.title} card={card} />
+              ))}
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-3">
+              <Link href="/operacoes" className="rounded-[28px] border border-white/8 bg-[#08101f]/90 p-5 transition-all hover:-translate-y-0.5 hover:border-white/14">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-sky-300">
+                    <Radar size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-white">Operações</p>
+                    <p className="text-xs text-slate-400">Jornadas, estados e rastreio</p>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/sincronizacao" className="rounded-[28px] border border-white/8 bg-[#08101f]/90 p-5 transition-all hover:-translate-y-0.5 hover:border-white/14">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-violet-300">
+                    <RefreshCw size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-white">Sincronização</p>
+                    <p className="text-xs text-slate-400">Offline, erro e pendências</p>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/combustivel" className="rounded-[28px] border border-white/8 bg-[#08101f]/90 p-5 transition-all hover:-translate-y-0.5 hover:border-white/14">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-orange-300">
+                    <Fuel size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-white">Combustível</p>
+                    <p className="text-xs text-slate-400">Acesso ao painel operacional</p>
+                  </div>
+                </div>
+              </Link>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
 
