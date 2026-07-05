@@ -8,7 +8,7 @@ import {
   EquipmentTypeService,
   EquipmentModelService,
   EquipmentGroupService,
-} from '@/services/master.service';
+} from '@/services/api-service';
 import { Equipment, EquipmentType, EquipmentModel, EquipmentGroup } from '@/lib/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -266,8 +266,7 @@ function EquipamentosPage() {
           version: selectedItem.version,
         });
       } else {
-        const all = await EquipmentService.getAll(true);
-        if (all.some((e) => e.code === formData.code && e.entityStatus !== 'ARQUIVADO')) {
+        if (data.some((e) => e.code === formData.code && e.entityStatus !== 'ARQUIVADO')) {
           throw new Error('Código de frota já cadastrado e ativo.');
         }
         await EquipmentService.create({ ...formData, lastSignal: 'Agora' });
@@ -516,7 +515,7 @@ function EquipamentosPage() {
                 <Loader2 size={40} className="text-primary animate-spin" />
                 <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Sincronizando frota...</p>
               </div>
-            ) : filteredData.length === 0 ? (
+            ) : data.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-[340px] border border-dashed border-[#2d3647] rounded-3xl bg-[#0a0e27]/60 px-6 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4">
                   <Truck size={28} />
@@ -533,6 +532,28 @@ function EquipamentosPage() {
                   className="mt-6 flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"
                 >
                   <Plus size={14} strokeWidth={3} /> Novo Equipamento
+                </button>
+              </div>
+            ) : filteredData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center min-h-[340px] border border-dashed border-[#2d3647] rounded-3xl bg-[#0a0e27]/60 px-6 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/70 mb-4">
+                  <Filter size={28} />
+                </div>
+                <h3 className="text-lg font-black uppercase tracking-tighter text-white">Nenhum equipamento encontrado com os filtros atuais</h3>
+                <p className="mt-2 max-w-xl text-sm text-muted-foreground leading-relaxed">
+                  Ajuste os filtros ou limpe a busca para voltar a visualizar a frota operacional disponível no tenant.
+                </p>
+                <button
+                  onClick={() => {
+                    setSearch('');
+                    setStatusFilter('ALL');
+                    setTypeFilter('ALL');
+                    setFrontFilter('ALL');
+                    setConnectivityFilter('ALL');
+                  }}
+                  className="mt-6 flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20"
+                >
+                  <Filter size={14} strokeWidth={3} /> Limpar filtros
                 </button>
               </div>
             ) : (
