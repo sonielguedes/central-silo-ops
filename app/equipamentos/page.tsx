@@ -98,6 +98,48 @@ function readOptionalText(item: Equipment, keys: string[]) {
   return undefined;
 }
 
+function readOptionalBoolean(item: Equipment, keys: string[]) {
+  const record = item as Equipment & Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true') return true;
+      if (normalized === 'false') return false;
+    }
+  }
+  return undefined;
+}
+
+function resolveEquipmentCode(item: Equipment) {
+  return readOptionalText(item, ['code', 'fleetCode', 'equipmentCode', 'name']) || '—';
+}
+
+function resolveEquipmentTitle(item: Equipment, type?: EquipmentType, model?: EquipmentModel) {
+  return (
+    readOptionalText(item, ['brand', 'description', 'name', 'model']) ||
+    model?.name ||
+    type?.name ||
+    'Não informado'
+  );
+}
+
+function resolveEquipmentStatus(item: Equipment) {
+  const raw = readOptionalText(item, ['entityStatus', 'status']);
+  if (raw) return raw;
+  const active = readOptionalBoolean(item, ['active']);
+  return active === false ? 'INATIVO' : 'ATIVO';
+}
+
+function resolveFrontFilterKey(item: Equipment) {
+  return readOptionalText(item, ['groupId', 'frontId', 'frenteId', 'frontCode']) || '';
+}
+
+function resolveFrontLabel(item: Equipment, group?: EquipmentGroup) {
+  return group?.name || readOptionalText(item, ['front', 'frente', 'frontName', 'frontLabel']) || 'Não informado';
+}
+
 function resolveOperationalStatus(status?: string) {
   const key = normalizeKey(status);
   const config: Record<string, { label: string; className: string }> = {
@@ -115,8 +157,8 @@ function resolveOperationalStatus(status?: string) {
 }
 
 function getConnectivityInfo(item: Equipment, type?: EquipmentType) {
-  const hasTelemetryConfig = Boolean(type?.telemetryEnabledDefault);
-  const mobileEnabled = item.mobileEnabled !== false;
+  const hasTelemetryConfig = readOptionalBoolean(item, ['telemetryEnabled', 'telemetryEnabledDefault']) ?? Boolean(type?.telemetryEnabledDefault);
+  const mobileEnabled = readOptionalBoolean(item, ['mobileEnabled']);
   const heartbeat = readOptionalText(item, ['lastHeartbeat', 'lastSyncAt', 'lastSignalAt']);
 
   if (!hasTelemetryConfig) {
@@ -128,7 +170,7 @@ function getConnectivityInfo(item: Equipment, type?: EquipmentType) {
     };
   }
 
-  if (!mobileEnabled) {
+  if (mobileEnabled === false) {
     return {
       label: 'Sem vínculo',
       helper: 'Mobile desabilitado',
@@ -294,9 +336,9 @@ function EquipamentosPage() {
   };
 
   const stats = useMemo(() => {
-    const activeCount = data.filter((item) => item.entityStatus === 'ATIVO').length;
-    const inactiveCount = data.filter((item) => item.entityStatus === 'INATIVO').length;
-    const mobileEnabledCount = data.filter((item) => item.mobileEnabled !== false).length;
+    const activeCount = data.filter((item) => resolveEquipmentStatus(item) === 'ATIVO').length;
+    const inactiveCount = data.filter((item) => resolveEquipmentStatus(item) === 'INATIVO').length;
+    const mobileEnabledCount = data.filter((item) => readOptionalBoolean(item, ['mobileEnabled']) !== false).length;
     const telemetryActiveCount = data.filter((item) => {
       const type = types.find((t) => t.id === item.typeId);
       return getConnectivityInfo(item, type).label === 'Ativa';
@@ -325,14 +367,15 @@ function EquipamentosPage() {
       const model = models.find((m) => m.id === item.modelId);
       const group = groups.find((g) => g.id === item.groupId);
       const connectivity = getConnectivityInfo(item, type);
+      const itemStatus = resolveEquipmentStatus(item);
 
-      if (statusFilter !== 'ALL' && item.entityStatus !== statusFilter) return false;
+      if (statusFilter !== 'ALL' && itemStatus !== statusFilter) return false;
       if (typeFilter !== 'ALL' && item.typeId !== typeFilter) return false;
-      if (frontFilter !== 'ALL' && item.groupId !== frontFilter) return false;
+      if (frontFilter !== 'ALL' && resolveFrontFilterKey(item) !== frontFilter && item.groupId !== frontFilter) return false;
       if (connectivityFilter !== 'ALL') {
         const key =
-          connectivityFilter === 'MOBILE_ENABLED' ? (item.mobileEnabled !== false ? 'ok' : 'no') :
-          connectivityFilter === 'MOBILE_DISABLED' ? (item.mobileEnabled === false ? 'ok' : 'no') :
+          connectivityFilter === 'MOBILE_ENABLED' ? (readOptionalBoolean(item, ['mobileEnabled']) !== false ? 'ok' : 'no') :
+          connectivityFilter === 'MOBILE_DISABLED' ? (readOptionalBoolean(item, ['mobileEnabled']) === false ? 'ok' : 'no') :
           connectivityFilter === 'TELEMETRY_ACTIVE' ? (connectivity.label === 'Ativa' ? 'ok' : 'no') :
           connectivityFilter === 'WAITING_LINK' ? (connectivity.label === 'Aguardando vínculo' ? 'ok' : 'no') :
           connectivityFilter === 'NO_LINK' ? (connectivity.label === 'Sem vínculo' ? 'ok' : 'no') :
@@ -344,14 +387,16 @@ function EquipamentosPage() {
       if (!term) return true;
 
       const haystack = [
-        item.code,
-        item.brand,
+        resolveEquipmentCode(item),
+        resolveEquipmentTitle(item, type, model),
+        readOptionalText(item, ['description', 'name', 'fleetCode', 'equipmentCode']),
         type?.name,
         model?.name,
-        group?.name,
+        resolveFrontLabel(item, group),
         item.plateOrSerial,
         item.status,
         item.entityStatus,
+        itemStatus,
       ]
         .filter(Boolean)
         .join(' ')
@@ -565,10 +610,13 @@ function EquipamentosPage() {
                   const connectivity = getConnectivityInfo(item, type);
                   const operational = resolveOperationalStatus(item.status);
                   const iconType = item.iconType || model?.iconType || type?.iconType || 'PADRAO_GENERICO';
-                  const frontLabel = group?.name || readOptionalText(item, ['front', 'frente', 'frontName', 'frontLabel']) || 'Não informado';
+                  const frontLabel = resolveFrontLabel(item, group);
                   const syncLabel = readOptionalText(item, ['lastSyncAt', 'lastHeartbeat']) || item.lastSignal || 'Não informado';
                   const measureLabel = formatMetricLabel(item.measurementMode || type?.primaryMetric || null);
                   const technicalLink = readOptionalText(item, ['deviceId', 'trackerId']);
+                  const code = resolveEquipmentCode(item);
+                  const title = resolveEquipmentTitle(item, type, model);
+                  const operationalStatus = resolveEquipmentStatus(item);
 
                   return (
                     <article key={item.id} className="group rounded-3xl border border-[#2d3647] bg-[#0a0e27]/70 p-5 shadow-[0_20px_40px_rgba(0,0,0,0.18)] transition-all hover:border-primary/35 hover:shadow-primary/10">
@@ -577,17 +625,17 @@ function EquipamentosPage() {
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#1a1f3a] text-primary shadow-inner shadow-black/20">
                             <EquipmentIcon type={iconType} size={30} />
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-muted-foreground">Frota</p>
-                            <h3 className="truncate text-lg font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors">
-                              {item.code}
-                            </h3>
-                            <p className="mt-1 truncate text-[11px] font-bold uppercase tracking-widest text-white/70">
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-muted-foreground">Frota</p>
+                              <h3 className="truncate text-lg font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors">
+                              {code}
+                              </h3>
+                              <p className="mt-1 truncate text-[11px] font-bold uppercase tracking-widest text-white/70">
                               {type?.name || 'Tipo não informado'} · {model?.name || 'Modelo não informado'}
-                            </p>
-                            {item.brand ? (
+                              </p>
+                            {title ? (
                               <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                {item.brand}
+                                {title}
                               </p>
                             ) : null}
                           </div>
@@ -615,7 +663,7 @@ function EquipamentosPage() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <MasterDataStatusBadge status={item.entityStatus} />
+                        <MasterDataStatusBadge status={operationalStatus} />
                         <span className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em]', operational.className)}>
                           {operational.label}
                         </span>
@@ -632,7 +680,7 @@ function EquipamentosPage() {
                         </div>
                         <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
                           <p className="text-[9px] font-black uppercase tracking-[0.22em] text-muted-foreground">Mobile</p>
-                          <p className="mt-1 text-xs font-bold text-white">{item.mobileEnabled ? 'Habilitado' : 'Não habilitado'}</p>
+                          <p className="mt-1 text-xs font-bold text-white">{readOptionalBoolean(item, ['mobileEnabled']) === false ? 'Não habilitado' : 'Habilitado'}</p>
                         </div>
                         <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
                           <p className="text-[9px] font-black uppercase tracking-[0.22em] text-muted-foreground">Telemetria</p>
@@ -856,7 +904,7 @@ function EquipamentosPage() {
                         <div className="rounded-xl border border-[#2d3647] bg-[#050812] p-3">
                           <p className="text-[9px] font-black uppercase tracking-[0.22em] text-muted-foreground">Conectividade</p>
                           <p className="mt-1 text-xs font-bold uppercase text-white">
-                            {selectedItem.mobileEnabled ? 'Mobile habilitado' : 'Mobile desabilitado'}
+                            {readOptionalBoolean(selectedItem, ['mobileEnabled']) === false ? 'Mobile desabilitado' : 'Mobile habilitado'}
                           </p>
                         </div>
                         <div className="rounded-xl border border-[#2d3647] bg-[#050812] p-3">
