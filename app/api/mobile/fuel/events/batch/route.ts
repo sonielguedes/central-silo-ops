@@ -8,9 +8,18 @@ import { findActiveFuelJourneyByComboio } from '@/lib/fuel-journeys';
 
 export const dynamic = 'force-dynamic';
 
-type FuelBatchEventType = FuelJourneyEventType | 'FUEL_SUPPLY';
+type FuelBatchEventType = FuelJourneyEventType;
 
-const ALLOWED_TYPES = new Set<FuelBatchEventType>(['JOURNEY_START', 'POST_REFUEL', 'FUEL_SUPPLY', 'JOURNEY_END']);
+const ALLOWED_TYPES = new Set<FuelBatchEventType>([
+  'JOURNEY_START',
+  'POST_REFUEL',
+  'FUEL_SUPPLY',
+  'TANK_REFILL',
+  'STOP_STARTED',
+  'STOP_REASON_ADDED',
+  'STOP_ENDED',
+  'JOURNEY_END',
+]);
 
 const asString = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
 const asObject = (value: unknown): Record<string, unknown> | undefined => (
@@ -86,58 +95,86 @@ function validateEvent(item: BatchEvent, index: number): { ok: true; value: { ty
   return { ok: true, value: { type: type as FuelBatchEventType, offlineId, occurredAt, payload } };
 }
 
+function normalizeCommonJourneyPayload(payload: Record<string, unknown>) {
+  return {
+    journeyId: asString(payload.journeyId),
+    journeyOfflineId: asString(payload.journeyOfflineId),
+    comboio: asString(payload.comboio),
+    comboioFleetCode: asString(payload.comboioFleetCode ?? payload.comboio),
+    driverRegistration: asString(payload.driverRegistration),
+    driverName: asString(payload.driverName),
+    shift: asString(payload.shift),
+    startedAt: asString(payload.startedAt),
+    endedAt: asString(payload.endedAt),
+    status: asString(payload.status),
+    source: asString(payload.source) ?? 'APK',
+  };
+}
+
 function normalizeJourneyPayload(type: FuelBatchEventType, payload: Record<string, unknown>) {
   switch (type) {
     case 'JOURNEY_START':
       return {
-        journeyId: asString(payload.journeyId),
-        comboioFleetCode: asString(payload.comboioFleetCode),
-        driverRegistration: asString(payload.driverRegistration),
-        driverName: asString(payload.driverName),
-        shift: asString(payload.shift),
+        ...normalizeCommonJourneyPayload(payload),
         kmStart: asFiniteNumber(payload.kmStart ?? payload.kmInicial),
-        tankStartLiters: asFiniteNumber(payload.tankStartLiters ?? payload.tanqueInicial),
-        startedAt: asString(payload.startedAt),
+        tankStartLiters: asFiniteNumber(payload.tankInitialLiters ?? payload.tankStartLiters ?? payload.tanqueInicial),
       };
     case 'POST_REFUEL':
       return {
-        journeyId: asString(payload.journeyId),
-        comboioFleetCode: asString(payload.comboioFleetCode),
+        ...normalizeCommonJourneyPayload(payload),
         pumpCode: asString(payload.pumpCode),
         meterStart: asFiniteNumber(payload.meterStart),
         meterEnd: asFiniteNumber(payload.meterEnd),
         liters: asFiniteNumber(payload.liters),
         responsibleName: asString(payload.responsibleName),
       };
+    case 'TANK_REFILL':
+    case 'STOP_STARTED':
+    case 'STOP_REASON_ADDED':
+    case 'STOP_ENDED':
+      return {
+        ...normalizeCommonJourneyPayload(payload),
+        reasonCode: asString(payload.reasonCode ?? payload.stopReasonCode),
+        reasonDescription: asString(payload.reasonDescription ?? payload.stopReasonDescription),
+        stopCode: asString(payload.stopCode),
+        stopDescription: asString(payload.stopDescription),
+        pumpCode: asString(payload.pumpCode),
+        liters: asFiniteNumber(payload.liters),
+        hourmeter: asFiniteNumber(payload.hourmeter),
+        odometer: asFiniteNumber(payload.odometer),
+      };
     case 'JOURNEY_END':
       return {
-        journeyId: asString(payload.journeyId),
-        comboioFleetCode: asString(payload.comboioFleetCode),
-        driverRegistration: asString(payload.driverRegistration),
-        driverName: asString(payload.driverName),
-        shift: asString(payload.shift),
-        kmStart: asFiniteNumber(payload.kmStart ?? payload.kmInicial),
+        ...normalizeCommonJourneyPayload(payload),
+        kmStart: asFiniteNumber(payload.kmStart ?? payload.kmInitial ?? payload.kmInicial),
         kmFinal: asFiniteNumber(payload.kmFinal),
-        distanciaPercorrida: asFiniteNumber(payload.distanciaPercorrida),
-        tankStartLiters: asFiniteNumber(payload.tankStartLiters ?? payload.tanqueInicial),
-        totalCarregadoPosto: asFiniteNumber(payload.totalCarregadoPosto ?? payload.totalLoaded),
-        totalAbastecidoMaquinas: asFiniteNumber(payload.totalAbastecidoMaquinas ?? payload.totalSupplied),
-        saldoTeorico: asFiniteNumber(payload.saldoTeorico ?? payload.theoreticalBalance),
-        tankFinalLiters: asFiniteNumber(payload.tankFinalLiters ?? payload.tanqueFinal),
-        diferenca: asFiniteNumber(payload.diferenca ?? payload.difference),
+        distanciaPercorrida: asFiniteNumber(payload.distanciaPercorrida ?? payload.distanceKm),
+        tankStartLiters: asFiniteNumber(payload.tankInitialLiters ?? payload.tankStartLiters ?? payload.tanqueInicial),
+        tankInitialLiters: asFiniteNumber(payload.tankInitialLiters ?? payload.tankStartLiters ?? payload.tanqueInicial),
+        totalLoadedLiters: asFiniteNumber(payload.totalLoadedLiters ?? payload.totalCarregadoPosto ?? payload.totalLoaded),
+        totalSuppliedLiters: asFiniteNumber(payload.totalSuppliedLiters ?? payload.totalAbastecidoMaquinas ?? payload.totalSupplied),
+        theoreticalFinalBalanceLiters: asFiniteNumber(payload.theoreticalFinalBalanceLiters ?? payload.saldoTeorico ?? payload.theoreticalBalance),
+        realFinalBalanceLiters: asFiniteNumber(payload.realFinalBalanceLiters ?? payload.saldoFinalReal ?? payload.tankFinalLiters ?? payload.tanqueFinal),
+        tankFinalLiters: asFiniteNumber(payload.tankFinalLiters ?? payload.tanqueFinal ?? payload.realFinalBalanceLiters ?? payload.saldoFinalReal),
+        divergenceLiters: asFiniteNumber(payload.divergenceLiters ?? payload.diferenca ?? payload.difference),
         startedAt: asString(payload.startedAt),
-        finishedAt: asString(payload.finishedAt),
-        status: asString(payload.status),
-        source: asString(payload.source) ?? 'APK',
+        finishedAt: asString(payload.finishedAt ?? payload.endedAt),
       };
     case 'FUEL_SUPPLY':
       return {
         journeyId: asString(payload.journeyId),
+        journeyOfflineId: asString(payload.journeyOfflineId),
+        comboio: asString(payload.comboio),
+        comboioFleetCode: asString(payload.comboioFleetCode ?? payload.comboio),
         fleetCode: asString(payload.fleetCode),
         fleetDescription: asString(payload.fleetDescription),
         operatorName: asString(payload.operatorName),
+        attendantName: asString(payload.attendantName),
+        attendantRegistration: asString(payload.attendantRegistration),
         pumpCode: asString(payload.pumpCode),
-        fuelType: asString(payload.fuelType),
+        productCode: asString(payload.productCode),
+        productDescription: asString(payload.productDescription),
+        fuelType: asString(payload.productCode ?? payload.productDescription ?? payload.fuelType),
         liters: asFiniteNumber(payload.liters),
         hourmeter: asFiniteNumber(payload.hourmeter),
         odometer: asFiniteNumber(payload.odometer),
@@ -147,9 +184,8 @@ function normalizeJourneyPayload(type: FuelBatchEventType, payload: Record<strin
   }
 }
 
-function getJourneyIdFromPayload(type: FuelBatchEventType, payload: Record<string, unknown>): string | undefined {
-  if (type === 'FUEL_SUPPLY') return asString(payload.journeyId);
-  return asString(payload.journeyId);
+function getJourneyIdFromPayload(payload: Record<string, unknown>): string | undefined {
+  return asString(payload.journeyId) ?? asString(payload.journeyOfflineId);
 }
 
 export async function POST(req: NextRequest) {
@@ -225,6 +261,9 @@ export async function POST(req: NextRequest) {
       if (type === 'FUEL_SUPPLY') {
         if (FuelingStorage.isDuplicate(bodyTenantId, offlineId)) {
           duplicates += 1;
+          console.info(`[FuelEventsBatch] type=FUEL_SUPPLY accepted=true`);
+          console.info(`[FuelEventsBatch] offlineId=${offlineId}`);
+          console.info(`[FuelEventsBatch] duplicate=true offlineId=${offlineId}`);
           continue;
         }
 
@@ -235,8 +274,8 @@ export async function POST(req: NextRequest) {
 
         const hasFleetCode = typeof fleetCode === 'string' && fleetCode.trim().length > 0;
         const hasLiters = typeof liters === 'number' && Number.isFinite(liters) && liters > 0;
-        const hasHourmeter = typeof hourmeter === 'number' && Number.isFinite(hourmeter) && hourmeter > 0;
-        const hasOdometer = typeof odometer === 'number' && Number.isFinite(odometer) && odometer > 0;
+        const hasHourmeter = typeof hourmeter === 'number' && Number.isFinite(hourmeter) && hourmeter >= 0;
+        const hasOdometer = typeof odometer === 'number' && Number.isFinite(odometer) && odometer >= 0;
 
         if (!hasFleetCode || !hasLiters || (!hasHourmeter && !hasOdometer)) {
           return fail(400, 'Payload invalido', {
@@ -250,15 +289,20 @@ export async function POST(req: NextRequest) {
         const saveResult = FuelingStorage.save({
           eventId: offlineId,
           tenantId: bodyTenantId,
+          companyCode: bodyCompanyCode,
           equipmentId: fleetCode,
           fleetCode,
           truckFleetCode: asString(payload.pumpCode ?? bodyDeviceId),
+          comboioFleetCode: asString(payload.comboioFleetCode ?? payload.comboio),
+          journeyOfflineId: asString(payload.journeyOfflineId),
           pumpCode: asString(payload.pumpCode),
           dieselLiters: liters,
           hourmeter: hasHourmeter ? hourmeter : null,
-          fuelType: asString(payload.fuelType),
+          fuelType: asString(payload.productCode ?? payload.productDescription ?? payload.fuelType),
           fleetDescription: asString(payload.fleetDescription),
           operatorName: asString(payload.operatorName),
+          attendantName: asString(payload.attendantName),
+          attendantRegistration: asString(payload.attendantRegistration),
           odometer: hasOdometer ? odometer : null,
           durationSeconds: asFiniteNumber(payload.durationSeconds),
           averageFlowLitersPerMinute: asFiniteNumber(payload.averageFlowLitersPerMinute),
@@ -269,10 +313,16 @@ export async function POST(req: NextRequest) {
 
         if (saveResult === 'DUPLICATE') {
           duplicates += 1;
+          console.info(`[FuelEventsBatch] type=FUEL_SUPPLY accepted=true`);
+          console.info(`[FuelEventsBatch] offlineId=${offlineId}`);
+          console.info(`[FuelEventsBatch] duplicate=true offlineId=${offlineId}`);
           continue;
         }
 
         synced += 1;
+        console.info(`[FuelEventsBatch] type=FUEL_SUPPLY accepted=true`);
+        console.info(`[FuelEventsBatch] offlineId=${offlineId}`);
+        console.info(`[FuelEventsBatch] saved=true`);
         auditFromRequest(req, bodyTenantId, {
           action: 'FUEL_SUPPLY_RECEIVED',
           entity: 'fueling',
@@ -282,7 +332,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const journeyId = getJourneyIdFromPayload(type, payload);
+      const journeyId = getJourneyIdFromPayload(payload);
       if (FuelJourneyStorage.isDuplicate(bodyTenantId, offlineId)) {
         duplicates += 1;
         continue;
@@ -334,10 +384,14 @@ export async function POST(req: NextRequest) {
 
       if (saveResult === 'DUPLICATE') {
         duplicates += 1;
+        console.info(`[FuelEventsBatch] duplicate=true offlineId=${offlineId}`);
         continue;
       }
 
       synced += 1;
+      console.info(`[FuelEventsBatch] type=${type} accepted=true`);
+      console.info(`[FuelEventsBatch] offlineId=${offlineId}`);
+      console.info(`[FuelEventsBatch] saved=true`);
     }
 
     return NextResponse.json({

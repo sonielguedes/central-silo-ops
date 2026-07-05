@@ -225,6 +225,73 @@ describe('POST /api/mobile/fuel/events/batch', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects invalid event type with 400', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'INVALID_TYPE',
+          offlineId: 'invalid-type-001',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: { journeyId: 'journey-001' },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.errors[0].error).toBe('type invalido');
+  });
+
+  it('accepts FUEL_SUPPLY with hourmeter filled, odometer null and attendant fields null', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-hourmeter-null-attendant',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            journeyOfflineId: 'journey-offline-001',
+            comboio: '770',
+            fleetCode: '1401',
+            liters: 5,
+            hourmeter: 558,
+            odometer: null,
+            productCode: 'DIESEL_S10',
+            productDescription: 'Diesel S-10',
+            pumpCode: 'BOMBA - 01',
+            driverName: 'sony',
+            driverRegistration: '1234',
+            attendantName: null,
+            attendantRegistration: null,
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      received: 1,
+      synced: 1,
+      duplicates: 0,
+    });
+
+    const { FuelingStorage } = await import('@/lib/fueling-storage');
+    const [saved] = FuelingStorage.getAll('sg01-1781359594113');
+    expect(saved).toMatchObject({
+      journeyId: 'journey-001',
+      journeyOfflineId: 'journey-offline-001',
+      fleetCode: '1401',
+      dieselLiters: 5,
+      hourmeter: 558,
+      odometer: null,
+      fuelType: 'DIESEL_S10',
+    });
+  });
+
   it('accepts JOURNEY_END payload using the APK contract fields', async () => {
     const res = await POST(makeReq({
       ...batchBody(),
@@ -287,6 +354,103 @@ describe('POST /api/mobile/fuel/events/batch', () => {
       finishedAt: '2026-06-21T22:10:00-03:00',
       status: 'FINALIZADA',
       source: 'APK',
+    });
+  });
+
+  it('accepts JOURNEY_END payload using the canonical Central contract fields', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'JOURNEY_END',
+          offlineId: 'journey-end-canonical',
+          occurredAt: '2026-06-21T22:10:00-03:00',
+          payload: {
+            journeyId: 'journey-canonical',
+            journeyOfflineId: 'journey-offline-canonical',
+            comboio: '770',
+            startedAt: '2026-06-21T18:33:00-03:00',
+            endedAt: '2026-06-21T22:10:00-03:00',
+            kmInitial: 180,
+            kmFinal: 981,
+            distanceKm: 801,
+            tankInitialLiters: 1500,
+            totalLoadedLiters: 0,
+            totalSuppliedLiters: 20,
+            theoreticalFinalBalanceLiters: 1480,
+            realFinalBalanceLiters: 1480,
+            divergenceLiters: 0,
+            status: 'FINALIZADA',
+            source: 'APK',
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.synced).toBe(1);
+
+    const { FuelJourneyStorage } = await import('@/lib/fuel-journey-storage');
+    const [saved] = FuelJourneyStorage.getAll('sg01-1781359594113', { type: 'JOURNEY_END' });
+    expect(saved?.payload).toMatchObject({
+      journeyId: 'journey-canonical',
+      journeyOfflineId: 'journey-offline-canonical',
+      comboio: '770',
+      startedAt: '2026-06-21T18:33:00-03:00',
+      endedAt: '2026-06-21T22:10:00-03:00',
+      kmInitial: 180,
+      kmFinal: 981,
+      distanceKm: 801,
+      tankInitialLiters: 1500,
+      totalLoadedLiters: 0,
+      totalSuppliedLiters: 20,
+      theoreticalFinalBalanceLiters: 1480,
+      realFinalBalanceLiters: 1480,
+      divergenceLiters: 0,
+      status: 'FINALIZADA',
+      source: 'APK',
+    });
+  });
+
+  it('accepts FUEL_SUPPLY with the canonical journey and comboio linkage fields', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'FUEL_SUPPLY',
+          offlineId: 'fuel-supply-canonical',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-canonical',
+            journeyOfflineId: 'journey-offline-canonical',
+            comboio: '770',
+            comboioFleetCode: '770',
+            fleetCode: '1401',
+            liters: 20,
+            meterStart: 1000,
+            meterEnd: 1010,
+            hourmeter: 13.4,
+            productCode: 'DIESEL_S10',
+            productDescription: 'Diesel S-10',
+            tenantId: 'sg01-1781359594113',
+            companyCode: 'SG01',
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.synced).toBe(1);
+
+    const { FuelingStorage } = await import('@/lib/fueling-storage');
+    const [saved] = FuelingStorage.getAll('sg01-1781359594113');
+    expect(saved).toMatchObject({
+      journeyId: 'journey-canonical',
+      fleetCode: '1401',
+      dieselLiters: 20,
+      fuelType: 'DIESEL_S10',
     });
   });
 
@@ -499,7 +663,7 @@ describe('POST /api/mobile/fuel/events/batch', () => {
     expect(body.synced).toBe(1);
   });
 
-  it('rejects FUEL_SUPPLY with hourmeter = 0 and odometer = null', async () => {
+  it('accepts FUEL_SUPPLY with hourmeter = 0 and odometer = null', async () => {
     const res = await POST(makeReq({
       ...batchBody(),
       events: [
@@ -518,10 +682,10 @@ describe('POST /api/mobile/fuel/events/batch', () => {
       ],
     }));
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 
-  it('rejects FUEL_SUPPLY with hourmeter = null and odometer = 0', async () => {
+  it('accepts FUEL_SUPPLY with hourmeter = null and odometer = 0', async () => {
     const res = await POST(makeReq({
       ...batchBody(),
       events: [
@@ -540,10 +704,10 @@ describe('POST /api/mobile/fuel/events/batch', () => {
       ],
     }));
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 
-  it('rejects FUEL_SUPPLY with hourmeter = 0 and odometer = 0', async () => {
+  it('accepts FUEL_SUPPLY with hourmeter = 0 and odometer = 0', async () => {
     const res = await POST(makeReq({
       ...batchBody(),
       events: [
@@ -562,7 +726,7 @@ describe('POST /api/mobile/fuel/events/batch', () => {
       ],
     }));
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 
   it('rejects FUEL_SUPPLY with NEITHER hourmeter NOR odometer', async () => {
@@ -587,5 +751,70 @@ describe('POST /api/mobile/fuel/events/batch', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.errors[0].error).toContain('hourmeter ou odometer validos');
+  });
+
+  it('accepts TANK_REFILL and STOP_* events', async () => {
+    const res = await POST(makeReq({
+      ...batchBody(),
+      events: [
+        {
+          type: 'TANK_REFILL',
+          offlineId: 'tank-refill-001',
+          occurredAt: '2026-06-21T21:58:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            journeyOfflineId: 'journey-offline-001',
+            comboio: '770',
+            liters: 120,
+            reasonCode: 'REABASTECIMENTO',
+            reasonDescription: 'Reabastecimento do tanque',
+          },
+        },
+        {
+          type: 'STOP_STARTED',
+          offlineId: 'stop-started-001',
+          occurredAt: '2026-06-21T22:00:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            journeyOfflineId: 'journey-offline-001',
+            comboio: '770',
+            stopCode: 'STOP-01',
+            stopDescription: 'Parada operacional',
+          },
+        },
+        {
+          type: 'STOP_REASON_ADDED',
+          offlineId: 'stop-reason-001',
+          occurredAt: '2026-06-21T22:01:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            journeyOfflineId: 'journey-offline-001',
+            comboio: '770',
+            reasonCode: 'ALMOÇO',
+            reasonDescription: 'Intervalo de almoço',
+          },
+        },
+        {
+          type: 'STOP_ENDED',
+          offlineId: 'stop-ended-001',
+          occurredAt: '2026-06-21T22:02:00-03:00',
+          payload: {
+            journeyId: 'journey-001',
+            journeyOfflineId: 'journey-offline-001',
+            comboio: '770',
+            stopCode: 'STOP-01',
+            stopDescription: 'Parada operacional',
+          },
+        },
+      ],
+    }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      received: 4,
+      synced: 4,
+      duplicates: 0,
+    });
   });
 });

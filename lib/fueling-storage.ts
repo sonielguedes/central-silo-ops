@@ -25,6 +25,8 @@ export interface FuelingRecord {
   gpsLongitude?: number;
   operatorRegistration?: string;
   operatorName?: string;
+  attendantName?: string;
+  attendantRegistration?: string | null;
   operationCode?: string;
   targetFleetCode?: string;
   deviceId?: string;
@@ -55,6 +57,8 @@ export interface FuelingRecordInput {
   gpsLongitude?: number;
   operatorRegistration?: string;
   operatorName?: string;
+  attendantName?: string;
+  attendantRegistration?: string | null;
   operationCode?: string;
   targetFleetCode?: string;
   pumpCode?: string;
@@ -124,6 +128,8 @@ export class FuelingStorage {
       gpsLongitude: input.gpsLongitude,
       operatorRegistration: input.operatorRegistration,
       operatorName: input.operatorName,
+      attendantName: input.attendantName,
+      attendantRegistration: input.attendantRegistration ?? undefined,
       operationCode: input.operationCode,
       targetFleetCode: input.targetFleetCode,
       deviceId: input.deviceId,

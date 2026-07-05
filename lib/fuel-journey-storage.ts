@@ -6,7 +6,15 @@ const DATA_ROOT =
   process.env.SILO_DATA_DIR ||
   (process.env.NODE_ENV === 'production' ? '/app/data' : './data');
 
-export type FuelJourneyEventType = 'JOURNEY_START' | 'POST_REFUEL' | 'JOURNEY_END';
+export type FuelJourneyEventType =
+  | 'JOURNEY_START'
+  | 'POST_REFUEL'
+  | 'FUEL_SUPPLY'
+  | 'TANK_REFILL'
+  | 'STOP_STARTED'
+  | 'STOP_REASON_ADDED'
+  | 'STOP_ENDED'
+  | 'JOURNEY_END';
 
 export interface FuelJourneyEventRecord {
   id: string;

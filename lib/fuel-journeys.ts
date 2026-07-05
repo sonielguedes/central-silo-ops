@@ -6,7 +6,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export type FuelJourneyStatus = 'FINALIZADA' | 'ATIVA' | 'INCONSISTENTE';
 export type FuelJourneySyncStatus = 'SYNCED' | 'PENDENTE_SYNC' | 'ERRO_SYNC';
-export type FuelJourneyEventType = 'JOURNEY_START' | 'PRODUCT_LOAD' | 'POST_REFUEL' | 'FUEL_SUPPLY' | 'JOURNEY_END';
+export type FuelJourneyEventType =
+  | 'JOURNEY_START'
+  | 'PRODUCT_LOAD'
+  | 'POST_REFUEL'
+  | 'FUEL_SUPPLY'
+  | 'TANK_REFILL'
+  | 'STOP_STARTED'
+  | 'STOP_REASON_ADDED'
+  | 'STOP_ENDED'
+  | 'JOURNEY_END';
 
 type SourceType = 'APK' | 'WEB' | 'UNKNOWN';
 
@@ -279,6 +288,14 @@ function timelineLabel(type: FuelJourneyEventType): string {
       return 'Pós-abastecimento';
     case 'FUEL_SUPPLY':
       return 'Abastecimento';
+    case 'TANK_REFILL':
+      return 'Reabastecimento do tanque';
+    case 'STOP_STARTED':
+      return 'Parada iniciada';
+    case 'STOP_REASON_ADDED':
+      return 'Motivo da parada';
+    case 'STOP_ENDED':
+      return 'Parada encerrada';
     case 'JOURNEY_END':
       return 'Finalização da jornada';
   }
@@ -293,6 +310,10 @@ function timelineSummary(event: JourneyBaseEvent): string {
   if (event.type === 'JOURNEY_START') return `Comboio ${resolveJourneyComboio(event.payload)} iniciou jornada`;
   if (event.type === 'JOURNEY_END') return `Comboio ${resolveJourneyComboio(event.payload)} encerrou jornada`;
   if (event.type === 'PRODUCT_LOAD') return `Combustível carregado no posto`;
+  if (event.type === 'TANK_REFILL') return `Tanque reabastecido`;
+  if (event.type === 'STOP_STARTED') return `Parada iniciada`;
+  if (event.type === 'STOP_REASON_ADDED') return `Motivo da parada registrado`;
+  if (event.type === 'STOP_ENDED') return `Parada encerrada`;
   return `Evento ${event.type}`;
 }
 
@@ -306,8 +327,16 @@ function eventSortWeight(type: FuelJourneyEventType): number {
       return 2;
     case 'FUEL_SUPPLY':
       return 3;
-    case 'JOURNEY_END':
+    case 'TANK_REFILL':
       return 4;
+    case 'STOP_STARTED':
+      return 5;
+    case 'STOP_REASON_ADDED':
+      return 6;
+    case 'STOP_ENDED':
+      return 7;
+    case 'JOURNEY_END':
+      return 8;
   }
 }
 
