@@ -5,11 +5,11 @@ import { Package, Plus, Search } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 
-const COLUMNS = ['CÃ³digo', 'Nome', 'Tipo', 'Unidade', 'Status'];
+const COLUMNS = ['Código', 'Nome', 'Tipo', 'Unidade', 'Status'];
 
 const EXEMPLOS = [
-  { code: 'DIESEL_S10',  name: 'Diesel S10',   tipo: 'CombustÃ­vel', unit: 'L' },
-  { code: 'DIESEL_S500', name: 'Diesel S500',  tipo: 'CombustÃ­vel', unit: 'L' },
+  { code: 'DIESEL_S10',  name: 'Diesel S10',   tipo: 'Combustível', unit: 'L' },
+  { code: 'DIESEL_S500', name: 'Diesel S500',  tipo: 'Combustível', unit: 'L' },
   { code: 'ARLA_32',     name: 'Arla 32',      tipo: 'Aditivo',     unit: 'L' },
   { code: 'LUBR_15W40',  name: 'Lubrificante 15W40', tipo: 'Lubrificante', unit: 'L' },
   { code: 'GRAXA_GP',    name: 'Graxa GP',     tipo: 'Lubrificante', unit: 'kg' },
@@ -28,7 +28,7 @@ function CombustivelProdutosPage() {
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#050812] text-white">
       <CombustivelPageHeader
         title="Produtos"
-        subtitle="CombustÃ­veis, lubrificantes e aditivos cadastrados"
+        subtitle="Combustíveis, lubrificantes e aditivos cadastrados"
         currentPage="Produtos"
         actions={
           <>
@@ -59,9 +59,9 @@ function CombustivelProdutosPage() {
             <h3 className="text-sm font-black mb-4 text-white">Cadastrar Produto</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               {[
-                { label: 'CÃ³digo', placeholder: 'DIESEL_S10' },
+                { label: 'Código', placeholder: 'DIESEL_S10' },
                 { label: 'Nome', placeholder: 'Diesel S10' },
-                { label: 'Tipo', placeholder: 'CombustÃ­vel / Lubrificante / Aditivo' },
+                { label: 'Tipo', placeholder: 'Combustível / Lubrificante / Aditivo' },
                 { label: 'Unidade', placeholder: 'L / kg / unid' },
               ].map(field => (
                 <div key={field.label}>
@@ -85,8 +85,8 @@ function CombustivelProdutosPage() {
 
         {/* Info */}
         <div className="bg-[#0a0e27]/70 border border-[#2d3647] rounded-2xl p-4 text-[11px] text-muted-foreground">
-          Estes produtos serÃ£o usados nos abastecimentos e sincronizados com o aplicativo via cÃ³digo (<code className="text-orange-300">productCode</code>).
-          O cÃ³digo deve ser Ãºnico por empresa e nunca convertido para nÃºmero.
+          Estes produtos serão usados nos abastecimentos e sincronizados com o aplicativo via código (<code className="text-orange-300">productCode</code>).
+          O código deve ser único por empresa e nunca convertido para número.
         </div>
 
         {/* Table */}
@@ -128,7 +128,7 @@ function CombustivelProdutosPage() {
           </table>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Exibindo {filtered.length} produto(s). Os produtos acima sÃ£o exemplos de referÃªncia â€” edite ou substitua conforme necessÃ¡rio.
+          Exibindo {filtered.length} produto(s). Os produtos acima são exemplos de referência — edite ou substitua conforme necessário.
         </p>
       </div>
     </div>

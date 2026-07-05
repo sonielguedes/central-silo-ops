@@ -123,7 +123,7 @@ function FazendasPage() {
                   onClick={() => setActiveTab('FIELDS')}
                   className={cn("px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all", activeTab === 'FIELDS' ? "bg-primary text-[#0a0e27]" : "text-muted-foreground hover:text-white")}
                 >
-                  TalhÃµes
+                   Talhões
                 </button>
              </div>
              <div className="relative w-64">
@@ -141,7 +141,7 @@ function FazendasPage() {
           {loading ? (
              <div className="flex flex-col items-center justify-center h-64 gap-4">
               <Loader2 size={40} className="text-primary animate-spin" />
-              <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Mapeando Território...</p>
+               <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em]">Mapeando Território...</p>
             </div>
           ) : activeTab === 'FARMS' ? (
              filteredFarms.length === 0 ? (
@@ -241,10 +241,10 @@ function FazendasPage() {
                   <button onClick={() => setIsFarmDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
                </div>
                <form className="space-y-6" onSubmit={farmForm.handleSubmit(onFarmSubmit)}>
-                  <FormField label="CÃ³digo" error={farmForm.formState.errors.code?.message} required><input {...farmForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                  <FormField label="Código" error={farmForm.formState.errors.code?.message} required><input {...farmForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   <FormField label="Nome" error={farmForm.formState.errors.name?.message} required><input {...farmForm.register('name')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
-                  <FormField label="MunicÃ­pio" error={farmForm.formState.errors.municipality?.message} required><input {...farmForm.register('municipality')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
-                  <FormField label="Ãrea Total (ha)" error={farmForm.formState.errors.totalArea?.message} required><input type="number" step="0.1" {...farmForm.register('totalArea')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                  <FormField label="Município" error={farmForm.formState.errors.municipality?.message} required><input {...farmForm.register('municipality')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                  <FormField label="Área Total (ha)" error={farmForm.formState.errors.totalArea?.message} required><input type="number" step="0.1" {...farmForm.register('totalArea')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   <div className="pt-6 flex gap-3">
                     <button type="submit" className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary/20"><Save size={14} /> Salvar Fazenda</button>
                   </div>
@@ -259,7 +259,7 @@ function FazendasPage() {
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsFieldDrawerOpen(false)}></div>
             <div className="relative w-full max-w-md bg-[#0a0e27] border-l border-[#2d3647] shadow-2xl p-8 flex flex-col h-full animate-in slide-in-from-right duration-300">
                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">{selectedField ? 'Editar TalhÃ£o' : 'Novo TalhÃ£o'}</h2>
+                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">{selectedField ? 'Editar Talhão' : 'Novo Talhão'}</h2>
                   <button onClick={() => setIsFieldDrawerOpen(false)} className="p-2 hover:bg-[#1a1f3a] rounded-xl transition-all"><X size={20} /></button>
                </div>
                <form className="space-y-6" onSubmit={fieldForm.handleSubmit(onFieldSubmit)}>
@@ -269,13 +269,13 @@ function FazendasPage() {
                        {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                     </select>
                   </FormField>
-                  <FormField label="CÃ³digo do TalhÃ£o" error={fieldForm.formState.errors.code?.message} required><input {...fieldForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                   <FormField label="Código do Talhão" error={fieldForm.formState.errors.code?.message} required><input {...fieldForm.register('code')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   <div className="grid grid-cols-2 gap-4">
-                     <FormField label="Ãrea (ha)" error={fieldForm.formState.errors.area?.message} required><input type="number" step="0.1" {...fieldForm.register('area')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
+                      <FormField label="Área (ha)" error={fieldForm.formState.errors.area?.message} required><input type="number" step="0.1" {...fieldForm.register('area')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                      <FormField label="Cultura" error={fieldForm.formState.errors.crop?.message} required><input {...fieldForm.register('crop')} className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none" /></FormField>
                   </div>
                   <div className="pt-6 flex gap-3">
-                    <button type="submit" className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary/20"><Save size={14} /> Salvar TalhÃ£o</button>
+                     <button type="submit" className="flex-1 py-3 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary/20"><Save size={14} /> Salvar Talhão</button>
                   </div>
                </form>
             </div>

@@ -5,7 +5,7 @@ import { Truck, Plus, Search, CheckCircle, XCircle } from 'lucide-react';
 import { withAuth } from '@/components/shared/with-auth';
 import { CombustivelPageHeader } from '@/components/combustivel/combustivel-page-header';
 
-const COLUMNS = ['CÃ³digo', 'DescriÃ§Ã£o', 'Placa', 'Capacidade Total (L)', 'Status', 'AÃ§Ãµes'];
+const COLUMNS = ['Código', 'Descrição', 'Placa', 'Capacidade Total (L)', 'Status', 'Ações'];
 
 function CombustivelComboiosPage() {
   const [search, setSearch] = useState('');
@@ -15,7 +15,7 @@ function CombustivelComboiosPage() {
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#050812] text-white">
       <CombustivelPageHeader
         title="Comboios"
-        subtitle="Cadastro de unidades abastecedoras (caminhÃ£o-pipa, reboque, etc.)"
+        subtitle="Cadastro de unidades abastecedoras (caminhão-pipa, reboque, etc.)"
         currentPage="Comboios"
         actions={
           <>
@@ -46,8 +46,8 @@ function CombustivelComboiosPage() {
             <h3 className="text-sm font-black mb-4 text-white">Cadastrar Comboio</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               {[
-                { label: 'CÃ³digo', placeholder: 'CB-01', hint: 'Sempre String' },
-                { label: 'DescriÃ§Ã£o', placeholder: 'CaminhÃ£o Pipa 01' },
+                { label: 'Código', placeholder: 'CB-01', hint: 'Sempre String' },
+                { label: 'Descrição', placeholder: 'Caminhão Pipa 01' },
                 { label: 'Placa', placeholder: 'AAA-0000 (opcional)' },
                 { label: 'Capacidade (L)', placeholder: '0,0', type: 'number' },
               ].map(field => (
