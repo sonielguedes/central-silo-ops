@@ -345,12 +345,12 @@ export function HeaderActions() {
         <button
           type="button"
           onClick={openNotifications}
-          className="relative rounded-full p-2 hover:bg-[#1a1f3a] transition-colors"
+          className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-[#2d3647] bg-white/[0.03] text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-primary/25"
           aria-label="Abrir notificações"
         >
-          <Bell size={20} className="text-muted-foreground hover:text-white transition-colors" />
+          <Bell size={18} />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 bg-red-500 rounded-full border-2 border-[#0a0e27] text-[9px] flex items-center justify-center font-bold text-white">
+            <span className="absolute right-1 top-1 min-w-4 h-4 px-1 rounded-full border border-[#0a0e27] bg-red-500 text-[9px] flex items-center justify-center font-bold text-white shadow-[0_0_10px_rgba(239,68,68,0.35)]">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -431,16 +431,16 @@ export function HeaderActions() {
       <button
         type="button"
         onClick={openUserMenu}
-        className="flex items-center gap-3 rounded-2xl border border-[#2d3647] bg-[#1a1f3a]/30 px-3 py-2 hover:border-primary/30 transition-colors"
+        className="group flex items-center gap-3 rounded-2xl border border-[#2d3647] bg-white/[0.03] px-3 py-2 transition-all hover:border-primary/30 hover:bg-white/[0.06] focus:outline-none focus:ring-1 focus:ring-primary/25"
       >
-        <div className="text-right hidden md:block">
-          <p className="text-sm font-semibold text-white">{user?.name || 'Carregando...'}</p>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{roleLabel(user?.role)}</p>
+        <div className="hidden min-w-0 text-right md:block">
+          <p className="truncate text-[13px] font-black text-white">{user?.name || 'Carregando...'}</p>
+          <p className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{roleLabel(user?.role)}</p>
         </div>
-        <ChevronDown size={14} className="hidden md:block text-muted-foreground" />
-        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#1a1f3a] to-[#2d3647] border border-[#2d3647] p-0.5">
-          <div className="w-full h-full rounded-full bg-[#0a0e27] flex items-center justify-center overflow-hidden">
-            <User size={20} className="text-muted-foreground" />
+        <ChevronDown size={14} className="hidden text-muted-foreground md:block" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2d3647] bg-gradient-to-tr from-[#1a1f3a] to-[#2d3647] p-0.5 shadow-[0_0_18px_rgba(0,0,0,0.15)]">
+          <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0a0e27]">
+            <User size={18} className="text-muted-foreground transition-colors group-hover:text-white" />
           </div>
         </div>
       </button>
