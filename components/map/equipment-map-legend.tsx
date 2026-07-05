@@ -19,20 +19,24 @@ import {
 /* ── MapLegend ──────────────────────────────────────────────────────────── */
 
 interface MapLegendProps {
-  items: Array<{ iconType?: string | null; status?: string | null }>;
+  items: Array<{ iconType?: string | null; status?: string | null; label?: string | null }>;
 }
 
 export const MapLegend = memo<MapLegendProps>(({ items }) => {
   const grouped = useMemo(() => {
     const statusCounts: Record<string, number> = {};
-    const typeCounts: Record<string, number> = {};
+    const typeCounts: Record<string, { iconType: EquipmentIconType; count: number }> = {};
 
     items.forEach(item => {
       const st = resolveMapStatus(item.status);
       statusCounts[st] = (statusCounts[st] || 0) + 1;
 
       const it = resolveIconType(item.iconType);
-      typeCounts[it] = (typeCounts[it] || 0) + 1;
+      const label = item.label?.trim() || EQUIPMENT_ICON_LABELS[it] || it;
+      const current = typeCounts[label];
+      typeCounts[label] = current
+        ? { iconType: current.iconType, count: current.count + 1 }
+        : { iconType: it, count: 1 };
     });
 
     return { statusCounts, typeCounts };
@@ -92,19 +96,19 @@ export const MapLegend = memo<MapLegendProps>(({ items }) => {
       <div className="space-y-2">
         <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Tipos</p>
         {Object.entries(grouped.typeCounts)
-          .sort((a, b) => b[1] - a[1])
+          .sort((a, b) => b[1].count - a[1].count)
           .slice(0, 6)
-          .map(([type, count]) => (
-            <div key={type} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.03] px-2.5 py-2">
+          .map(([label, meta]) => (
+            <div key={label} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.03] px-2.5 py-2">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/5 text-slate-100">
-                  <EquipmentIcon type={type as EquipmentIconType} size={15} />
+                  <EquipmentIcon type={meta.iconType} size={15} />
                 </span>
                 <span className="truncate text-xs font-bold text-slate-100">
-                  {EQUIPMENT_ICON_LABELS[type as EquipmentIconType] || type}
+                  {label}
                 </span>
               </div>
-              <span className="text-xs font-black text-white">{count}</span>
+              <span className="text-xs font-black text-white">{meta.count}</span>
             </div>
           ))}
       </div>

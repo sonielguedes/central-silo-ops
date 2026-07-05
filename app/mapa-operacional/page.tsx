@@ -389,7 +389,11 @@ function MapaOperacionalPage() {
 
         {allFleetData.length > 0 && !trailPanelOpen && (
           <div className="absolute bottom-8 left-4 z-[1400]">
-            <MapLegend items={filteredFleetData.map(m => ({ iconType: m.iconType, status: m.status }))} />
+            <MapLegend items={filteredFleetData.map(m => ({
+              iconType: m.iconType,
+              status: m.status,
+              label: m.implementName || m.equipmentModel || m.equipmentType || m.type || m.name,
+            }))} />
             {filteredFleetData.length !== allFleetData.length && (
               <div className="mt-1 text-[9px] font-bold text-muted-foreground text-center">
                 {filteredFleetData.filter(m => m.pos).length} visiveis no mapa
@@ -468,7 +472,9 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
           <div className="flex items-center gap-2">
             <span className={cn("text-sm font-black italic tracking-tighter leading-none transition-colors", isSelected ? "text-primary" : "text-white group-hover:text-primary")}>{machine.code}</span>
             <div className="h-3 w-[1px] bg-white/10" />
-            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">{formatLiveValue(machine.type || machine.name)}</span>
+            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">
+              {formatLiveValue(machine.implementName || machine.equipmentModel || machine.equipmentType || machine.type || machine.name)}
+            </span>
           </div>
           <span className="text-[8px] text-muted-foreground font-bold uppercase">{formatLiveTime(machine.lastHeartbeatAt || machine.lastGpsAt)}</span>
         </div>
