@@ -29,10 +29,10 @@ export function OperationalMap({ totalFleet = 0, counts }: { totalFleet?: number
   const resolvedCounts = counts ?? { total: totalFleet, TRABALHANDO: 0, DESLOCANDO: 0, PARADA: 0, ALERTA: 0, OFFLINE: 0 };
 
   return (
-    <div className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl overflow-hidden flex flex-col relative min-h-[500px] h-full group shadow-2xl select-none">
-      <div className="p-4 border-b border-[#2d3647]/50 flex items-center justify-between absolute top-0 left-0 right-0 z-[50] bg-[#0a0e27]/75 backdrop-blur-xl">
+    <div className="relative flex h-full min-h-[500px] flex-col overflow-hidden bg-[#050812] select-none group">
+      <div className="absolute left-0 right-0 top-0 z-[50] flex items-center justify-between border-b border-white/6 bg-[#07101f]/85 p-4 backdrop-blur-xl">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-xl text-primary ring-1 ring-primary/20">
+          <div className="rounded-xl border border-white/8 bg-white/[0.04] p-2 text-sky-300 ring-1 ring-sky-400/15">
             <MapIcon size={16} />
           </div>
           <div>
@@ -44,35 +44,35 @@ export function OperationalMap({ totalFleet = 0, counts }: { totalFleet?: number
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden sm:flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-300">
+          <span className="hidden sm:flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">
             <Activity size={11} /> Ao vivo
           </span>
-          <button className="p-2 bg-[#1a1f3a]/80 rounded-xl hover:bg-primary/20 hover:text-primary transition-all border border-[#2d3647] text-muted-foreground">
+          <button className="rounded-xl border border-white/8 bg-white/[0.04] p-2 text-slate-300 transition-all hover:border-sky-400/30 hover:text-white">
             <Filter size={14} />
           </button>
-          <button className="p-2 bg-[#1a1f3a]/80 rounded-xl hover:bg-primary/20 hover:text-primary transition-all border border-[#2d3647] text-muted-foreground">
+          <button className="rounded-xl border border-white/8 bg-white/[0.04] p-2 text-slate-300 transition-all hover:border-sky-400/30 hover:text-white">
             <Maximize2 size={14} />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 relative bg-[#050812] overflow-hidden">
+      <div className="relative flex-1 overflow-hidden bg-[#050812]">
         <FullMap />
       </div>
 
       <div
-        className="absolute bottom-5 left-5 z-[40] w-[240px] rounded-2xl border border-slate-600/30 p-4 shadow-2xl backdrop-blur-xl"
-        style={{ background: 'linear-gradient(180deg, rgba(10,14,39,0.96), rgba(8,13,30,0.88))', boxShadow: '0 16px 40px rgba(0,0,0,0.35)' }}
+        className="absolute bottom-5 left-5 z-[40] w-[250px] rounded-2xl border border-white/8 p-4 shadow-2xl backdrop-blur-xl"
+        style={{ background: 'linear-gradient(180deg, rgba(7,16,31,0.96), rgba(5,8,18,0.92))', boxShadow: '0 16px 40px rgba(0,0,0,0.35)' }}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary"><Layers3 size={15} /></span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/8 bg-white/[0.04] text-sky-300"><Layers3 size={15} /></span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Legenda</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Legenda</p>
               <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">Frota real do tenant</p>
             </div>
           </div>
-          <span className="rounded-full border border-slate-600/40 bg-slate-900/70 px-2 py-0.5 text-[10px] font-black text-slate-100">
+          <span className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-0.5 text-[10px] font-black text-slate-100">
             {resolvedCounts.total} equipamento{resolvedCounts.total === 1 ? '' : 's'}
           </span>
         </div>
