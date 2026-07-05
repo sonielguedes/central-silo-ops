@@ -62,12 +62,17 @@ function normalizeKey(value?: string | null) {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '_');
 }
 
-function readOptionalText(item: Operator, keys: string[]) {
-  const record = item as Operator & Record<string, unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function readOptionalText(item: unknown, keys: string[]) {
+  if (!isRecord(item)) return undefined;
+  const record = item;
   for (const key of keys) {
     const value = record[key];
     if (typeof value === 'string' && value.trim()) return value.trim();
@@ -76,8 +81,9 @@ function readOptionalText(item: Operator, keys: string[]) {
   return undefined;
 }
 
-function readOptionalBoolean(item: Operator, keys: string[]) {
-  const record = item as Operator & Record<string, unknown>;
+function readOptionalBoolean(item: unknown, keys: string[]) {
+  if (!isRecord(item)) return undefined;
+  const record = item;
   for (const key of keys) {
     const value = record[key];
     if (typeof value === 'boolean') return value;
@@ -90,15 +96,15 @@ function readOptionalBoolean(item: Operator, keys: string[]) {
   return undefined;
 }
 
-function resolveOperatorName(item: Operator) {
+function resolveOperatorName(item: unknown) {
   return readOptionalText(item, ['name', 'nome', 'operatorName']) || 'Sem nome informado';
 }
 
-function resolveOperatorRegistration(item: Operator) {
-  return readOptionalText(item, ['registration', 'matricula', 'operatorRegistration']) || 'Sem matrícula';
+function resolveOperatorRegistration(item: unknown) {
+  return readOptionalText(item, ['registration', 'matricula', 'operatorRegistration']) || 'Sem matr?cula';
 }
 
-function resolveOperatorRole(item: Operator): OperatorRoleMeta {
+function resolveOperatorRole(item: unknown): OperatorRoleMeta {
   const raw = readOptionalText(item, ['role', 'funcao', 'function', 'cargo', 'position', 'title']) || '';
   const key = normalizeKey(raw);
   if (key.includes('motorista') || key.includes('driver') || key.includes('condutor')) {
@@ -112,20 +118,20 @@ function resolveOperatorRole(item: Operator): OperatorRoleMeta {
     key.includes('piloto') ||
     key.includes('maquina')
   ) {
-    return { key: 'OPERADOR_MAQUINA', label: raw || 'Operador de máquina' };
+    return { key: 'OPERADOR_MAQUINA', label: raw || 'Operador de m?quina' };
   }
-  return { key: 'OUTROS', label: raw || 'Não informada' };
+  return { key: 'OUTROS', label: raw || 'N?o informada' };
 }
 
-function resolveOperatorShift(item: Operator) {
-  return readOptionalText(item, ['shift', 'turno']) || 'Não informado';
+function resolveOperatorShift(item: unknown) {
+  return readOptionalText(item, ['shift', 'turno']) || 'N?o informado';
 }
 
-function resolveOperatorPhone(item: Operator) {
-  return readOptionalText(item, ['phone', 'telefone']) || 'Não informado';
+function resolveOperatorPhone(item: unknown) {
+  return readOptionalText(item, ['phone', 'telefone']) || 'N?o informado';
 }
 
-function resolveOperatorStatus(item: Operator): OperatorStatusMeta {
+function resolveOperatorStatus(item: unknown): OperatorStatusMeta {
   const rawStatus = readOptionalText(item, ['status']);
   const normalized = normalizeKey(rawStatus);
   const active = readOptionalBoolean(item, ['active']);
@@ -161,7 +167,7 @@ function resolveOperatorStatus(item: Operator): OperatorStatusMeta {
   };
 }
 
-function resolveOperatorOperationalState(item: Operator) {
+function resolveOperatorOperationalState(item: unknown) {
   const status = resolveOperatorStatus(item);
   if (status.key === 'ATIVO') return { label: 'Apto para jornada', className: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' };
   if (status.key === 'INATIVO') return { label: 'Bloqueado', className: 'bg-red-500/10 text-red-300 border-red-500/20' };
@@ -169,30 +175,30 @@ function resolveOperatorOperationalState(item: Operator) {
 }
 
 function formatRelativeDate(value?: string | null) {
-  if (!value) return 'Não informado';
+  if (!value) return 'N?o informado';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Não informado';
+  if (Number.isNaN(date.getTime())) return 'N?o informado';
   const diffMs = Date.now() - date.getTime();
   const absMinutes = Math.round(Math.abs(diffMs) / 60000);
   const absHours = Math.round(absMinutes / 60);
   const absDays = Math.round(absHours / 24);
   if (absMinutes < 2) return 'Agora';
-  if (absMinutes < 60) return `há ${absMinutes} min`;
-  if (absHours < 24) return `há ${absHours} h`;
-  if (absDays < 7) return `há ${absDays} d`;
+  if (absMinutes < 60) return `h? ${absMinutes} min`;
+  if (absHours < 24) return `h? ${absHours} h`;
+  if (absDays < 7) return `h? ${absDays} d`;
   return date.toLocaleDateString('pt-BR');
 }
 
-function resolveUpdateDate(item: Operator) {
+function resolveUpdateDate(item: unknown) {
   return readOptionalText(item, ['updatedAt', 'lastUpdatedAt', 'lastSyncAt', 'lastSeenAt']);
 }
 
-function resolveLastJourney(item: Operator) {
+function resolveLastJourney(item: unknown) {
   return readOptionalText(item, ['lastJourney', 'journey', 'lastOperation', 'lastUsage', 'lastUsedEquipment']) || 'Sem jornada recente';
 }
 
-function resolveLastLink(item: Operator) {
-  return readOptionalText(item, ['lastFleet', 'lastEquipment', 'currentFleet', 'currentEquipment']) || 'Não informado';
+function resolveLastLink(item: unknown) {
+  return readOptionalText(item, ['lastFleet', 'lastEquipment', 'currentFleet', 'currentEquipment']) || 'N?o informado';
 }
 
 function StatCard({ label, value, helper, icon }: StatCardProps) {
@@ -280,7 +286,7 @@ function OperadoresPage() {
   const loadData = async () => {
     setLoading(true);
     const result = await OperatorService.getAll();
-    setData(result);
+    setData(Array.isArray(result) ? result.filter((item): item is Operator => isRecord(item)) : []);
     setLoading(false);
   };
 
