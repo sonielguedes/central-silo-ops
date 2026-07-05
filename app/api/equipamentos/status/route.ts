@@ -3,11 +3,10 @@ import { ServerStorage } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
 import { requireTenant } from '@/lib/auth/api-guard';
 import { resolveStop } from '@/lib/stop-resolver';
+import { resolveEquipmentIconTypeFromContext } from '@/lib/equipment-icon-resolution';
 import type { EquipmentLiveState } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-
-// ── Stop state machine ────────────────────────────────────────────────────────
 
 const WORKING_STATUSES = new Set(['OPERANDO', 'ONLINE', 'EM_ANDAMENTO']);
 const STOP_PENDING_STATUSES = new Set(['PARADO', 'AGUARDANDO_PARADA']);
@@ -20,7 +19,6 @@ export type StopState =
 
 export interface ResolvedStopForMap {
   state: StopState;
-  /** Label legivel para exibicao no card/popup do mapa. */
   label: string;
   code: string | null;
   reason: string | null;
@@ -31,17 +29,11 @@ export interface ResolvedStopForMap {
   inconsistency: string | null;
 }
 
-/**
- * Constroi o estado semantico de parada baseado no status do equipamento e
- * nos dados ja resolvidos pelo resolveStop(). Nunca retorna "NÃO INFORMADO" --
- * cada estado tem uma label explicita.
- */
 function buildStopState(
   status: string,
   stop: { code: string | null; description: string | null },
   liveState: EquipmentLiveState,
 ): ResolvedStopForMap {
-  // Em operacao: sem parada ativa
   if (WORKING_STATUSES.has(status)) {
     return {
       state: 'SEM_PARADA_ATIVA',
@@ -56,7 +48,6 @@ function buildStopState(
     };
   }
 
-  // Tem codigo resolvido -> parada apontada
   if (stop.code != null) {
     return {
       state: 'PARADA_APONTADA',
@@ -71,7 +62,6 @@ function buildStopState(
     };
   }
 
-  // Status indica parada apontada mas sem codigo/motivo -> inconsistente
   if (status === 'PARADA_APONTADA') {
     return {
       state: 'PARADA_INCONSISTENTE',
@@ -86,7 +76,6 @@ function buildStopState(
     };
   }
 
-  // Maquina parada aguardando operador apontar motivo
   if (STOP_PENDING_STATUSES.has(status)) {
     return {
       state: 'AGUARDANDO_APONTAMENTO',
@@ -101,7 +90,6 @@ function buildStopState(
     };
   }
 
-  // OFFLINE, FINALIZADO e demais estados
   return {
     state: 'SEM_PARADA_ATIVA',
     label: 'Sem parada ativa',
@@ -115,27 +103,23 @@ function buildStopState(
   };
 }
 
-/**
- * Normalizes a liveFleet item to guarantee:
- * - speedKmh: calculated from speed (m/s) when not sent by APK
- * - horimetro: canonical alias for hourmeterCurrent for the Operational Map
- * - rpm: passed through directly (when available via CAN/APK)
- * - Invalid GPS (0,0 or out of range) is discarded before reaching the map
- * - stop: structured object with semantic state (SEM_PARADA_ATIVA, AGUARDANDO_APONTAMENTO,
- *         PARADA_APONTADA, PARADA_INCONSISTENTE) -- never returns "NÃO INFORMADO"
- * - stopCode / stopDescription: flat fields kept for backward compat
- */
+function normalizeText(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
 function normalizeForMap(
   s: EquipmentLiveState,
   allEvents: ReturnType<typeof ServerStorage.getEvents>,
   catalog: { code: string; description: string }[],
+  equipmentCatalog: Array<Record<string, unknown>>,
+  typeCatalog: Array<Record<string, unknown>>,
+  modelCatalog: Array<Record<string, unknown>>,
+  groupCatalog: Array<Record<string, unknown>>,
 ) {
-  // Calculate speedKmh if APK sent speed in m/s and did not send speedKmh
   const speedKmh =
     s.speedKmh ??
     (s.speed != null ? Math.round(s.speed * 3.6 * 10) / 10 : undefined);
 
-  // Ensure invalid coordinates do not reach the map
   const hasValidGps =
     s.latitude != null &&
     s.longitude != null &&
@@ -145,16 +129,77 @@ function normalizeForMap(
     s.longitude > -180 &&
     s.longitude < 180;
 
-  // Resolve stop via full priority chain (event -> live-state -> catalog)
   const resolvedStop = resolveStop(s, allEvents, catalog);
-
-  // Build semantic stop state (4-state machine, no "NÃO INFORMADO")
   const stop = buildStopState(s.status, resolvedStop, s);
 
-  // ── Campos de comunicação e operacional (passam de getLiveFleet via ...s) ──
-  // Garantir que displayStatus seja correto mesmo se getLiveFleet não os calculou
+  const equipmentRecord =
+    equipmentCatalog.find((item) => String(item.id ?? '') === String(s.equipmentId ?? '')) ||
+    equipmentCatalog.find((item) => String(item.code ?? '') === String(s.fleetCode ?? ''));
+  const typeRecord =
+    equipmentRecord
+      ? typeCatalog.find((item) =>
+          String(item.id ?? '') === String(equipmentRecord.typeId ?? '') ||
+          String(item.code ?? '') === String(equipmentRecord.typeCode ?? '') ||
+          String(item.name ?? '') === String(equipmentRecord.type ?? ''),
+        )
+      : undefined;
+  const modelRecord =
+    equipmentRecord
+      ? modelCatalog.find((item) =>
+          String(item.id ?? '') === String(equipmentRecord.modelId ?? '') ||
+          String(item.name ?? '') === String(equipmentRecord.model ?? '') ||
+          String(item.model ?? '') === String(equipmentRecord.model ?? ''),
+        )
+      : undefined;
+  const groupRecord =
+    equipmentRecord
+      ? groupCatalog.find((item) =>
+          String(item.id ?? '') === String(equipmentRecord.groupId ?? '') ||
+          String(item.name ?? '') === String(equipmentRecord.group ?? ''),
+        )
+      : undefined;
+
+  const resolvedEquipmentType =
+    normalizeText(typeRecord?.name ?? typeRecord?.code ?? equipmentRecord?.type ?? modelRecord?.operationalType) || undefined;
+  const resolvedEquipmentModel =
+    normalizeText(modelRecord?.name ?? modelRecord?.model ?? equipmentRecord?.model ?? equipmentRecord?.name ?? s.implementName) || undefined;
+  const resolvedEquipmentCategory =
+    normalizeText(modelRecord?.category ?? typeRecord?.category ?? equipmentRecord?.category ?? groupRecord?.name) || undefined;
+  const resolvedImplementName =
+    normalizeText(s.implementName ?? equipmentRecord?.implementName ?? equipmentRecord?.implementCode) || undefined;
+  const resolvedImplementCode =
+    normalizeText(s.implementCode ?? equipmentRecord?.implementCode) || undefined;
+
+  const resolvedIconType = resolveEquipmentIconTypeFromContext(
+    {
+      type: resolvedEquipmentType,
+      model: resolvedEquipmentModel,
+      category: resolvedEquipmentCategory,
+      metadata: {
+        equipmentType: normalizeText(modelRecord?.iconType ?? typeRecord?.iconType ?? equipmentRecord?.iconType) || null,
+      },
+      name: equipmentRecord ? normalizeText(equipmentRecord.name) : undefined,
+      brand: equipmentRecord ? normalizeText(equipmentRecord.brand ?? equipmentRecord.manufacturer) : undefined,
+      code: s.fleetCode,
+      iconType: normalizeText((s as unknown as Record<string, unknown>).iconType) || null,
+      implementName: resolvedImplementName,
+      implementCode: resolvedImplementCode,
+      operation: s.operationName ?? null,
+      currentOperation: s.currentOperation ?? null,
+    },
+    {
+      iconType: normalizeText(equipmentRecord?.iconType ?? modelRecord?.iconType ?? typeRecord?.iconType ?? groupRecord?.iconType) || null,
+      type: resolvedEquipmentType,
+      name: equipmentRecord ? normalizeText(equipmentRecord.name) : undefined,
+      model: resolvedEquipmentModel,
+      category: resolvedEquipmentCategory,
+      brand: equipmentRecord ? normalizeText(equipmentRecord.brand ?? equipmentRecord.manufacturer) : undefined,
+      manufacturer: equipmentRecord ? normalizeText(equipmentRecord.manufacturer ?? equipmentRecord.brand) : undefined,
+    },
+  );
+
   const extS = s as typeof s & { isOnline?: boolean; communicationStatus?: string; operationalStatus?: string; hasRecentGps?: boolean; hasRecentHeartbeat?: boolean };
-  const RICH_OP_API = new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA','FINALIZADO']);
+  const RICH_OP_API = new Set(['OPERANDO', 'PARADO', 'AGUARDANDO_PARADA', 'PARADA_APONTADA', 'FINALIZADO']);
   const isOnlineApi           = extS.isOnline           ?? (s.status !== 'OFFLINE');
   const communicationStatusApi = extS.communicationStatus ?? (isOnlineApi ? 'ONLINE' : 'OFFLINE');
   const operationalStatusApi   = extS.operationalStatus   ?? s.status;
@@ -164,22 +209,23 @@ function normalizeForMap(
 
   return {
     ...s,
-    // Extra fields for the Operational Map
     equipmentCode: s.fleetCode,
     speedKmh,
     horimetro: s.hourmeterCurrent,
     rpm: s.rpm,
-    // GPS: clear if invalid so the map shows the alert instead of pinning at 0,0
     latitude: hasValidGps ? s.latitude : undefined,
     longitude: hasValidGps ? s.longitude : undefined,
-    // Flat stop fields (backward compat -- use stop.* for new code)
     stopCode: stop.code,
     stopDescription: stop.reason,
     stopReason: stop.reason,
     stopSource: resolvedStop.source,
-    // Structured stop state for the map card/popup
     stop,
-    // ── Status de comunicação e operacional separados ──
+    equipmentType: resolvedEquipmentType,
+    equipmentModel: resolvedEquipmentModel,
+    equipmentCategory: resolvedEquipmentCategory,
+    implementName: resolvedImplementName,
+    implementCode: resolvedImplementCode,
+    iconType: resolvedIconType,
     isOnline:            isOnlineApi,
     communicationStatus: communicationStatusApi,
     operationalStatus:   operationalStatusApi,
@@ -196,8 +242,11 @@ export async function GET(req: NextRequest) {
 
     const { tenantId } = tenant;
     const liveFleet = ServerStorage.getLiveFleet(tenantId);
+    const equipmentCatalog = CadastroStorage.getAllRaw(tenantId, 'equipamentos') as Array<Record<string, unknown>>;
+    const typeCatalog = CadastroStorage.getAllRaw(tenantId, 'tipos') as Array<Record<string, unknown>>;
+    const modelCatalog = CadastroStorage.getAllRaw(tenantId, 'modelos') as Array<Record<string, unknown>>;
+    const groupCatalog = CadastroStorage.getAllRaw(tenantId, 'grupos') as Array<Record<string, unknown>>;
 
-    // Load events and catalog once per request (not per machine)
     const allEvents = ServerStorage.getEvents(tenantId);
     const catalog = (
       CadastroStorage.getAll(tenantId, 'paradas') as { code?: string; description?: string }[]
@@ -205,7 +254,9 @@ export async function GET(req: NextRequest) {
       .filter((p) => p.code && p.description)
       .map((p) => ({ code: p.code as string, description: p.description as string }));
 
-    const response = NextResponse.json(liveFleet.map((s) => normalizeForMap(s, allEvents, catalog)));
+    const response = NextResponse.json(
+      liveFleet.map((s) => normalizeForMap(s, allEvents, catalog, equipmentCatalog, typeCatalog, modelCatalog, groupCatalog)),
+    );
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');

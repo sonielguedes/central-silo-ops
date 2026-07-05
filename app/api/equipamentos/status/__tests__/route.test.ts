@@ -28,6 +28,7 @@ jest.mock('@/lib/server-storage', () => ({
 jest.mock('@/lib/cadastro-storage', () => ({
   CadastroStorage: {
     getAll: jest.fn(),
+    getAllRaw: jest.fn(),
   },
 }));
 
@@ -44,6 +45,7 @@ import type { MobileEvent } from '@/lib/server-storage';
 const mockGetLiveFleet = ServerStorage.getLiveFleet as jest.MockedFn<typeof ServerStorage.getLiveFleet>;
 const mockGetEvents    = ServerStorage.getEvents    as jest.MockedFn<typeof ServerStorage.getEvents>;
 const mockGetAll       = CadastroStorage.getAll     as jest.MockedFn<typeof CadastroStorage.getAll>;
+const mockGetAllRaw    = CadastroStorage.getAllRaw  as jest.MockedFn<typeof CadastroStorage.getAllRaw>;
 const mockRequireTenant = requireTenant             as jest.MockedFn<typeof requireTenant>;
 
 // ── Factories ─────────────────────────────────────────────────────────────────
@@ -97,6 +99,7 @@ function setup(live: EquipmentLiveState[], events: MobileEvent[] = []) {
   mockGetLiveFleet.mockReturnValue(live);
   mockGetEvents.mockReturnValue(events);
   mockGetAll.mockReturnValue(STOP_CATALOG as ReturnType<typeof CadastroStorage.getAll>);
+  mockGetAllRaw.mockReturnValue([] as ReturnType<typeof CadastroStorage.getAllRaw>);
 }
 
 // ── Import handler ─────────────────────────────────────────────────────────────
@@ -223,6 +226,24 @@ test('Caso 8 -- operador, matricula, operacao e implemento continuam no retorno'
   expect(item.operationName).toBe('Preparo de Solo');
   expect(item.implementCode).toBe('5000');
   expect(item.implementName).toBe('SULCADOR');
+});
+
+// â”€â”€ Caso 8b: payload repassa implemento e resolve icone a partir dele â”€â”€â”€â”€â”€â”€â”€â”€
+test('Caso 8b -- implementName e implementCode seguem no payload e resolvem SULCADOR', async () => {
+  setup([makeLive({
+    implementCode: '5000',
+    implementName: 'SULCADOR',
+    equipmentType: undefined,
+    equipmentModel: undefined,
+    equipmentCategory: undefined,
+    type: undefined,
+    name: undefined,
+  })]);
+  const [item] = await getJson(makeRequest());
+  expect(item.implementName).toBe('SULCADOR');
+  expect(item.implementCode).toBe('5000');
+  expect(item.equipmentModel).toBe('SULCADOR');
+  expect(item.iconType).toBe('SULCADOR');
 });
 
 // ── Caso 9: retorno inclui campo stop estruturado (verifica /operacoes nao quebra) ──
