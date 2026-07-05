@@ -449,13 +449,13 @@ function DashboardPage() {
                     }
                     className="overflow-hidden"
                   >
-                    <div className="overflow-hidden rounded-[24px] border border-white/6 bg-[#050812]">
+                    <div className="h-[420px] overflow-hidden rounded-[24px] border border-white/6 bg-[#050812] xl:h-[440px]">
                       <OperationalMap totalFleet={data.totalFleet} counts={data.fleetStatusCounts} />
                     </div>
                   </SectionShell>
                 </div>
 
-                <div className="col-span-12 min-h-[520px] xl:col-span-4">
+                <div className="col-span-12 min-h-[420px] xl:col-span-4">
                   <ActiveFleetPanel fleet={data.activeFleet} />
                 </div>
               </section>

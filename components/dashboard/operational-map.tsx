@@ -29,15 +29,15 @@ export function OperationalMap({ totalFleet = 0, counts }: { totalFleet?: number
   const resolvedCounts = counts ?? { total: totalFleet, TRABALHANDO: 0, DESLOCANDO: 0, PARADA: 0, ALERTA: 0, OFFLINE: 0 };
 
   return (
-    <div className="relative flex h-full min-h-[500px] flex-col overflow-hidden bg-[#050812] select-none group">
-      <div className="absolute left-0 right-0 top-0 z-[50] flex items-center justify-between border-b border-white/6 bg-[#07101f]/85 p-4 backdrop-blur-xl">
+    <div className="relative flex h-full min-h-[380px] flex-col overflow-hidden bg-[#050812] select-none group">
+      <div className="absolute left-0 right-0 top-0 z-[50] flex items-center justify-between border-b border-white/6 bg-[#07101f]/85 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <div className="rounded-xl border border-white/8 bg-white/[0.04] p-2 text-sky-300 ring-1 ring-sky-400/15">
             <MapIcon size={16} />
           </div>
           <div>
-            <h3 className="font-black text-sm text-white tracking-tight uppercase">Monitoramento Georreferenciado</h3>
-            <span className="text-[10px] text-primary flex items-center gap-1 font-medium uppercase tracking-widest">
+            <h3 className="font-black text-[13px] text-white tracking-tight uppercase">Monitoramento Georreferenciado</h3>
+            <span className="flex items-center gap-1 text-[9px] font-medium uppercase tracking-[0.18em] text-slate-300">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.8)]" />
               Central ao vivo
             </span>
@@ -61,23 +61,23 @@ export function OperationalMap({ totalFleet = 0, counts }: { totalFleet?: number
       </div>
 
       <div
-        className="absolute bottom-5 left-5 z-[40] w-[250px] rounded-2xl border border-white/8 p-4 shadow-2xl backdrop-blur-xl"
+        className="absolute bottom-4 left-4 z-[40] w-[210px] rounded-2xl border border-white/8 p-3 shadow-2xl backdrop-blur-xl"
         style={{ background: 'linear-gradient(180deg, rgba(7,16,31,0.96), rgba(5,8,18,0.92))', boxShadow: '0 16px 40px rgba(0,0,0,0.35)' }}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/8 bg-white/[0.04] text-sky-300"><Layers3 size={15} /></span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-white/8 bg-white/[0.04] text-sky-300"><Layers3 size={14} /></span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Legenda</p>
-              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">Frota real do tenant</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-300">Legenda</p>
+              <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-500">Frota real do tenant</p>
             </div>
           </div>
-          <span className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-0.5 text-[10px] font-black text-slate-100">
+          <span className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-0.5 text-[9px] font-black text-slate-100">
             {resolvedCounts.total} equipamento{resolvedCounts.total === 1 ? '' : 's'}
           </span>
         </div>
-        <div className="space-y-2">
-          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Status</p>
+        <div className="space-y-1.5">
+          <p className="text-[8px] font-black uppercase tracking-[0.18em] text-slate-500">Status</p>
           {STATUS_META.map((item) => (
             <StatusItem key={item.key} color={item.color} label={item.label} count={resolvedCounts[item.key]} />
           ))}
@@ -89,15 +89,15 @@ export function OperationalMap({ totalFleet = 0, counts }: { totalFleet?: number
 
 function StatusItem({ color, label, count }: { color: string; label: string; count: number }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.03] px-2.5 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-2.5 py-1.5">
       <div className="flex min-w-0 items-center gap-2">
         <span
           className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white/5"
           style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}70` }}
         />
-        <span className="truncate text-xs font-bold text-slate-100">{label}</span>
+        <span className="truncate text-[11px] font-bold text-slate-100">{label}</span>
       </div>
-      <span className="text-xs font-black text-white">{count}</span>
+      <span className="text-[11px] font-black text-white">{count}</span>
     </div>
   );
 }
