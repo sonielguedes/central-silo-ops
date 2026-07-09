@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
+import { DeviceBindingStorage } from '@/lib/device-binding-storage';
 import { EquipmentLiveState } from '@/lib/types';
 import { requireMobileAuth } from '@/lib/auth/api-guard';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
@@ -10,7 +11,13 @@ export const dynamic = 'force-dynamic';
 
 const hasValidValue = (value: unknown) => value !== undefined && value !== null && value !== '';
 
-function isStopActive(state: Record<string, unknown> | null | undefined): boolean {
+type StopLikeState = {
+  status?: unknown;
+  stopReasonCode?: unknown;
+  stopCode?: unknown;
+};
+
+function isStopActive(state: StopLikeState | null | undefined): boolean {
   if (!state) return false;
   const st = String(state.status ?? '').toUpperCase();
   if (new Set(['PARADA_APONTADA', 'PARADO', 'AGUARDANDO_PARADA']).has(st)) return true;
@@ -33,8 +40,19 @@ const asNumber = (value: unknown): number | undefined => typeof value === 'numbe
 const isValidGps = (lat: number | undefined, lng: number | undefined): boolean => lat !== undefined && lng !== undefined && !(lat === 0 && lng === 0) && lat > -90 && lat < 90 && lng > -180 && lng < 180;
 const asValidHourmeter = (value: unknown): number | undefined => { const parsed = asNumber(value); return parsed !== undefined && parsed > 0 ? parsed : undefined; };
 const asString = (value: unknown): string | undefined => typeof value === 'string' && value.trim() ? value : undefined;
+const asRecord = (value: unknown): Record<string, unknown> | undefined => (value && typeof value === 'object' && !Array.isArray(value)) ? value as Record<string, unknown> : undefined;
+const firstDefined = (...values: unknown[]): unknown => values.find((value) => value !== undefined && value !== null && value !== '');
 
-interface MobileBatchEvent { uuid: string; type: string; timestamp: string | number | Date; data?: Record<string, unknown>; }
+interface MobileBatchEvent {
+  uuid: string;
+  type: string;
+  timestamp: string | number | Date;
+  data?: Record<string, unknown>;
+  eventId?: string;
+  occurredAt?: string | number | Date;
+  payload?: Record<string, unknown>;
+  journeyId?: string;
+}
 interface MobileBatchHeader { machineId?: string; tenantId?: string; mobileToken?: string; fleetCode?: string; }
 
 const JOURNEY_START_CLEAR_FIELDS = [
@@ -154,6 +172,42 @@ function validateCadastroEquipment(item: Record<string, unknown>, mobileToken: s
   return { ok: true, equipment: { id: String(item.id ?? ''), code: String(item.code ?? ''), mobileToken: storedToken, tenantId } };
 }
 
+function readEventData(event: MobileBatchEvent): Record<string, unknown> {
+  const root = event as unknown as Record<string, unknown>;
+  const data = asRecord(event.data) ?? {};
+  const payload = asRecord(root.payload) ?? {};
+  const nestedPayload = asRecord(data.payload) ?? {};
+  return { ...payload, ...nestedPayload, ...data, ...root };
+}
+
+function extractGpsFields(event: MobileBatchEvent, timestamp: string): Record<string, unknown> {
+  const source = readEventData(event);
+  const lat = asNumber(firstDefined(source.latitude, source.lat, source.gpsLatitude));
+  const lng = asNumber(firstDefined(source.longitude, source.lng, source.gpsLongitude));
+  const gpsAccuracy = asNumber(firstDefined(source.gpsAccuracy, source.accuracy));
+  const speedKmh = asNumber(firstDefined(source.speedKmh, source.speed));
+  const bearing = asNumber(firstDefined(source.bearing, source.course, source.azimuth, source.direction));
+  const gpsSource = asString(firstDefined(source.gpsSource, source.source, source.positionSource));
+  const updates: Record<string, unknown> = {};
+
+  if (isValidGps(lat, lng)) {
+    updates.latitude = lat;
+    updates.longitude = lng;
+    updates.lastGpsAt = timestamp;
+  }
+  if (gpsAccuracy !== undefined) {
+    updates.accuracy = gpsAccuracy;
+    updates.gpsAccuracy = gpsAccuracy;
+  }
+  if (speedKmh !== undefined) updates.speedKmh = speedKmh;
+  if (bearing !== undefined) updates.bearing = bearing;
+  if (gpsSource) {
+    updates.gpsSource = gpsSource;
+    updates.source = gpsSource;
+  }
+  return updates;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rl = checkRateLimit(req, RATE_LIMITS.mobileBatch);
@@ -163,7 +217,7 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const { tenantId, companyToken } = auth;
-    let body: any;
+    let body: { app?: string; header?: MobileBatchHeader; events?: MobileBatchEvent[]; deviceId?: string; driver?: Record<string, unknown>; vehicle?: Record<string, unknown>; version?: string; [key: string]: unknown };
     try {
       body = await req.json();
     } catch (e) {
@@ -171,20 +225,20 @@ export async function POST(req: NextRequest) {
     }
 
     const isPlm = body.app === 'PLM_MOTORISTA';
-    let header: MobileBatchHeader;
-    let events: MobileBatchEvent[];
+    let header: MobileBatchHeader | undefined;
+    let events: MobileBatchEvent[] | undefined;
 
     if (isPlm) {
       if (!body.deviceId) return NextResponse.json({ ok: false, error: 'INVALID_PAYLOAD', message: 'deviceId obrigatorio' }, { status: 400 });
       if (!Array.isArray(body.events)) return NextResponse.json({ ok: false, error: 'INVALID_PAYLOAD', message: 'events obrigatorio' }, { status: 400 });
       header = { machineId: body.deviceId, tenantId: tenantId };
-      events = body.events.map((e: any) => ({
-        uuid: e.eventId,
-        type: e.type,
-        timestamp: e.occurredAt,
+      events = body.events.map((e) => ({
+        uuid: String(e.eventId),
+        type: String(e.type),
+        timestamp: e.occurredAt as string,
         data: {
-          ...e.payload,
-          journeyId: e.journeyId,
+          ...(asRecord(e.payload) ?? {}),
+          journeyId: e.journeyId as string | undefined,
           deviceId: body.deviceId,
           driver: body.driver,
           vehicle: body.vehicle,
@@ -201,21 +255,35 @@ export async function POST(req: NextRequest) {
 
     const firstEventData = events[0]?.data;
     const mobileToken = header.mobileToken || (typeof firstEventData?.mobileToken === 'string' ? firstEventData.mobileToken : undefined);
+    const deviceBinding = DeviceBindingStorage.getByDeviceId(tenantId, header.machineId!);
+    const boundEquipmentId = deviceBinding?.equipmentId ? String(deviceBinding.equipmentId) : undefined;
+    const boundFleetCode = deviceBinding?.fleetCode ? String(deviceBinding.fleetCode) : undefined;
     const cadastroItems = CadastroStorage.getAll(tenantId, 'equipamentos') as Array<Record<string, unknown>>;
     const machineIdLower = header.machineId!.toLowerCase();
     const firstEquipCode = typeof firstEventData?.equipmentCode === 'string' ? firstEventData.equipmentCode.toLowerCase() : '';
+    const bindingEquipmentIdLower = boundEquipmentId?.toLowerCase() ?? '';
+    const bindingFleetCodeLower = boundFleetCode?.toLowerCase() ?? '';
 
     const cadastroMatch = cadastroItems.find((item) => {
       const itemId = String(item.id ?? '').toLowerCase();
       const itemCode = String(item.code ?? '').toLowerCase();
-      return itemId === machineIdLower || itemCode === machineIdLower || (firstEquipCode !== '' && itemCode === firstEquipCode);
+      return (
+        itemId === machineIdLower ||
+        itemCode === machineIdLower ||
+        (firstEquipCode !== '' && itemCode === firstEquipCode) ||
+        (bindingEquipmentIdLower !== '' && itemId === bindingEquipmentIdLower) ||
+        (bindingFleetCodeLower !== '' && itemCode === bindingFleetCodeLower)
+      );
     });
 
     let validation: any;
     if (cadastroMatch) {
       validation = validateCadastroEquipment(cadastroMatch, mobileToken, tenantId);
     } else {
-      const legacyEquip = ServerStorage.getEquipmentById(header.machineId!, tenantId);
+      const legacyEquip =
+        (boundEquipmentId ? ServerStorage.getEquipmentById(boundEquipmentId, tenantId) : undefined) ??
+        (boundFleetCode ? ServerStorage.getEquipmentByFleetCode(boundFleetCode, tenantId) : undefined) ??
+        ServerStorage.getEquipmentById(header.machineId!, tenantId);
       validation = ServerStorage.validateMobileEquipment(legacyEquip, mobileToken, tenantId, companyToken);
     }
 
@@ -226,8 +294,9 @@ export async function POST(req: NextRequest) {
 
     const currentLiveState = ServerStorage.getLiveFleet(tenantId).find(s => s.equipmentId === validation.equipment.id) ?? null;
     const results = events.map((event) => {
+      const eventData = readEventData(event);
       if (event.type === 'FUELING') {
-        const liters = asNumber(event.data?.dieselLiters);
+        const liters = asNumber(eventData.dieselLiters);
         if (liters === undefined || liters <= 0) return { offlineId: event.uuid, status: 'REJECTED', reason: 'dieselLiters > 0' };
       }
       const status = ServerStorage.saveEvent({
@@ -235,7 +304,7 @@ export async function POST(req: NextRequest) {
         equipmentId: validation.equipment.id,
         type: event.type,
         timestamp: new Date(event.timestamp).toISOString(),
-        payload: event.data || {}
+        payload: eventData
       }, tenantId);
       return { offlineId: event.uuid, status };
     });
@@ -247,11 +316,11 @@ export async function POST(req: NextRequest) {
 
     let journeyEnded = false;
     let journeyStarted = false;
-    let stopActive = isStopActive(currentLiveState as any);
+    let stopActive = isStopActive(currentLiveState);
     let stopEndedFieldsToDelete: (keyof EquipmentLiveState)[] = [];
 
     for (const event of sorted) {
-      const d = event.data || {};
+      const d = readEventData(event);
       const ts = new Date(event.timestamp).toISOString();
 
       switch (event.type) {
@@ -265,20 +334,18 @@ export async function POST(req: NextRequest) {
           journeyStarted = true;
           break;
 
+        case 'POSITION_UPDATE':
         case 'LOCATION':
         case 'GPS':
         case 'GPS_POINT':
           if (journeyEnded) break;
           applyOperationalFields(liveUpdates, d);
-          const lat = asNumber(d.latitude), lng = asNumber(d.longitude);
-          if (isValidGps(lat, lng)) {
-            liveUpdates.latitude = lat; liveUpdates.longitude = lng; liveUpdates.lastGpsAt = ts;
-            if (asNumber(d.speed) != null) liveUpdates.speed = asNumber(d.speed);
-            if (asNumber(d.speedKmh) != null) liveUpdates.speedKmh = asNumber(d.speedKmh);
-          }
+          const gpsUpdates = extractGpsFields(event, ts);
+          Object.assign(liveUpdates, gpsUpdates);
+          if (gpsUpdates.speedKmh !== undefined) liveUpdates.speedKmh = gpsUpdates.speedKmh;
           if (!stopActive && !isStopActive(liveUpdates)) {
-            const s = asString(d.status)?.toUpperCase();
-            if (s && new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA']).has(s)) liveUpdates.status = s as any;
+            const s = asString(firstDefined(d.status, d.operationalStatus))?.toUpperCase();
+            if (s && new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA']).has(s)) liveUpdates.status = s;
             else if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
           }
           break;
@@ -287,7 +354,7 @@ export async function POST(req: NextRequest) {
           if (journeyEnded) break;
           applyOperationalFields(liveUpdates, d);
           liveUpdates.lastHeartbeatAt = now;
-          const hCurr = asValidHourmeter(d.hourmeterCurrent ?? d.hourmeter);
+          const hCurr = asValidHourmeter(firstDefined(d.hourmeterCurrent, d.hourmeter));
           if (hCurr != null) liveUpdates.hourmeterCurrent = hCurr;
           break;
 
@@ -365,8 +432,8 @@ export async function POST(req: NextRequest) {
       results
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[batch] error', error);
-    return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR', message: error.message || 'Erro interno' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Erro interno' }, { status: 500 });
   }
 }
