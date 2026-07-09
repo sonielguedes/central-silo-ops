@@ -45,7 +45,7 @@ const firstDefined = (...values: unknown[]): unknown => values.find((value) => v
 
 interface MobileBatchEvent {
   uuid: string;
-  type: string;
+  type?: string;
   timestamp: string | number | Date;
   data?: Record<string, unknown>;
   eventId?: string;
@@ -53,8 +53,6 @@ interface MobileBatchEvent {
   payload?: Record<string, unknown>;
   journeyId?: string;
 }
-interface MobileBatchHeader { machineId?: string; tenantId?: string; mobileToken?: string; fleetCode?: string; }
-
 const JOURNEY_START_CLEAR_FIELDS = [
   'hourmeterEnd',
   'hourmeterFinal',
@@ -208,6 +206,124 @@ function extractGpsFields(event: MobileBatchEvent, timestamp: string): Record<st
   return updates;
 }
 
+type BatchBody = unknown;
+
+interface NormalizedBatchEvent extends Record<string, unknown> {
+  uuid: string;
+  type?: string;
+  timestamp: string | number | Date;
+  data: Record<string, unknown>;
+  payload?: Record<string, unknown>;
+  eventId?: string;
+  id?: string;
+  machineId?: string;
+  equipmentId?: string;
+  fleetCode?: string;
+  tenantId?: string;
+  companyCode?: string;
+  occurredAt?: string | number | Date;
+}
+
+interface BatchNormalizationResult {
+  rawEvents: unknown[];
+  receivedKeys: string[];
+  bodyRecord?: Record<string, unknown>;
+}
+
+function collectRawEvents(body: BatchBody): BatchNormalizationResult {
+  if (Array.isArray(body)) {
+    return { rawEvents: body, receivedKeys: ['[array]'] };
+  }
+
+  const bodyRecord = asRecord(body);
+  const dataRecord = asRecord(bodyRecord?.data);
+  const eventsFromEvents = Array.isArray(bodyRecord?.events) ? bodyRecord.events : [];
+  const eventsFromBatch = Array.isArray(bodyRecord?.batch) ? bodyRecord.batch : [];
+  const eventsFromDataEvents = Array.isArray(dataRecord?.events) ? dataRecord.events : [];
+  const rawEvents = [...eventsFromEvents, ...eventsFromBatch, ...eventsFromDataEvents];
+  return { rawEvents, receivedKeys: bodyRecord ? Object.keys(bodyRecord) : [], bodyRecord: bodyRecord ?? undefined };
+}
+
+function eventIdentityKey(value: unknown): string | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const payload = asRecord(record.payload) ?? asRecord(record.data);
+  return asString(firstDefined(
+    record.idempotencyKey,
+    record.eventId,
+    record.id,
+    payload?.idempotencyKey,
+    payload?.eventId,
+    payload?.id
+  ));
+}
+
+function dedupeRawEvents(rawEvents: unknown[]): unknown[] {
+  const seen = new Set<string>();
+  const deduped: unknown[] = [];
+  for (const event of rawEvents) {
+    const key = eventIdentityKey(event);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    deduped.push(event);
+  }
+  return deduped;
+}
+
+function resolveEventType(record: Record<string, unknown>, payload: Record<string, unknown>): string | undefined {
+  return asString(firstDefined(
+    record.type,
+    record.eventType,
+    payload.type,
+    payload.eventType,
+    asRecord(record.data)?.type,
+    asRecord(record.data)?.eventType
+  ))?.toUpperCase();
+}
+
+function resolveEventTimestamp(record: Record<string, unknown>, payload: Record<string, unknown>): string {
+  const ts = firstDefined(record.occurredAt, record.timestamp, payload.occurredAt, payload.capturedAt, new Date().toISOString());
+  return new Date(ts as string | number | Date).toISOString();
+}
+
+function normalizeBatchEvent(rawEvent: unknown, defaults: { tenantId: string; companyCode?: string; deviceId?: string; machineId?: string; fleetCode?: string }, index: number): NormalizedBatchEvent {
+  const record = asRecord(rawEvent) ?? {};
+  const payload = asRecord(record.payload) ?? asRecord(record.data) ?? {};
+  const type = resolveEventType(record, payload);
+  const timestamp = resolveEventTimestamp(record, payload);
+  const uuid = asString(firstDefined(
+    record.idempotencyKey,
+    record.eventId,
+    record.id,
+    payload.idempotencyKey,
+    payload.eventId,
+    payload.id,
+    `${index}-${timestamp}`
+  )) ?? `event-${index}-${timestamp}`;
+  const machineId = asString(firstDefined(record.machineId, record.equipmentId, payload.machineId, payload.equipmentId, defaults.deviceId));
+  const equipmentId = asString(firstDefined(record.equipmentId, record.machineId, payload.equipmentId, payload.machineId, defaults.deviceId));
+  const fleetCode = asString(firstDefined(record.fleetCode, payload.fleetCode, defaults.fleetCode));
+  const tenantId = asString(firstDefined(record.tenantId, payload.tenantId, defaults.tenantId));
+  const companyCode = asString(firstDefined(record.companyCode, payload.companyCode, defaults.companyCode));
+
+  return {
+    ...record,
+    data: payload,
+    payload,
+    uuid,
+    type,
+    timestamp,
+    eventId: asString(record.eventId) ?? asString(payload.eventId),
+    id: asString(record.id) ?? asString(payload.id),
+    machineId,
+    equipmentId,
+    fleetCode,
+    tenantId,
+    companyCode,
+    occurredAt: timestamp,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rl = checkRateLimit(req, RATE_LIMITS.mobileBatch);
@@ -217,52 +333,68 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const { tenantId, companyToken } = auth;
-    let body: { app?: string; header?: MobileBatchHeader; events?: MobileBatchEvent[]; deviceId?: string; driver?: Record<string, unknown>; vehicle?: Record<string, unknown>; version?: string; [key: string]: unknown };
+    let body: BatchBody;
     try {
       body = await req.json();
     } catch (e) {
       return NextResponse.json({ ok: false, error: 'INVALID_JSON', message: 'Payload invalido' }, { status: 400 });
     }
 
-    const isPlm = body.app === 'PLM_MOTORISTA';
-    let header: MobileBatchHeader | undefined;
-    let events: MobileBatchEvent[] | undefined;
+    const bodyRecord = asRecord(body);
+    const { rawEvents, receivedKeys } = collectRawEvents(body);
+    const dedupedRawEvents = dedupeRawEvents(rawEvents);
+    const firstRawEvent = dedupedRawEvents[0];
+    const firstRawKeys = asRecord(firstRawEvent) ? Object.keys(asRecord(firstRawEvent) ?? {}) : [];
+    console.info(`[MOBILE_EVENTS_BATCH] body keys=${receivedKeys.length ? receivedKeys.join(',') : '(none)'}`);
+    console.info(`[MOBILE_EVENTS_BATCH] events count=${dedupedRawEvents.length}`);
+    console.info(`[MOBILE_EVENTS_BATCH] first event keys=${firstRawKeys.length ? firstRawKeys.join(',') : '(none)'}`);
 
-    if (isPlm) {
-      if (!body.deviceId) return NextResponse.json({ ok: false, error: 'INVALID_PAYLOAD', message: 'deviceId obrigatorio' }, { status: 400 });
-      if (!Array.isArray(body.events)) return NextResponse.json({ ok: false, error: 'INVALID_PAYLOAD', message: 'events obrigatorio' }, { status: 400 });
-      header = { machineId: body.deviceId, tenantId: tenantId };
-      events = body.events.map((e) => ({
-        uuid: String(e.eventId),
-        type: String(e.type),
-        timestamp: e.occurredAt as string,
-        data: {
-          ...(asRecord(e.payload) ?? {}),
-          journeyId: e.journeyId as string | undefined,
-          deviceId: body.deviceId,
-          driver: body.driver,
-          vehicle: body.vehicle,
-          appVersion: body.version
-        }
-      }));
-    } else {
-      header = body.header;
-      events = body.events;
-      if (!header || !header.machineId || !Array.isArray(events)) {
-        return NextResponse.json({ error: 'Invalid batch format' }, { status: 400 });
-      }
+    if (dedupedRawEvents.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid batch format',
+        expected: 'body.events[] or body.batch[] or body.data.events[] or array body',
+        receivedKeys,
+      }, { status: 400 });
     }
 
-    const firstEventData = events[0]?.data;
-    const mobileToken = header.mobileToken || (typeof firstEventData?.mobileToken === 'string' ? firstEventData.mobileToken : undefined);
-    const deviceBinding = DeviceBindingStorage.getByDeviceId(tenantId, header.machineId!);
+    const requestTenantId = asString(req.headers.get('x-tenant-id'));
+    const requestCompanyCode = asString(req.headers.get('x-company-code'));
+    const requestDeviceId = asString(req.headers.get('x-device-id'));
+    const bodyHeader = asRecord(bodyRecord?.header);
+    const normalizedEvents = dedupedRawEvents.map((event, index) => normalizeBatchEvent(event, {
+      tenantId: requestTenantId ?? asString(bodyRecord?.tenantId) ?? tenantId,
+      companyCode: requestCompanyCode ?? asString(bodyRecord?.companyCode) ?? asString(bodyHeader?.companyCode),
+      deviceId: requestDeviceId ?? asString(bodyRecord?.deviceId) ?? asString(bodyHeader?.machineId) ?? asString(bodyRecord?.machineId),
+      machineId: requestDeviceId ?? asString(bodyRecord?.deviceId) ?? asString(bodyHeader?.machineId) ?? asString(bodyRecord?.machineId),
+      fleetCode: asString(bodyRecord?.fleetCode) ?? asString(bodyHeader?.fleetCode),
+    }, index));
+
+    const firstEventData = normalizedEvents[0]?.data;
+    const resolvedMachineId = asString(firstEventData?.machineId)
+      ?? asString(firstEventData?.equipmentId)
+      ?? asString(bodyHeader?.machineId)
+      ?? asString(bodyRecord?.machineId)
+      ?? asString(bodyRecord?.deviceId)
+      ?? asString(requestDeviceId)
+      ?? asString(normalizedEvents[0]?.machineId)
+      ?? asString(normalizedEvents[0]?.equipmentId);
+    const resolvedFleetCode = asString(firstEventData?.fleetCode)
+      ?? asString(bodyHeader?.fleetCode)
+      ?? asString(bodyRecord?.fleetCode)
+      ?? asString(normalizedEvents[0]?.fleetCode);
+    const mobileToken = asString(bodyHeader?.mobileToken) || (typeof firstEventData?.mobileToken === 'string' ? firstEventData.mobileToken : undefined);
+
+    console.info(`[MOBILE_EVENTS_BATCH] eventType=${normalizedEvents[0]?.type ?? '(missing)'} machineId=${resolvedMachineId ?? '(missing)'} fleetCode=${resolvedFleetCode ?? '(missing)'} tenantId=${tenantId}`);
+    const deviceBinding = resolvedMachineId ? DeviceBindingStorage.getByDeviceId(tenantId, resolvedMachineId) : undefined;
     const boundEquipmentId = deviceBinding?.equipmentId ? String(deviceBinding.equipmentId) : undefined;
     const boundFleetCode = deviceBinding?.fleetCode ? String(deviceBinding.fleetCode) : undefined;
     const cadastroItems = CadastroStorage.getAll(tenantId, 'equipamentos') as Array<Record<string, unknown>>;
-    const machineIdLower = header.machineId!.toLowerCase();
+    const machineIdLower = (resolvedMachineId ?? '').toLowerCase();
     const firstEquipCode = typeof firstEventData?.equipmentCode === 'string' ? firstEventData.equipmentCode.toLowerCase() : '';
     const bindingEquipmentIdLower = boundEquipmentId?.toLowerCase() ?? '';
     const bindingFleetCodeLower = boundFleetCode?.toLowerCase() ?? '';
+    const resolvedFleetCodeLower = resolvedFleetCode?.toLowerCase() ?? '';
 
     const cadastroMatch = cadastroItems.find((item) => {
       const itemId = String(item.id ?? '').toLowerCase();
@@ -271,30 +403,33 @@ export async function POST(req: NextRequest) {
         itemId === machineIdLower ||
         itemCode === machineIdLower ||
         (firstEquipCode !== '' && itemCode === firstEquipCode) ||
+        (resolvedFleetCodeLower !== '' && itemCode === resolvedFleetCodeLower) ||
         (bindingEquipmentIdLower !== '' && itemId === bindingEquipmentIdLower) ||
         (bindingFleetCodeLower !== '' && itemCode === bindingFleetCodeLower)
       );
     });
 
-    let validation: any;
+    type ValidationResult = { ok: true; equipment: { id: string; code: string; mobileToken?: string; tenantId: string } } | { ok: false; status: 403 | 404; error: string };
+    let validation: ValidationResult;
     if (cadastroMatch) {
       validation = validateCadastroEquipment(cadastroMatch, mobileToken, tenantId);
     } else {
       const legacyEquip =
         (boundEquipmentId ? ServerStorage.getEquipmentById(boundEquipmentId, tenantId) : undefined) ??
+        (resolvedFleetCode ? ServerStorage.getEquipmentByFleetCode(resolvedFleetCode, tenantId) : undefined) ??
         (boundFleetCode ? ServerStorage.getEquipmentByFleetCode(boundFleetCode, tenantId) : undefined) ??
-        ServerStorage.getEquipmentById(header.machineId!, tenantId);
+        (resolvedMachineId ? ServerStorage.getEquipmentById(resolvedMachineId, tenantId) : undefined);
       validation = ServerStorage.validateMobileEquipment(legacyEquip, mobileToken, tenantId, companyToken);
     }
 
     if (!validation.ok) {
-      if (isPlm) return NextResponse.json({ ok: false, error: 'VALIDATION_FAILED', message: validation.error }, { status: validation.status });
-      return NextResponse.json({ error: validation.error }, { status: validation.status });
+      return NextResponse.json({ success: false, ok: false, error: validation.error, message: validation.error }, { status: validation.status });
     }
 
     const currentLiveState = ServerStorage.getLiveFleet(tenantId).find(s => s.equipmentId === validation.equipment.id) ?? null;
-    const results = events.map((event) => {
+    const results = normalizedEvents.map((event) => {
       const eventData = readEventData(event);
+      if (!event.type) return { offlineId: event.uuid, status: 'FAILED', reason: 'Missing event type' };
       if (event.type === 'FUELING') {
         const liters = asNumber(eventData.dieselLiters);
         if (liters === undefined || liters <= 0) return { offlineId: event.uuid, status: 'REJECTED', reason: 'dieselLiters > 0' };
@@ -311,8 +446,11 @@ export async function POST(req: NextRequest) {
 
     const resultByUuid = new Map(results.map(r => [r.offlineId, r.status]));
     const now = new Date().toISOString();
-    const liveUpdates: Record<string, unknown> = { updatedAt: now };
-    const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const liveUpdates: Record<string, unknown> = {
+      updatedAt: now,
+      ...(currentLiveState?.status ? { status: currentLiveState.status } : {}),
+    };
+    const sorted = [...normalizedEvents].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     let journeyEnded = false;
     let journeyStarted = false;
@@ -322,6 +460,8 @@ export async function POST(req: NextRequest) {
     for (const event of sorted) {
       const d = readEventData(event);
       const ts = new Date(event.timestamp).toISOString();
+
+      if (event.type) console.info(`[MOBILE_EVENTS_BATCH] eventType=${event.type} machineId=${asString(event.machineId) ?? asString(event.equipmentId) ?? '(missing)'} fleetCode=${asString(event.fleetCode) ?? '(missing)'} tenantId=${asString(event.tenantId) ?? tenantId}`);
 
       switch (event.type) {
         case 'JOURNEY_START':
@@ -342,11 +482,14 @@ export async function POST(req: NextRequest) {
           applyOperationalFields(liveUpdates, d);
           const gpsUpdates = extractGpsFields(event, ts);
           Object.assign(liveUpdates, gpsUpdates);
+          if (gpsUpdates.latitude !== undefined && gpsUpdates.longitude !== undefined) {
+            console.info(`[MOBILE_EVENTS_BATCH] POSITION_UPDATE lat=${gpsUpdates.latitude} lng=${gpsUpdates.longitude}`);
+          }
           if (gpsUpdates.speedKmh !== undefined) liveUpdates.speedKmh = gpsUpdates.speedKmh;
           if (!stopActive && !isStopActive(liveUpdates)) {
             const s = asString(firstDefined(d.status, d.operationalStatus))?.toUpperCase();
             if (s && new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA']).has(s)) liveUpdates.status = s;
-            else if (!liveUpdates.status) liveUpdates.status = 'ONLINE';
+            else if (!liveUpdates.status && !currentLiveState?.status) liveUpdates.status = 'ONLINE';
           }
           break;
 
@@ -411,24 +554,25 @@ export async function POST(req: NextRequest) {
     if (journeyEnded) liveUpdates.status = 'FINALIZADO';
     enrichOperationalFields(tenantId, liveUpdates);
     ServerStorage.updateLiveState(tenantId, validation.equipment.id, validation.equipment.code, liveUpdates, (() => {
-      const toDelete: any[] = [];
+      const toDelete: (keyof EquipmentLiveState)[] = [];
       if (journeyStarted) toDelete.push(...JOURNEY_START_CLEAR_FIELDS);
       if (stopEndedFieldsToDelete.length) toDelete.push(...stopEndedFieldsToDelete);
       return toDelete.length ? toDelete : undefined;
     })());
 
-    if (isPlm) {
-      const accepted = results.filter(r => r.status === 'SYNCED').length;
-      const dups = results.filter(r => r.status === 'DUPLICATE').length;
-      const failed = results.filter(r => r.status === 'REJECTED').length;
-      return NextResponse.json({ ok: true, received: events.length, processed: accepted + dups, failed });
-    }
+    const processedCount = results.filter((r) => r.status === 'SYNCED' || r.status === 'DUPLICATE').length;
+    const failedCount = results.filter((r) => r.status === 'FAILED' || r.status === 'REJECTED').length;
+    console.info(`[MOBILE_EVENTS_BATCH] processed=${processedCount} failed=${failedCount}`);
 
     return NextResponse.json({
-      received: events.length, processed: results.length,
+      success: true,
+      ok: true,
+      received: normalizedEvents.length,
+      processed: processedCount,
+      failed: failedCount,
       accepted: results.filter(r => r.status === 'SYNCED').map(r => ({ eventId: r.offlineId, status: 'ACCEPTED' })),
       duplicates: results.filter(r => r.status === 'DUPLICATE').map(r => ({ eventId: r.offlineId, status: 'DUPLICATE' })),
-      rejected: results.filter(r => r.status === 'REJECTED').map(r => ({ eventId: r.offlineId, status: 'REJECTED' })),
+      rejected: results.filter(r => r.status === 'REJECTED' || r.status === 'FAILED').map(r => ({ eventId: r.offlineId, status: 'REJECTED' })),
       results
     });
 
