@@ -33,9 +33,11 @@ export interface StopEntry {
 }
 
 export interface OperationalTimelineEntry {
+  id: string;
   type: string;
   timestamp: string;
   label: string;
+  description: string | null;
 }
 
 export interface FichaOperador {
@@ -140,6 +142,47 @@ function sameLabel(a: string | null | undefined, b: string | null | undefined): 
   return !!left && left === right;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function cleanText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+}
+
+function eventPayload(event: { payload: unknown }): Record<string, unknown> {
+  const payload = asRecord(event.payload);
+  return { ...asRecord(payload.data), ...payload };
+}
+
+function eventType(event: { type: string; payload: unknown }): string {
+  const payload = eventPayload(event);
+  return (cleanText(event.type) ?? cleanText(payload.eventType) ?? cleanText(payload.type) ?? '').toUpperCase();
+}
+
+function eventTime(event?: { timestamp: string; receivedAt: string; payload: unknown }): string | null {
+  if (!event) return null;
+  const payload = eventPayload(event);
+  const candidate = cleanText(payload.occurredAt) ?? cleanText(payload.timestamp) ?? cleanText(payload.createdAt)
+    ?? cleanText(payload.receivedAt) ?? cleanText(event.timestamp) ?? cleanText(event.receivedAt);
+  return candidate && Number.isFinite(new Date(candidate).getTime()) ? candidate : null;
+}
+
+function stopFields(payload: Record<string, unknown>): { code: string; description: string; category: string | null } {
+  return {
+    code: cleanText(payload.reasonCode) ?? cleanText(payload.stopReasonCode) ?? cleanText(payload.stopCode) ?? cleanText(payload.code) ?? '',
+    description: cleanText(payload.reasonName) ?? cleanText(payload.stopReasonName) ?? cleanText(payload.stopReasonDescription)
+      ?? cleanText(payload.stopDescription) ?? cleanText(payload.description) ?? cleanText(payload.reason) ?? '',
+    category: cleanText(payload.reasonCategory),
+  };
+}
+
+function stopLabel(code: string, name: string): string {
+  return code && name ? `${code} — ${name}` : name || code || 'Parada sem motivo informado';
+}
+
 // ── Main builder ──────────────────────────────────────────────────────────────
 export function buildOperatorSheet(params: {
   tenantId:  string;
@@ -156,41 +199,53 @@ export function buildOperatorSheet(params: {
 
   const effectiveJourneyId = journeyId || machine.journeyId || null;
 
-  const allEvents     = ServerStorage.getEvents(tenantId, machine.equipmentId);
+  const allEvents = ServerStorage.getEvents(tenantId, machine.equipmentId)
+    .filter(event => eventTime(event) !== null)
+    .sort((a, b) => (eventTime(a) ?? '').localeCompare(eventTime(b) ?? ''));
+  const exactJourneyEvents = effectiveJourneyId
+    ? allEvents.filter(event => cleanText(eventPayload(event).journeyId) === effectiveJourneyId)
+    : [];
+  const exactStart = exactJourneyEvents.find(event => eventType(event) === 'JOURNEY_START');
+  const exactEnd = [...exactJourneyEvents].reverse().find(event => eventType(event) === 'JOURNEY_END');
+  const fallbackStart = [...allEvents].reverse().find(event => eventType(event) === 'JOURNEY_START');
+  const windowStart = eventTime(exactStart ?? exactJourneyEvents[0] ?? fallbackStart);
+  const fallbackEnd = allEvents.find(event => eventType(event) === 'JOURNEY_END' && !!windowStart && (eventTime(event) ?? '') >= windowStart);
+  const windowEnd = eventTime(exactEnd ?? fallbackEnd);
   const journeyEvents = effectiveJourneyId
-    ? allEvents.filter(e => {
-        const p = e.payload as Record<string, unknown>;
-        return p?.journeyId === effectiveJourneyId;
+    ? allEvents.filter(event => {
+        const payloadJourneyId = cleanText(eventPayload(event).journeyId);
+        if (payloadJourneyId) return payloadJourneyId === effectiveJourneyId;
+        const timestamp = eventTime(event);
+        return !!timestamp && (!windowStart || timestamp >= windowStart) && (!windowEnd || timestamp <= windowEnd);
       })
     : allEvents;
 
   const startEvent = journeyEvents
-    .filter(e => e.type === 'JOURNEY_START')
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))[0];
+    .filter(e => eventType(e) === 'JOURNEY_START')[0];
   const endEvent = journeyEvents
-    .filter(e => e.type === 'JOURNEY_END')
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+    .filter(e => eventType(e) === 'JOURNEY_END').at(-1);
 
-  const startedAt = startEvent?.timestamp ?? null;
-  const endedAt   = endEvent?.timestamp   ?? null;
+  const startedAt = startEvent ? eventTime(startEvent) : null;
+  const endedAt   = endEvent ? eventTime(endEvent) : null;
 
   // ── Stops ────────────────────────────────────────────────────────────────────
   const stops: StopEntry[] = [];
   const stopSeen = new Set<string>();
   const stopEvents = journeyEvents
-    .filter(e => ['STOP_STARTED', 'STOP_REASON', 'PARADA', 'STOP_ENDED'].includes(e.type))
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    .filter(e => ['STOP_STARTED', 'STOP_REASON', 'PARADA', 'STOP_ENDED'].includes(eventType(e)));
 
   for (const ev of stopEvents) {
-    const p           = ev.payload as Record<string, unknown>;
-    if (ev.type === 'STOP_ENDED') {
+    const p = eventPayload(ev);
+    const type = eventType(ev);
+    const occurredAt = eventTime(ev);
+    if (!occurredAt) continue;
+    if (type === 'STOP_ENDED') {
       const open = [...stops].reverse().find(stop => !stop.endedAt);
-      if (open) open.endedAt = String(p?.stopEndedAt ?? p?.endedAt ?? ev.timestamp);
+      if (open) open.endedAt = cleanText(p.stopEndedAt) ?? cleanText(p.endedAt) ?? occurredAt;
       continue;
     }
-    const code        = String(p?.stopReasonCode ?? p?.reasonCode ?? p?.stopCode ?? p?.code ?? '').trim();
-    const desc        = String(p?.stopReasonName ?? p?.stopReasonDescription ?? p?.stopDescription ?? p?.reasonName ?? p?.description ?? p?.reason ?? '').trim();
-    const stopStartAt = String(p?.stopStartedAt ?? ev.timestamp);
+    const { code, description: desc } = stopFields(p);
+    const stopStartAt = cleanText(p.stopStartedAt) ?? occurredAt;
     if (!code && !desc) continue;
     const dedupKey = code + '|' + stopStartAt.slice(0, 16);
     if (stopSeen.has(dedupKey)) continue;
@@ -221,11 +276,18 @@ export function buildOperatorSheet(params: {
     POSITION_UPDATE: 'Posição atualizada',
     HEARTBEAT: 'Comunicação recebida',
   };
-  const priorityTypes = new Set(['JOURNEY_START', 'STOP_STARTED', 'STOP_REASON', 'PARADA', 'STOP_ENDED', 'JOURNEY_END']);
-  const events: OperationalTimelineEntry[] = journeyEvents
-    .filter(event => priorityTypes.has(event.type))
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    .map(event => ({ type: event.type, timestamp: event.timestamp, label: eventLabels[event.type] ?? event.type }));
+  const priorityTypes = new Set(['JOURNEY_START', 'STOP_STARTED', 'STOP_REASON', 'PARADA', 'STOP_ENDED', 'JOURNEY_END', 'POSITION_UPDATE', 'HEARTBEAT']);
+  const technicalSeen = new Set<string>();
+  const events: OperationalTimelineEntry[] = journeyEvents.flatMap(event => {
+    const type = eventType(event);
+    const timestamp = eventTime(event);
+    if (!timestamp || !priorityTypes.has(type)) return [];
+    if ((type === 'POSITION_UPDATE' || type === 'HEARTBEAT') && technicalSeen.has(type)) return [];
+    technicalSeen.add(type);
+    const fields = stopFields(eventPayload(event));
+    return [{ id: event.offlineId || `${type}-${timestamp}`, type, timestamp, label: eventLabels[type] ?? type,
+      description: type.startsWith('STOP_') || type === 'PARADA' ? stopLabel(fields.code, fields.description) : null }];
+  });
 
   // ── Trail ────────────────────────────────────────────────────────────────────
   const trailPoints = effectiveJourneyId
