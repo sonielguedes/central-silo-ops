@@ -1,5 +1,6 @@
 import { ServerStorage } from '@/lib/server-storage';
 import type { TrailPoint } from '@/lib/types';
+import { createLogger } from '@/lib/logger';
 
 // ── Inconsistency codes ───────────────────────────────────────────────────────
 export const INCONSISTENCY = {
@@ -21,6 +22,7 @@ export const INCONSISTENCY = {
 const GPS_RECENTE_LIMITE_MIN  = 30; // minutos
 const HEARTBEAT_LIMITE_MIN    = 60; // minutos
 const INDETERMINADO_LIMITE_PCT = 50; // %
+const logger = createLogger('operator-sheet-builder');
 
 export interface StopEntry {
   code: string;
@@ -28,6 +30,12 @@ export interface StopEntry {
   startedAt: string;
   endedAt?: string;
   durationMinutes?: number;
+}
+
+export interface OperationalTimelineEntry {
+  type: string;
+  timestamp: string;
+  label: string;
 }
 
 export interface FichaOperador {
@@ -61,6 +69,8 @@ export interface FichaOperador {
   startedAt: string | null;
   endedAt: string | null;
   stops: StopEntry[];
+  events: OperationalTimelineEntry[];
+  operationalStatus: string;
   trailSummary: {
     points: number;
     firstGpsAt: string | null;
@@ -168,15 +178,20 @@ export function buildOperatorSheet(params: {
   const stops: StopEntry[] = [];
   const stopSeen = new Set<string>();
   const stopEvents = journeyEvents
-    .filter(e => e.type === 'STOP_REASON' || e.type === 'PARADA')
+    .filter(e => ['STOP_STARTED', 'STOP_REASON', 'PARADA', 'STOP_ENDED'].includes(e.type))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
   for (const ev of stopEvents) {
     const p           = ev.payload as Record<string, unknown>;
-    const code        = String(p?.stopCode ?? p?.code ?? '').trim();
-    const desc        = String(p?.stopDescription ?? p?.description ?? p?.reason ?? '').trim();
+    if (ev.type === 'STOP_ENDED') {
+      const open = [...stops].reverse().find(stop => !stop.endedAt);
+      if (open) open.endedAt = String(p?.stopEndedAt ?? p?.endedAt ?? ev.timestamp);
+      continue;
+    }
+    const code        = String(p?.stopReasonCode ?? p?.reasonCode ?? p?.stopCode ?? p?.code ?? '').trim();
+    const desc        = String(p?.stopReasonName ?? p?.stopReasonDescription ?? p?.stopDescription ?? p?.reasonName ?? p?.description ?? p?.reason ?? '').trim();
     const stopStartAt = String(p?.stopStartedAt ?? ev.timestamp);
-    if (!code) continue;
+    if (!code && !desc) continue;
     const dedupKey = code + '|' + stopStartAt.slice(0, 16);
     if (stopSeen.has(dedupKey)) continue;
     stopSeen.add(dedupKey);
@@ -186,9 +201,8 @@ export function buildOperatorSheet(params: {
   const machineStopEndedAt =
     String((machine as unknown as Record<string, unknown>)['stopEndedAt'] ?? '').trim() || null;
   if (machineStopEndedAt) {
-    for (const s of stops) {
-      if (!s.endedAt) s.endedAt = machineStopEndedAt;
-    }
+    const lastOpenStop = [...stops].reverse().find(stop => !stop.endedAt);
+    if (lastOpenStop) lastOpenStop.endedAt = machineStopEndedAt;
   }
 
   // Compute stop durations
@@ -196,6 +210,22 @@ export function buildOperatorSheet(params: {
     ...s,
     durationMinutes: stopDurationMinutes(s),
   }));
+
+  const eventLabels: Record<string, string> = {
+    JOURNEY_START: 'Jornada iniciada',
+    STOP_STARTED: 'Parada iniciada',
+    STOP_REASON: 'Motivo da parada registrado',
+    PARADA: 'Parada registrada',
+    STOP_ENDED: 'Parada finalizada',
+    JOURNEY_END: 'Jornada finalizada',
+    POSITION_UPDATE: 'Posição atualizada',
+    HEARTBEAT: 'Comunicação recebida',
+  };
+  const priorityTypes = new Set(['JOURNEY_START', 'STOP_STARTED', 'STOP_REASON', 'PARADA', 'STOP_ENDED', 'JOURNEY_END']);
+  const events: OperationalTimelineEntry[] = journeyEvents
+    .filter(event => priorityTypes.has(event.type))
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    .map(event => ({ type: event.type, timestamp: event.timestamp, label: eventLabels[event.type] ?? event.type }));
 
   // ── Trail ────────────────────────────────────────────────────────────────────
   const trailPoints = effectiveJourneyId
@@ -392,8 +422,8 @@ export function buildOperatorSheet(params: {
 
   const validated = status === 'FINALIZADO';
 
-  console.info(
-    '[operator-sheet-builder] fleetCode=' + fleetCode +
+  logger.debug(
+    'fleetCode=' + fleetCode +
     ' journeyId=' + (effectiveJourneyId ?? 'none') +
     ' status=' + status +
     ' inconsistencies=' + inconsistencies.length +
@@ -426,6 +456,8 @@ export function buildOperatorSheet(params: {
     startedAt,
     endedAt,
     stops: enrichedStops,
+    events,
+    operationalStatus: endedAt ? 'FINALIZADO' : String(machine.status ?? 'OFFLINE'),
     trailSummary,
     status,
     inconsistencies,

@@ -626,7 +626,10 @@ export default function FullMapEnterprise({
   }, []);
 
   const handleOpenFicha = useCallback((fleetCode: string, journeyId: string | null) => {
-    setFichaTarget({ fleetCode, journeyId });
+    const path = journeyId
+      ? `/operacional/fichas/${encodeURIComponent(journeyId)}?fleetCode=${encodeURIComponent(fleetCode)}`
+      : `/operacional/fichas/frota/${encodeURIComponent(fleetCode)}`;
+    window.location.assign(path);
   }, []);
 
   const loadFleetData = useCallback(async () => {
