@@ -26,6 +26,19 @@ import type { DashboardSummary, ActiveFleetItem, RecentAlert } from '@/app/api/d
 
 const REFRESH_INTERVAL_MS = 30_000;
 
+function cleanText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+}
+
+function formatStopReason(code: unknown, reason: unknown): string {
+  const cleanCode = cleanText(code);
+  const cleanReason = cleanText(reason);
+  if (cleanCode && cleanReason) return `${cleanCode} — ${cleanReason}`;
+  return cleanReason ?? cleanCode ?? 'Parada sem motivo informado';
+}
+
 function fmtH(h: number): string {
   const hrs = Math.floor(h);
   const min = Math.round((h - hrs) * 60);
@@ -49,7 +62,7 @@ function severityColor(s: string): string {
 function statusColor(s: string): string {
   if (s === 'TRABALHANDO') return 'bg-emerald-400';
   if (s === 'DESLOCANDO') return 'bg-amber-400';
-  if (s === 'PARADA') return 'bg-orange-400';
+  if (s === 'PARADA' || s === 'PARADO') return 'bg-orange-400';
   if (s === 'ALERTA') return 'bg-rose-400';
   if (s === 'OFFLINE') return 'bg-slate-500';
   return 'bg-slate-600';
@@ -60,6 +73,8 @@ function statusLabel(s: string): string {
     TRABALHANDO: 'Trabalhando',
     DESLOCANDO: 'Deslocando',
     PARADA: 'Parada',
+    PARADO: 'Parado',
+    OPERANDO: 'Operando',
     ALERTA: 'Alerta',
     OFFLINE: 'Offline',
   };
@@ -226,12 +241,10 @@ function ActiveFleetPanel({ fleet }: { fleet: ActiveFleetItem[] }) {
                 </div>
                 <p className="mt-1 truncate text-[11px] text-slate-300">
                   {m.status === 'PARADO'
-                    ? ((m.stopReasonName || m.stopDescription || m.stopReasonCode || m.stopCode)
-                        ? [
-                            m.stopReasonCode || m.stopCode,
-                            m.stopReasonName || m.stopDescription || m.stopReason,
-                          ].filter(Boolean).join(' — ')
-                        : 'Parado')
+                    ? formatStopReason(
+                        m.stopReasonCode || m.stopCode,
+                        m.stopReasonName || m.stopDescription || m.stopReason,
+                      )
                     : (m.operationName || m.operationCode || statusLabel(m.status))}
                 </p>
                 <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-500">

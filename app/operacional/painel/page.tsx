@@ -85,10 +85,23 @@ const fmtAge = (ms: number): string => {
 };
 
 const fmtTime = (v?: string): string => {
-  if (!v) return 'Nao informado';
+  if (!v) return '—';
   const t = new Date(v);
-  if (Number.isNaN(t.getTime())) return 'Nao informado';
-  return t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  if (Number.isNaN(t.getTime())) return '—';
+  return t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+
+const cleanText = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+};
+
+const formatStopReason = (code: unknown, reason: unknown): string => {
+  const cleanCode = cleanText(code);
+  const cleanReason = cleanText(reason);
+  if (cleanCode && cleanReason) return `${cleanCode} — ${cleanReason}`;
+  return cleanReason ?? cleanCode ?? 'Parada sem motivo informado';
 };
 
 const fv = (v: unknown): string =>
@@ -383,11 +396,10 @@ function DecisionRow({ item }: { item: DecisionItem }) {
   // operationName preferred; fallback to operationCode then currentOperation
   const operation  = fv(item.operationName || item.operationCode || item.currentOperation);
   const hCurr      = item.hourmeterCurrent ?? item.hourmeter;
-  // stopInfo visible even when OFFLINE if stopCode/stopDescription present
-  const stopCode   = item.stopReasonCode || item.stopCode;
-  const stopInfo   = item.stopReasonName || item.stopDescription || (item as unknown as Record<string, unknown>)['stopReason'] as string | undefined;
+  const stopCode   = cleanText(item.stopReasonCode) ?? cleanText(item.stopCode);
+  const stopInfo   = cleanText(item.stopReasonName) ?? cleanText(item.stopDescription) ?? cleanText((item as unknown as Record<string, unknown>)['stopReason']);
   const stopStartedAt = item.stopStartedAt;
-  const hasStop    = !!(stopCode || stopInfo);
+  const hasStop    = item.status === 'PARADO';
   // implement
   const implement  = item.implementName || (item as unknown as Record<string, unknown>)['implementCode'] as string | undefined;
 
@@ -444,7 +456,7 @@ function DecisionRow({ item }: { item: DecisionItem }) {
         {hasStop ? (
           <div className="flex flex-col gap-0.5">
             <span className={cn('text-[11px] font-bold uppercase truncate max-w-[130px]', stopInfo ? 'text-orange-300' : 'text-orange-400/60 italic')}>
-              {stopCode && stopInfo ? `${stopCode} — ${stopInfo}` : stopInfo ?? stopCode ?? 'Sem motivo'}
+              {formatStopReason(stopCode, stopInfo)}
             </span>
             {stopStartedAt && <span className="text-[9px] text-muted-foreground">Desde: {fmtTime(stopStartedAt)}</span>}
             {!stopStartedAt && stopCode && <span className="text-[9px] text-muted-foreground">{stopCode}</span>}

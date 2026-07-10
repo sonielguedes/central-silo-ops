@@ -120,6 +120,19 @@ const formatValue = (value: unknown): string => {
   return String(value);
 };
 
+const cleanText = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+};
+
+const formatStopReason = (code: unknown, reason: unknown): string => {
+  const cleanCode = cleanText(code);
+  const cleanReason = cleanText(reason);
+  if (cleanCode && cleanReason) return `${cleanCode} — ${cleanReason}`;
+  return cleanReason ?? cleanCode ?? 'Parada sem motivo informado';
+};
+
 const formatClockTime = (value?: string | null): string => {
   if (!value) return '—';
   const date = new Date(value);
@@ -926,7 +939,7 @@ function OperationalPopup({
 
         <div className="rounded-2xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
           <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Parada</p>
-          <StopBlock stop={machine.stop} stopDesc={machine.stopDescription ?? machine.stopReason} stopCode={machine.stopCode} />
+          <StopBlock active={['PARADO', 'AGUARDANDO_PARADA', 'PARADA_APONTADA'].includes(machine.operationalStatus ?? machine.status)} stop={machine.stop} stopDesc={machine.stopDescription ?? machine.stopReason} stopCode={machine.stopCode} />
         </div>
 
         <div className="pt-1 flex flex-col gap-2">
@@ -964,17 +977,24 @@ function OperationalPopup({
  *  PARADA_INCONSISTENTE    -> alerta com mensagem de inconsistencia
  */
 function StopBlock({
+  active,
   stop,
   stopDesc,
   stopCode,
 }: {
+  active: boolean;
   stop?: ResolvedStopForMap;
   stopDesc: string | null | undefined;
   stopCode: string | null | undefined;
 }) {
+  if (!active) {
+    return <p className="text-[11px] text-muted-foreground/60 italic font-bold uppercase">Sem parada ativa</p>;
+  }
   // Caminho novo: usa o objeto stop estruturado
   if (stop) {
-    const { state, reason, code, inconsistency } = stop;
+    const { state, inconsistency } = stop;
+    const reason = cleanText(stop.reason);
+    const code = cleanText(stop.code);
 
     if (state === 'SEM_PARADA_ATIVA') {
       return (
@@ -1018,7 +1038,7 @@ function StopBlock({
         <PField
           icon={<PauseCircle size={11} />}
           label="Motivo"
-          value={code && reason ? `${code} — ${reason}` : reason ?? code ?? '-'}
+          value={formatStopReason(code, reason)}
         />
         <PField icon={<Hash size={11} />} label="Codigo" value={code ?? '-'} />
         <PField icon={<Clock size={11} />} label="Desde" value={formatClockTime(stop.startedAt)} />
@@ -1027,8 +1047,9 @@ function StopBlock({
   }
 
   // Fallback legado: API anterior sem objeto stop
-  const desc = stopDesc;
-  const hasStop = desc != null || stopCode != null;
+  const desc = cleanText(stopDesc);
+  const code = cleanText(stopCode);
+  const hasStop = desc != null || code != null;
   if (!hasStop) {
     return (
       <p className="text-[11px] text-muted-foreground/60 italic font-bold uppercase">
@@ -1041,9 +1062,9 @@ function StopBlock({
       <PField
         icon={<PauseCircle size={11} />}
         label="Motivo"
-        value={stopCode && desc ? `${stopCode} — ${desc}` : desc ?? '-'}
+        value={formatStopReason(code, desc)}
       />
-      <PField icon={<Hash size={11} />} label="Codigo" value={stopCode ?? '-'} />
+      <PField icon={<Hash size={11} />} label="Codigo" value={code ?? '-'} />
       <PField icon={<Clock size={11} />} label="Desde" value="—" />
     </div>
   );
