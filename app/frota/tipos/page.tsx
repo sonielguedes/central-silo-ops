@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -157,7 +157,7 @@ function TypesPage() {
   async function onSubmit(formData: EquipmentTypeFormData) {
     const code = formData.code.trim().toUpperCase();
     const duplicate = data.some((item) => item.code.toUpperCase() === code && item.id !== selected?.id);
-    if (duplicate) throw new Error('Código já cadastrado.');
+    if (duplicate) throw new Error('CÃ³digo jÃ¡ cadastrado.');
 
     const payload = {
       ...formData,
@@ -223,7 +223,7 @@ function TypesPage() {
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
           <PageHeader
             title="Tipos de Frota"
-            description="Classificação Operacional dos Equipamentos"
+            description="ClassificaÃ§Ã£o Operacional dos Equipamentos"
           >
             <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0a0e27] rounded-xl text-xs font-black uppercase tracking-tighter hover:scale-105 transition-transform shadow-lg shadow-primary/20">
               <Plus size={16} strokeWidth={3} /> Novo Tipo
@@ -238,7 +238,7 @@ function TypesPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por código, nome ou descrição..."
+                placeholder="Buscar por cÃ³digo, nome ou descriÃ§Ã£o..."
                 className="w-full bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40"
               />
             </div>
@@ -262,7 +262,7 @@ function TypesPage() {
             <div className="mb-6 p-4 bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl flex flex-wrap gap-5 animate-in slide-in-from-top-2 duration-200">
               <FilterGroup title="Categoria" items={FLEET_TYPE_CATEGORIES} value={filterCategory} onChange={setFilterCategory} />
               <FilterGroup title="Unidade principal" items={PRIMARY_METRIC_OPTIONS} value={filterMetric} onChange={setFilterMetric} />
-              <FilterGroup title="Ícone" items={[...new Set(data.map((item) => resolveIconType(item.iconType)))]} value={filterIcon} onChange={setFilterIcon} labelMap={EQUIPMENT_ICON_LABELS} />
+              <FilterGroup title="Ãcone" items={[...new Set(data.map((item) => resolveIconType(item.iconType)))]} value={filterIcon} onChange={setFilterIcon} labelMap={EQUIPMENT_ICON_LABELS} />
               <FilterGroup title="Grupo operacional" items={FLEET_OPERATIONAL_GROUPS} value={filterGroup} onChange={setFilterGroup} />
               <div>
                 <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-2">Status</p>
@@ -287,8 +287,8 @@ function TypesPage() {
                 <table className="w-full text-left min-w-[1250px]">
                   <thead className="bg-[#1a1f3a]/50 text-[9px] uppercase font-black tracking-widest text-muted-foreground border-b border-[#2d3647]">
                     <tr>
-                      <th className="px-4 py-4 w-12">Ícone</th>
-                      <th className="px-4 py-4">Código</th>
+                      <th className="px-4 py-4 w-12">Ãcone</th>
+                      <th className="px-4 py-4">CÃ³digo</th>
                       <th className="px-4 py-4">Nome</th>
                       <th className="px-4 py-4">Categoria</th>
                       <th className="px-4 py-4">Unidade principal</th>
@@ -298,7 +298,7 @@ function TypesPage() {
                       <th className="px-4 py-4 text-center">Mobile</th>
                       <th className="px-4 py-4 text-center">Mapa</th>
                       <th className="px-4 py-4 text-center">Status</th>
-                      <th className="px-4 py-4 text-right">Ações</th>
+                      <th className="px-4 py-4 text-right">AÃ§Ãµes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#2d3647]">
@@ -354,14 +354,14 @@ function TypesPage() {
             </div>
 
             <form className="flex-1 overflow-y-auto custom-scrollbar px-8 py-6 space-y-5" onSubmit={handleSubmit(handleSave)}>
-              <FormField label="Código" error={errors.code?.message} required>
+              <FormField label="CÃ³digo" error={errors.code?.message} required>
                 <input {...register('code')} placeholder="TRATOR" className={inputCls} />
               </FormField>
               <FormField label="Nome" error={errors.name?.message} required>
                 <input {...register('name')} placeholder="Trator" className={inputCls} />
               </FormField>
-              <FormField label="Descrição" error={errors.description?.message}>
-                <textarea {...register('description')} rows={2} placeholder="Descrição operacional..." className={cn(inputCls, 'resize-none')} />
+              <FormField label="DescriÃ§Ã£o" error={errors.description?.message}>
+                <textarea {...register('description')} rows={2} placeholder="DescriÃ§Ã£o operacional..." className={cn(inputCls, 'resize-none')} />
               </FormField>
 
               <div className="grid grid-cols-2 gap-4">
@@ -377,7 +377,7 @@ function TypesPage() {
                 </FormField>
               </div>
 
-              <FormField label="Ícone" error={errors.iconType?.message} required>
+              <FormField label="Ãcone" error={errors.iconType?.message} required>
                 <Controller name="iconType" control={control} render={({ field }) => <EquipmentIconPicker value={field.value} onChange={field.onChange} />} />
               </FormField>
 
@@ -388,15 +388,15 @@ function TypesPage() {
               </FormField>
 
               <div className="grid grid-cols-2 gap-3">
-                <Toggle label="Telemetria padrão" name="telemetryEnabledDefault" register={register} />
-                <Toggle label="CAN padrão" name="canEnabledDefault" register={register} />
-                <Toggle label="Mobile padrão" name="mobileEnabledDefault" register={register} />
+                <Toggle label="Telemetria padrÃ£o" name="telemetryEnabledDefault" register={register} />
+                <Toggle label="CAN padrÃ£o" name="canEnabledDefault" register={register} />
+                <Toggle label="Mobile padrÃ£o" name="mobileEnabledDefault" register={register} />
                 <Toggle label="Exibir no mapa" name="mapEnabled" register={register} />
                 <Toggle label="Ativo" name="active" register={register} />
               </div>
 
-              <FormField label="Observações">
-                <textarea {...register('notes')} rows={3} placeholder="Anotações internas..." className={cn(inputCls, 'resize-none')} />
+              <FormField label="ObservaÃ§Ãµes">
+                <textarea {...register('notes')} rows={3} placeholder="AnotaÃ§Ãµes internas..." className={cn(inputCls, 'resize-none')} />
               </FormField>
             </form>
 
@@ -488,3 +488,4 @@ const inputCls = 'w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 tex
 const selectCls = 'w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl p-3 text-sm focus:border-primary outline-none appearance-none text-white font-medium';
 
 export default withAuth(TypesPage, { module: 'TIPOS' });
+

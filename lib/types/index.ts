@@ -1,4 +1,4 @@
-
+﻿
 export type EntityStatus = 'ATIVO' | 'INATIVO' | 'ARQUIVADO';
 
 export interface HistoryEntry {
@@ -27,8 +27,8 @@ export type CompanyPlan = 'PILOTO' | 'PRO' | 'ENTERPRISE';
 /**
  * Status de assinatura / acesso da empresa.
  * - ATIVO:     acesso permitido normalmente.
- * - EXPIRANDO: acesso permitido com aviso (≤ 7 dias para vencer).
- * - EXPIRADO:  acesso bloqueado — clientes comuns não entram.
+ * - EXPIRANDO: acesso permitido com aviso (â‰¤ 7 dias para vencer).
+ * - EXPIRADO:  acesso bloqueado â€” clientes comuns nÃ£o entram.
  * - SUSPENSO:  acesso bloqueado manualmente pelo admin da plataforma.
  * - CANCELADO: acesso encerrado definitivamente.
  */
@@ -39,7 +39,7 @@ export type SubscriptionStatus =
   | 'SUSPENSO'
   | 'CANCELADO';
 
-/** Ciclo de cobrança para plano PRO. */
+/** Ciclo de cobranÃ§a para plano PRO. */
 export type BillingCycle = 'MENSAL' | 'TRIMESTRAL' | 'ANUAL';
 
 export interface Company extends BaseEntity {
@@ -68,37 +68,37 @@ export interface Company extends BaseEntity {
   status: 'ATIVO' | 'INATIVO';
   observations?: string;
 
-  // ── Campos de assinatura / plano de serviço ──────────────────────────────
+  // â”€â”€ Campos de assinatura / plano de serviÃ§o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** Status calculado da assinatura (ATIVO, EXPIRANDO, EXPIRADO, SUSPENSO, CANCELADO). */
   subscriptionStatus?: SubscriptionStatus;
 
   // PILOTO
-  /** Dias de teste: 15 ou 30. Padrão: 30. */
+  /** Dias de teste: 15 ou 30. PadrÃ£o: 30. */
   trialDays?: 15 | 30;
-  /** ISO — data em que o período de teste começou. */
+  /** ISO â€” data em que o perÃ­odo de teste comeÃ§ou. */
   trialStartedAt?: string;
-  /** ISO — data em que o período de teste termina. */
+  /** ISO â€” data em que o perÃ­odo de teste termina. */
   trialEndsAt?: string;
 
   // PRO
-  /** Ciclo de cobrança (MENSAL = 30d, TRIMESTRAL = 90d, ANUAL = 365d). */
+  /** Ciclo de cobranÃ§a (MENSAL = 30d, TRIMESTRAL = 90d, ANUAL = 365d). */
   billingCycle?: BillingCycle;
-  /** ISO — início da assinatura PRO. */
+  /** ISO â€” inÃ­cio da assinatura PRO. */
   subscriptionStartedAt?: string;
-  /** ISO — vencimento da assinatura PRO. */
+  /** ISO â€” vencimento da assinatura PRO. */
   subscriptionEndsAt?: string;
 
   // ENTERPRISE
-  /** ISO — início do contrato ENTERPRISE. */
+  /** ISO â€” inÃ­cio do contrato ENTERPRISE. */
   contractStartedAt?: string;
-  /** ISO — fim do contrato ENTERPRISE (opcional). */
+  /** ISO â€” fim do contrato ENTERPRISE (opcional). */
   contractEndsAt?: string;
 
-  // Campos comuns pós-ativação
-  /** ISO — data da última renovação (qualquer plano). */
+  // Campos comuns pÃ³s-ativaÃ§Ã£o
+  /** ISO â€” data da Ãºltima renovaÃ§Ã£o (qualquer plano). */
   lastRenewedAt?: string;
-  /** Dias restantes calculados em tempo real (não persistido, derivado). */
+  /** Dias restantes calculados em tempo real (nÃ£o persistido, derivado). */
   daysRemaining?: number | null;
 }
 
@@ -218,7 +218,7 @@ export interface Equipment extends BaseEntity {
     longitude: number;
   };
   activeShiftId?: string;
-  // Perfil Operacional — define operações/implementos/paradas permitidos no APK
+  // Perfil Operacional â€” define operaÃ§Ãµes/implementos/paradas permitidos no APK
   operationalProfileCode?: string | null;
   measurementMode?: 'HORIMETRO' | 'KM' | 'AMBOS' | null;
 }
@@ -256,10 +256,10 @@ export interface EquipmentModel extends BaseEntity {
   typeId: string;
   iconType?: string;
   technicalSpecs?: Record<string, string>;
-  // campos técnicos novos
+  // campos tÃ©cnicos novos
   description?: string;
-  manufacturer?: string;  // alias de brand (fallback mútuo)
-  model?: string;         // alias de name  (fallback mútuo)
+  manufacturer?: string;  // alias de brand (fallback mÃºtuo)
+  model?: string;         // alias de name  (fallback mÃºtuo)
   operationalType?: string;
   category?: ModelCategory | string;
   primaryMetric?: PrimaryMetric;
@@ -414,10 +414,10 @@ export interface FleetActivity extends BaseEntity {
 export type OperatorStatus = 'ATIVO' | 'FERIAS' | 'AFASTADO' | 'INATIVO';
 
 export interface Operator extends BaseEntity {
-  registration: string; // Matrícula
+  registration: string; // MatrÃ­cula
   name: string;
   phone?: string;
-  role: string; // Função
+  role: string; // FunÃ§Ã£o
   status: OperatorStatus;
   shift: string; // Turno
   observations?: string;
@@ -553,23 +553,23 @@ export interface ServiceOrder extends BaseEntity {
   priority: ServiceOrderPriority;
   status: ServiceOrderStatus;
 
-  // Vínculos obrigatórios
+  // VÃ­nculos obrigatÃ³rios
   equipmentId: string;           // Frota / Equipamento
   operatorId?: string;           // Operador permitido
   farmId?: string;               // Fazenda
-  fieldId?: string;              // Talhão
+  fieldId?: string;              // TalhÃ£o
   costCenterId?: string;         // Centro de Custo
-  operationId?: string;          // Operação cadastrada
+  operationId?: string;          // OperaÃ§Ã£o cadastrada
 
-  // Vínculos opcionais
+  // VÃ­nculos opcionais
   implementId?: string;          // Implemento (opcional)
   activityId?: string;           // Atividade
   shift?: 'DIURNO' | 'NOTURNO' | 'INTEGRAL';
 
   // Datas
   openedAt: string;              // Data/hora de abertura
-  plannedAt?: string;            // Data/hora planejada de início
-  startedAt?: string;            // Data/hora efetiva de início
+  plannedAt?: string;            // Data/hora planejada de inÃ­cio
+  startedAt?: string;            // Data/hora efetiva de inÃ­cio
   pausedAt?: string;             // Data/hora da pausa
   closedAt?: string;             // Data/hora de encerramento
 
@@ -577,7 +577,7 @@ export interface ServiceOrder extends BaseEntity {
   observations?: string;
 }
 
-// --- Comunicação Operacional ---
+// --- ComunicaÃ§Ã£o Operacional ---
 
 export type MessagePriority = 'NORMAL' | 'ALTA' | 'CRITICA';
 export type MessageStatus = 'ENVIADA' | 'ENTREGUE' | 'LIDA' | 'ERRO' | 'EXPIRADA';
@@ -615,16 +615,16 @@ export interface TrailPoint {
   speed?: number;
   /** Velocidade em km/h */
   speedKmh?: number;
-  /** Rotações por minuto do motor */
+  /** RotaÃ§Ãµes por minuto do motor */
   rpm?: number;
   accuracy?: number;
   timestamp: string;
   status?: string;
   operatorRegistration?: string;
   operationCode?: string;
-  /** Horímetro no instante do ponto (quando disponível) */
+  /** HorÃ­metro no instante do ponto (quando disponÃ­vel) */
   hourmeterCurrent?: number;
-  /** ID único do evento (offlineId do APK) para deduplicação */
+  /** ID Ãºnico do evento (offlineId do APK) para deduplicaÃ§Ã£o */
   eventId?: string;
   /** Qualidade do ponto GPS */
   qualityStatus?: TrailPointQualityStatus;
@@ -642,11 +642,11 @@ export interface EquipmentLiveState {
   status: EquipmentOperationalStatus;
   latitude?: number;
   longitude?: number;
-  /** Velocidade em m/s (campo interno — use speedKmh para exibição) */
+  /** Velocidade em m/s (campo interno â€” use speedKmh para exibiÃ§Ã£o) */
   speed?: number;
-  /** Velocidade em km/h (alias calculado a partir de speed × 3.6) */
+  /** Velocidade em km/h (alias calculado a partir de speed Ã— 3.6) */
   speedKmh?: number;
-  /** Rotações por minuto do motor (se disponível via CAN ou APK) */
+  /** RotaÃ§Ãµes por minuto do motor (se disponÃ­vel via CAN ou APK) */
   rpm?: number;
   accuracy?: number;
   lastGpsAt?: string;
@@ -656,23 +656,23 @@ export interface EquipmentLiveState {
   currentOperator?: string;
   operationName?: string;
   operatorName?: string;
-  /** Matrícula do operador */
+  /** MatrÃ­cula do operador */
   registration?: string;
-  /** Matrícula do operador (campo canônico da API) */
+  /** MatrÃ­cula do operador (campo canÃ´nico da API) */
   operatorRegistration?: string;
-  /** ID interno do operador (nunca usar como matrícula) */
+  /** ID interno do operador (nunca usar como matrÃ­cula) */
   operatorId?: string;
-  /** Código da operação atual */
+  /** CÃ³digo da operaÃ§Ã£o atual */
   operationCode?: string;
-  /** Código do centro de custo */
+  /** CÃ³digo do centro de custo */
   costCenterCode?: string;
   /** Nome do centro de custo */
   costCenterName?: string;
   /** Centro de custo */
   costCenter?: string;
-  /** Ordem de serviço */
+  /** Ordem de serviÃ§o */
   workOrder?: string;
-  /** Código do implemento acoplado */
+  /** CÃ³digo do implemento acoplado */
   implementCode?: string;
   /** ID interno do implemento */
   implementId?: string;
@@ -700,14 +700,18 @@ export interface EquipmentLiveState {
   stopReason?: string;
   /** Descricao da parada (campo canonico da API) */
   stopDescription?: string;
+  /** Nome canonico/normalizado da parada para a Central */
+  stopReasonName?: string;
   /** Codigo da parada atual (ex: PAR-01) */
   stopCode?: string;
-  /** Codigo canonico do APK (stopReasonCode) — alias salvo junto com stopCode */
+  /** Codigo canonico do APK (stopReasonCode) â€” alias salvo junto com stopCode */
   stopReasonCode?: string;
-  /** Descricao canonica do APK (stopReasonDescription) — alias salvo junto com stopDescription */
+  /** Descricao canonica do APK (stopReasonDescription) â€” alias salvo junto com stopDescription */
   stopReasonDescription?: string;
   /** Timestamp de inicio da parada atual */
   stopStartedAt?: string;
+  /** Alias de leitura para a ultima parada relevante */
+  lastStopAt?: string;
   /** Duracao da parada em segundos */
   stopDurationSeconds?: number;
   /** Timestamp de encerramento da parada (preenchido no JOURNEY_END) */
@@ -737,25 +741,27 @@ export interface EquipmentLiveState {
   displayOperator?: string;
   updatedAt: string;
 
-  // ── Campos computados (não armazenados no live-state.json) ──
-  /** Computed: status de comunicação separado do status operacional */
+  // â”€â”€ Campos computados (nÃ£o armazenados no live-state.json) â”€â”€
+  /** Computed: status de comunicaÃ§Ã£o separado do status operacional */
   communicationStatus?: 'ONLINE' | 'OFFLINE';
-  /** Computed: alias explícito para o status operacional (mesmo valor que status) */
+  /** Computed: alias explÃ­cito para o status operacional (mesmo valor que status) */
   operationalStatus?: string;
-  /** Computed: status de exibição — prioriza operacional (OPERANDO/PARADO/FINALIZADO) sobre comunicação */
+  /** Computed: status de exibiÃ§Ã£o â€” prioriza operacional (OPERANDO/PARADO/FINALIZADO) sobre comunicaÃ§Ã£o */
   displayStatus?: string;
+  /** Computed/derivado: parada ativa exposta pela API de status */
+  activeStop?: unknown;
   /** Computed: equipamento enviando sinais recentes (heartbeat ou GPS) */
   isOnline?: boolean;
-  /** Computed: GPS atualizado nos últimos 5 min */
+  /** Computed: GPS atualizado nos Ãºltimos 5 min */
   hasRecentGps?: boolean;
-  /** Computed: Heartbeat recebido nos últimos 2 min */
+  /** Computed: Heartbeat recebido nos Ãºltimos 2 min */
   hasRecentHeartbeat?: boolean;
 }
 
 // --- Mobile Bootstrap ---
 
 /**
- * Centro de Custo — entidade cadastral usada pelo APK para categorizar jornadas.
+ * Centro de Custo â€” entidade cadastral usada pelo APK para categorizar jornadas.
  * Sincronizado via GET /api/mobile/bootstrap.
  */
 export interface CostCenter extends BaseEntity {
@@ -780,3 +786,5 @@ export interface BootstrapPackage {
   updatedAt: string;
   version: string;
 }
+
+

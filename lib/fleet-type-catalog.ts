@@ -1,4 +1,4 @@
-import type { PrimaryMetric } from '@/lib/types';
+﻿import type { PrimaryMetric } from '@/lib/types';
 
 export const FLEET_TYPE_CATEGORIES = [
   'Agrícola',
@@ -60,3 +60,4 @@ export function resolveDefaultOperationalGroup(category?: string): FleetOperatio
   if (!category) return 'OUTROS';
   return DEFAULT_GROUP_BY_CATEGORY[category as FleetTypeCategory] ?? 'OUTROS';
 }
+
