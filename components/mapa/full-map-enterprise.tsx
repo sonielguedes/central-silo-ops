@@ -159,23 +159,6 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   pos:              hasValidPosition(item) ? [item.latitude, item.longitude] : null,
   type:             item.implementName || item.type || item.name || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel,
   typeIcon:         getTypeIcon(item.implementName || item.type || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel),
-  iconSource:       item.iconType
-                      ? 'iconType'
-                      : item.implementName
-                        ? 'implementName'
-                        : item.equipmentType
-                          ? 'equipmentType'
-                          : item.equipmentModel
-                            ? 'equipmentModel'
-                            : item.equipmentCategory
-                              ? 'equipmentCategory'
-                              : item.implementCode
-                                ? 'implementCode'
-                                : item.currentOperation
-                                  ? 'currentOperation'
-                                  : item.operationName
-                                    ? 'operationName'
-                                    : 'fallback',
   iconType:         resolveEquipmentIconTypeFromContext(
     {
       type: item.type,
@@ -204,47 +187,6 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   equipmentType:    (item as unknown as Record<string, string>).equipmentType,
   equipmentModel:   (item as unknown as Record<string, string>).equipmentModel,
   equipmentCategory: (item as unknown as Record<string, string>).equipmentCategory,
-  resolvedIconType: resolveEquipmentIconTypeFromContext(
-    {
-      type: item.type,
-      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
-      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
-      metadata: { equipmentType: (item as unknown as Record<string, string>).equipmentType ?? null },
-      name: item.name,
-      brand: item.currentOperation ?? item.operationName ?? null,
-      code: item.fleetCode,
-      iconType: (item as unknown as Record<string, string>).iconType ?? null,
-      implementName: item.implementName ?? null,
-      implementCode: item.implementCode ?? null,
-      operation: item.operationName ?? null,
-      currentOperation: item.currentOperation ?? null,
-    },
-    {
-      iconType: (item as unknown as Record<string, string>).iconType ?? null,
-      type: item.type,
-      name: item.name,
-      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
-      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
-      brand: item.currentOperation ?? item.operationName ?? null,
-      manufacturer: item.currentOperator ?? item.operatorName ?? null,
-    },
-  ),
-  rawTypeFields: {
-    fleetCode: item.fleetCode,
-    code: item.equipmentId,
-    name: item.name ?? null,
-    type: item.type ?? null,
-    equipmentType: (item as unknown as Record<string, string>).equipmentType ?? null,
-    equipmentModel: (item as unknown as Record<string, string>).equipmentModel ?? null,
-    equipmentCategory: (item as unknown as Record<string, string>).equipmentCategory ?? null,
-    iconType: (item as unknown as Record<string, string>).iconType ?? null,
-    implementName: item.implementName ?? null,
-    implementCode: item.implementCode ?? null,
-    currentOperation: item.currentOperation ?? null,
-    operationName: item.operationName ?? null,
-    currentOperator: item.currentOperator ?? null,
-    operatorName: item.operatorName ?? null,
-  },
   displayOperator:  formatValue(item.currentOperator || item.operatorName),
   displayOperation: formatValue(item.currentOperation || item.operationName),
 });
@@ -928,7 +870,6 @@ function OperationalPopup({
   rawMode: boolean;
   onToggleRaw: () => void;
 }) {
-  const isDev = process.env.NODE_ENV !== 'production';
   const registration = machine.operatorRegistration ?? machine.registration;
   const hCurrent = machine.hourmeterCurrent ?? machine.hourmeter;
 
@@ -982,22 +923,6 @@ function OperationalPopup({
             <PField icon={<Hash size={11} />} label="Implemento" value={implement} />
           </div>
         </div>
-
-        {isDev && (
-          <div className="rounded-2xl border border-dashed border-cyan-500/35 bg-cyan-500/5 p-3">
-            <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-cyan-200/80">Debug do ícone</p>
-            <div className="grid grid-cols-1 gap-2">
-              <PField icon={<Hash size={11} />} label="iconSource" value={formatValue(machine.iconSource)} />
-              <PField icon={<Hash size={11} />} label="resolvedIconType" value={formatValue(machine.resolvedIconType || machine.iconType)} />
-              <PField icon={<Hash size={11} />} label="implementName" value={formatValue(machine.rawTypeFields?.implementName)} />
-              <PField icon={<Hash size={11} />} label="implementCode" value={formatValue(machine.rawTypeFields?.implementCode)} />
-              <PField icon={<Hash size={11} />} label="operation" value={formatValue(machine.rawTypeFields?.currentOperation || machine.rawTypeFields?.operationName)} />
-              <PField icon={<Hash size={11} />} label="equipmentType" value={formatValue(machine.rawTypeFields?.equipmentType)} />
-              <PField icon={<Hash size={11} />} label="equipmentModel" value={formatValue(machine.rawTypeFields?.equipmentModel)} />
-              <PField icon={<Hash size={11} />} label="equipmentCategory" value={formatValue(machine.rawTypeFields?.equipmentCategory)} />
-            </div>
-          </div>
-        )}
 
         <div className="rounded-2xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
           <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Parada</p>
