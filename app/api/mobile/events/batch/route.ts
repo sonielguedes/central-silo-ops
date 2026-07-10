@@ -558,7 +558,7 @@ export async function POST(req: NextRequest) {
           const lastCode = asString(liveUpdates.stopReasonCode as string) || asString(currentLiveState?.stopReasonCode);
           if (lastCode) liveUpdates.lastStopReasonCode = lastCode;
           liveUpdates.lastStopEndedAt = ts;
-          stopEndedFieldsToDelete = ['stopReasonCode', 'stopCode', 'stopDescription', 'stopReason', 'stopReasonName', 'stopReasonCategory', 'stopStartedAt'];
+          stopEndedFieldsToDelete = ['stopReasonCode', 'stopCode', 'stopDescription', 'stopReason', 'stopStartedAt'];
           liveUpdates.status = 'OPERANDO';
           stopActive = false;
           break;
