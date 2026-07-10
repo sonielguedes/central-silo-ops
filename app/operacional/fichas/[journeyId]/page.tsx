@@ -38,14 +38,23 @@ function JourneySheetPage() {
   const [sheet, setSheet] = useState<FichaOperador | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    setError(null);
     fetch(`/api/operacional/fichas/${encodeURIComponent(journeyId)}?fleetCode=${encodeURIComponent(fleetCode)}`, { cache: 'no-store' })
-      .then(async response => { if (!response.ok) throw new Error((await response.json()).error ?? `HTTP ${response.status}`); return response.json(); })
-      .then(setSheet).catch(error => setError(error.message));
+      .then(async response => {
+        const body = await response.json().catch(() => ({})) as { error?: string } & Partial<FichaOperador>;
+        if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
+        return body as FichaOperador;
+      })
+      .then(setSheet)
+      .catch(error => {
+        console.error('[OPERATOR_SHEET_PAGE_ERROR]', { journeyId, fleetCode, error });
+        setError(error instanceof Error ? error.message : 'Falha ao carregar ficha operacional');
+      });
   }, [fleetCode, journeyId]);
 
   return <div className="min-h-screen bg-background"><Sidebar /><div className="lg:pl-64"><Header /><main className="mx-auto max-w-7xl space-y-5 p-6">
     <Link href="/mapa-operacional" className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-white"><ArrowLeft size={14}/>Voltar ao mapa</Link>
-    {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</div>}
+    {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-5 text-red-200"><h1 className="font-black">Ficha não encontrada para esta jornada</h1><p className="mt-2 text-sm">{error}</p><p className="mt-2 text-xs text-red-300/70">JourneyId: {journeyId || '—'} · Frota: {fleetCode || 'não informada'}</p><p className="mt-1 text-xs text-red-300/70">Verifique se o JOURNEY_START já foi sincronizado.</p></div>}
     {!sheet && !error && <div className="flex justify-center py-24"><Loader2 className="animate-spin text-primary"/></div>}
     {sheet && <>
       <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-black text-white">Ficha Operacional</h1><p className="text-sm text-muted-foreground">Jornada {sheet.journeyId} · Frota {sheet.fleetCode} · {sheet.operatorName ?? 'Operador não informado'}</p></div><span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-xs font-black text-orange-300">{sheet.operationalStatus}</span></header>

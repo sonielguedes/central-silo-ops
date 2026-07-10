@@ -1,5 +1,5 @@
 import { ServerStorage } from '@/lib/server-storage';
-import type { TrailPoint } from '@/lib/types';
+import type { EquipmentLiveState, TrailPoint } from '@/lib/types';
 import { createLogger } from '@/lib/logger';
 
 // ── Inconsistency codes ───────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ function cleanText(value: unknown): string | null {
 
 function eventPayload(event: { payload: unknown }): Record<string, unknown> {
   const payload = asRecord(event.payload);
-  return { ...asRecord(payload.data), ...payload };
+  return { ...asRecord(payload.raw), ...asRecord(payload.data), ...payload };
 }
 
 function eventType(event: { type: string; payload: unknown }): string {
@@ -186,16 +186,31 @@ function stopLabel(code: string, name: string): string {
 // ── Main builder ──────────────────────────────────────────────────────────────
 export function buildOperatorSheet(params: {
   tenantId:  string;
-  fleetCode: string;
+  fleetCode: string | null;
   journeyId: string | null;
 }): BuildSheetResult {
   const { tenantId, fleetCode, journeyId } = params;
 
   const liveFleet = ServerStorage.getLiveFleet(tenantId);
-  const machine   = liveFleet.find(m => m.fleetCode === fleetCode);
-  if (!machine) {
-    return { ok: false, status: 404, error: 'fleetCode not found in live-state' };
+  const tenantEvents = ServerStorage.getEvents(tenantId);
+  const journeyEvent = journeyId ? tenantEvents.find(event => cleanText(eventPayload(event).journeyId) === journeyId) : undefined;
+  const eventData = journeyEvent ? eventPayload(journeyEvent) : {};
+  const resolvedFleetCode = fleetCode ?? cleanText(eventData.fleetCode);
+  const eventEquipmentId = journeyEvent?.equipmentId ?? cleanText(eventData.equipmentId) ?? cleanText(eventData.machineId);
+  const liveMachine = liveFleet.find(machine =>
+    (resolvedFleetCode && machine.fleetCode === resolvedFleetCode) ||
+    (eventEquipmentId && machine.equipmentId === eventEquipmentId)
+  );
+  if (!liveMachine && !journeyEvent) {
+    return { ok: false, status: 404, error: 'Ficha não encontrada para esta jornada' };
   }
+  const machine = liveMachine ?? ({
+    equipmentId: eventEquipmentId ?? 'unknown',
+    fleetCode: resolvedFleetCode ?? 'Não informada',
+    tenantId,
+    status: 'ONLINE',
+    updatedAt: journeyEvent?.receivedAt ?? journeyEvent?.timestamp ?? new Date().toISOString(),
+  } as EquipmentLiveState);
 
   const effectiveJourneyId = journeyId || machine.journeyId || null;
 
@@ -485,7 +500,7 @@ export function buildOperatorSheet(params: {
   const validated = status === 'FINALIZADO';
 
   logger.debug(
-    'fleetCode=' + fleetCode +
+    'fleetCode=' + machine.fleetCode +
     ' journeyId=' + (effectiveJourneyId ?? 'none') +
     ' status=' + status +
     ' inconsistencies=' + inconsistencies.length +
