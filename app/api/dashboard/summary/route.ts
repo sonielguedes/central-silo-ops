@@ -41,6 +41,9 @@ export interface ActiveFleetItem {
   operatorName?:     string;
   stopCode?:         string;
   stopDescription?:  string;
+  stopReason?:       string;
+  stopReasonCode?:   string;
+  stopReasonName?:   string;
   stopStartedAt?:    string;
   hourmeterCurrent?: number;
   lastHeartbeatAt?:  string;
@@ -217,6 +220,9 @@ export async function GET(req: NextRequest) {
         operatorName:      m.operatorName,
         stopCode:          m.stopCode,
         stopDescription:   m.stopDescription,
+        stopReason:        m.stopReason,
+        stopReasonCode:    m.stopReasonCode,
+        stopReasonName:    m.stopReasonName,
         stopStartedAt:     m.stopStartedAt,
         hourmeterCurrent:  m.hourmeterCurrent,
         lastHeartbeatAt:   m.lastHeartbeatAt,
