@@ -226,7 +226,12 @@ function ActiveFleetPanel({ fleet }: { fleet: ActiveFleetItem[] }) {
                 </div>
                 <p className="mt-1 truncate text-[11px] text-slate-300">
                   {m.status === 'PARADO'
-                    ? (m.stopDescription || m.stopCode || 'Parado')
+                    ? ((m.stopReasonName || m.stopDescription || m.stopReasonCode || m.stopCode)
+                        ? [
+                            m.stopReasonCode || m.stopCode,
+                            m.stopReasonName || m.stopDescription || m.stopReason,
+                          ].filter(Boolean).join(' — ')
+                        : 'Parado')
                     : (m.operationName || m.operationCode || statusLabel(m.status))}
                 </p>
                 <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-500">

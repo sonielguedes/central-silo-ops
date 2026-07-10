@@ -384,9 +384,10 @@ function DecisionRow({ item }: { item: DecisionItem }) {
   const operation  = fv(item.operationName || item.operationCode || item.currentOperation);
   const hCurr      = item.hourmeterCurrent ?? item.hourmeter;
   // stopInfo visible even when OFFLINE if stopCode/stopDescription present
-  const hasStop    = !!(item.stopCode || item.stopDescription || (item as unknown as Record<string, unknown>)['stopReason']);
-  const stopInfo   = item.stopDescription ?? (item as unknown as Record<string, unknown>)['stopReason'] as string | undefined;
-  const stopCode   = item.stopCode;
+  const stopCode   = item.stopReasonCode || item.stopCode;
+  const stopInfo   = item.stopReasonName || item.stopDescription || (item as unknown as Record<string, unknown>)['stopReason'] as string | undefined;
+  const stopStartedAt = item.stopStartedAt;
+  const hasStop    = !!(stopCode || stopInfo);
   // implement
   const implement  = item.implementName || (item as unknown as Record<string, unknown>)['implementCode'] as string | undefined;
 
@@ -443,9 +444,10 @@ function DecisionRow({ item }: { item: DecisionItem }) {
         {hasStop ? (
           <div className="flex flex-col gap-0.5">
             <span className={cn('text-[11px] font-bold uppercase truncate max-w-[130px]', stopInfo ? 'text-orange-300' : 'text-orange-400/60 italic')}>
-              {stopInfo ?? stopCode ?? 'Sem motivo'}
+              {stopCode && stopInfo ? `${stopCode} — ${stopInfo}` : stopInfo ?? stopCode ?? 'Sem motivo'}
             </span>
-            {stopCode && <span className="text-[9px] text-muted-foreground">{stopCode}</span>}
+            {stopStartedAt && <span className="text-[9px] text-muted-foreground">Desde: {fmtTime(stopStartedAt)}</span>}
+            {!stopStartedAt && stopCode && <span className="text-[9px] text-muted-foreground">{stopCode}</span>}
             {item.stopDurationMs > 0 && (
               <span className="text-[9px] text-orange-400/70">{fmtAge(item.stopDurationMs)}</span>
             )}

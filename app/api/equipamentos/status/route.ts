@@ -107,6 +107,11 @@ function normalizeText(value: unknown): string {
   return String(value ?? '').trim();
 }
 
+function normalizeStopText(value: unknown): string | null {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  return normalized ? normalized : null;
+}
+
 function normalizeForMap(
   s: EquipmentLiveState,
   allEvents: ReturnType<typeof ServerStorage.getEvents>,
@@ -206,6 +211,10 @@ function normalizeForMap(
   const displayStatusApi       = RICH_OP_API.has(operationalStatusApi) ? operationalStatusApi : communicationStatusApi;
   const hasRecentGpsApi        = extS.hasRecentGps        ?? false;
   const hasRecentHeartbeatApi  = extS.hasRecentHeartbeat  ?? false;
+  const stopReasonCodeApi      = normalizeStopText(stop.code);
+  const stopReasonNameApi      = normalizeStopText(stop.reason);
+  const stopStartedAtApi       = normalizeStopText(s.stopStartedAt);
+  const lastStopAtApi          = normalizeStopText(s.stopStartedAt ?? s.lastStopStartedAt ?? s.lastStopEndedAt ?? s.stopEndedAt);
 
   return {
     ...s,
@@ -218,6 +227,11 @@ function normalizeForMap(
     stopCode: stop.code,
     stopDescription: stop.reason,
     stopReason: stop.reason,
+    stopReasonCode: stopReasonCodeApi,
+    stopReasonName: stopReasonNameApi,
+    stopStartedAt: stopStartedAtApi,
+    lastStopAt: lastStopAtApi,
+    activeStop: stop.hasActiveStop ? stop : null,
     stopSource: resolvedStop.source,
     stop,
     equipmentType: resolvedEquipmentType,

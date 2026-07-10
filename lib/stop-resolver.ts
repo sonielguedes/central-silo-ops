@@ -56,6 +56,7 @@ function eventCode(payload: Record<string, unknown>): string | null {
 function eventDesc(payload: Record<string, unknown>): string | null {
   return (
     asStr(payload.stopReasonDescription) ??
+    asStr(payload.stopReasonName) ??
     asStr(payload.stopDescription) ??
     asStr(payload.stopReason) ??
     asStr(payload.description) ??
@@ -112,6 +113,7 @@ export function resolveStop(
     asStr(machine.stopCode);
   const lsDesc =
     asStr(machine.stopReasonDescription) ??
+    asStr(machine.stopReasonName) ??
     asStr(machine.stopDescription) ??
     asStr(machine.stopReason);
 

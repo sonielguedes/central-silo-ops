@@ -120,6 +120,13 @@ const formatValue = (value: unknown): string => {
   return String(value);
 };
 
+const formatClockTime = (value?: string | null): string => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+
 const formatSpeed     = (v?: number): string => v == null ? NOT_INFORMED : Number(v).toFixed(1) + ' km/h';
 const formatAccuracy  = (v?: number): string => v == null ? NOT_INFORMED : Number(v).toFixed(1) + ' m';
 const formatHourmeter = (v?: number | string | null): string => {
@@ -150,8 +157,25 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   id:               item.equipmentId,
   code:             item.fleetCode || item.equipmentId,
   pos:              hasValidPosition(item) ? [item.latitude, item.longitude] : null,
-  type:             item.type || item.name || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel,
-  typeIcon:         getTypeIcon(item.type || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel),
+  type:             item.implementName || item.type || item.name || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel,
+  typeIcon:         getTypeIcon(item.implementName || item.type || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel),
+  iconSource:       item.iconType
+                      ? 'iconType'
+                      : item.implementName
+                        ? 'implementName'
+                        : item.equipmentType
+                          ? 'equipmentType'
+                          : item.equipmentModel
+                            ? 'equipmentModel'
+                            : item.equipmentCategory
+                              ? 'equipmentCategory'
+                              : item.implementCode
+                                ? 'implementCode'
+                                : item.currentOperation
+                                  ? 'currentOperation'
+                                  : item.operationName
+                                    ? 'operationName'
+                                    : 'fallback',
   iconType:         resolveEquipmentIconTypeFromContext(
     {
       type: item.type,
@@ -162,6 +186,10 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
       brand: item.currentOperation ?? item.operationName ?? null,
       code: item.fleetCode,
       iconType: (item as unknown as Record<string, string>).iconType ?? null,
+      implementName: item.implementName ?? null,
+      implementCode: item.implementCode ?? null,
+      operation: item.operationName ?? null,
+      currentOperation: item.currentOperation ?? null,
     },
     {
       iconType: (item as unknown as Record<string, string>).iconType ?? null,
@@ -176,6 +204,47 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
   equipmentType:    (item as unknown as Record<string, string>).equipmentType,
   equipmentModel:   (item as unknown as Record<string, string>).equipmentModel,
   equipmentCategory: (item as unknown as Record<string, string>).equipmentCategory,
+  resolvedIconType: resolveEquipmentIconTypeFromContext(
+    {
+      type: item.type,
+      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
+      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
+      metadata: { equipmentType: (item as unknown as Record<string, string>).equipmentType ?? null },
+      name: item.name,
+      brand: item.currentOperation ?? item.operationName ?? null,
+      code: item.fleetCode,
+      iconType: (item as unknown as Record<string, string>).iconType ?? null,
+      implementName: item.implementName ?? null,
+      implementCode: item.implementCode ?? null,
+      operation: item.operationName ?? null,
+      currentOperation: item.currentOperation ?? null,
+    },
+    {
+      iconType: (item as unknown as Record<string, string>).iconType ?? null,
+      type: item.type,
+      name: item.name,
+      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
+      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
+      brand: item.currentOperation ?? item.operationName ?? null,
+      manufacturer: item.currentOperator ?? item.operatorName ?? null,
+    },
+  ),
+  rawTypeFields: {
+    fleetCode: item.fleetCode,
+    code: item.equipmentId,
+    name: item.name ?? null,
+    type: item.type ?? null,
+    equipmentType: (item as unknown as Record<string, string>).equipmentType ?? null,
+    equipmentModel: (item as unknown as Record<string, string>).equipmentModel ?? null,
+    equipmentCategory: (item as unknown as Record<string, string>).equipmentCategory ?? null,
+    iconType: (item as unknown as Record<string, string>).iconType ?? null,
+    implementName: item.implementName ?? null,
+    implementCode: item.implementCode ?? null,
+    currentOperation: item.currentOperation ?? null,
+    operationName: item.operationName ?? null,
+    currentOperator: item.currentOperator ?? null,
+    operatorName: item.operatorName ?? null,
+  },
   displayOperator:  formatValue(item.currentOperator || item.operatorName),
   displayOperation: formatValue(item.currentOperation || item.operationName),
 });
@@ -859,6 +928,7 @@ function OperationalPopup({
   rawMode: boolean;
   onToggleRaw: () => void;
 }) {
+  const isDev = process.env.NODE_ENV !== 'production';
   const registration = machine.operatorRegistration ?? machine.registration;
   const hCurrent = machine.hourmeterCurrent ?? machine.hourmeter;
 
@@ -879,7 +949,15 @@ function OperationalPopup({
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-base font-black italic tracking-tighter leading-none uppercase truncate">{machine.code}</span>
-            <span className="mt-1 text-[9px] uppercase text-muted-foreground font-bold tracking-widest truncate">{formatValue(machine.type || machine.name)}</span>
+            <span className="mt-1 text-[9px] uppercase text-muted-foreground font-bold tracking-widest truncate">
+              {formatValue(
+                machine.implementName ||
+                machine.equipmentModel ||
+                machine.equipmentType ||
+                machine.type ||
+                machine.name
+              )}
+            </span>
           </div>
         </div>
         <div className="shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border backdrop-blur" style={{ color: statusCfg.color, borderColor: statusCfg.color + '40', backgroundColor: statusCfg.color + '15' }}>
@@ -904,6 +982,22 @@ function OperationalPopup({
             <PField icon={<Hash size={11} />} label="Implemento" value={implement} />
           </div>
         </div>
+
+        {isDev && (
+          <div className="rounded-2xl border border-dashed border-cyan-500/35 bg-cyan-500/5 p-3">
+            <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-cyan-200/80">Debug do ícone</p>
+            <div className="grid grid-cols-1 gap-2">
+              <PField icon={<Hash size={11} />} label="iconSource" value={formatValue(machine.iconSource)} />
+              <PField icon={<Hash size={11} />} label="resolvedIconType" value={formatValue(machine.resolvedIconType || machine.iconType)} />
+              <PField icon={<Hash size={11} />} label="implementName" value={formatValue(machine.rawTypeFields?.implementName)} />
+              <PField icon={<Hash size={11} />} label="implementCode" value={formatValue(machine.rawTypeFields?.implementCode)} />
+              <PField icon={<Hash size={11} />} label="operation" value={formatValue(machine.rawTypeFields?.currentOperation || machine.rawTypeFields?.operationName)} />
+              <PField icon={<Hash size={11} />} label="equipmentType" value={formatValue(machine.rawTypeFields?.equipmentType)} />
+              <PField icon={<Hash size={11} />} label="equipmentModel" value={formatValue(machine.rawTypeFields?.equipmentModel)} />
+              <PField icon={<Hash size={11} />} label="equipmentCategory" value={formatValue(machine.rawTypeFields?.equipmentCategory)} />
+            </div>
+          </div>
+        )}
 
         <div className="rounded-2xl border border-[#2d3647]/70 bg-[#050812]/70 p-3">
           <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Parada</p>
@@ -996,8 +1090,13 @@ function StopBlock({
     // PARADA_APONTADA -- exibe motivo e codigo reais
     return (
       <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-        <PField icon={<PauseCircle size={11} />} label="Motivo" value={reason ?? code ?? '-'} />
+        <PField
+          icon={<PauseCircle size={11} />}
+          label="Motivo"
+          value={code && reason ? `${code} — ${reason}` : reason ?? code ?? '-'}
+        />
         <PField icon={<Hash size={11} />} label="Codigo" value={code ?? '-'} />
+        <PField icon={<Clock size={11} />} label="Desde" value={formatClockTime(stop.startedAt)} />
       </div>
     );
   }
@@ -1014,8 +1113,13 @@ function StopBlock({
   }
   return (
     <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-      <PField icon={<PauseCircle size={11} />} label="Motivo" value={desc ?? '-'} />
+      <PField
+        icon={<PauseCircle size={11} />}
+        label="Motivo"
+        value={stopCode && desc ? `${stopCode} — ${desc}` : desc ?? '-'}
+      />
       <PField icon={<Hash size={11} />} label="Codigo" value={stopCode ?? '-'} />
+      <PField icon={<Clock size={11} />} label="Desde" value="—" />
     </div>
   );
 }

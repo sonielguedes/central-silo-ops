@@ -144,18 +144,19 @@ function Field({ label, icon, children, span }: {
 function StopBlock({ stop }: { stop?: ResolvedStop }) {
   // Fallback seguro: sem stop object -> trata como SEM_PARADA_ATIVA
   const state = stop?.state ?? 'SEM_PARADA_ATIVA';
+  const stopSince = stop?.startedAt ? fmtTime(stop.startedAt) : null;
 
   let content: React.ReactNode;
 
   if (state === 'PARADA_APONTADA') {
     content = (
       <div className="space-y-0.5">
-        {stop?.code && (
-          <p className="text-xs font-bold text-orange-300 uppercase">CÃ³digo: {stop.code}</p>
+        {(stop?.code || stop?.reason) && (
+          <p className="text-xs font-bold text-white/90 uppercase truncate">
+            Motivo: {stop?.code && stop?.reason ? `${stop.code} — ${stop.reason}` : (stop?.reason ?? stop?.code)}
+          </p>
         )}
-        {stop?.reason && (
-          <p className="text-xs font-bold text-white/90 uppercase truncate">Motivo: {stop.reason}</p>
-        )}
+        {stopSince && <p className="text-xs font-bold text-orange-300 uppercase">Desde: {stopSince}</p>}
         {!stop?.code && !stop?.reason && (
           <p className="text-xs font-bold text-white/90 uppercase">Parada apontada</p>
         )}
@@ -629,5 +630,9 @@ function OperacoesPage() {
 }
 
 export default withAuth(OperacoesPage, { module: 'OPERACOES' });
+
+
+
+
 
 

@@ -235,6 +235,7 @@ function eventStopCode(p: Record<string, unknown>): string | null {
 function eventStopDesc(p: Record<string, unknown>): string | null {
   return (
     asStr(p.stopReasonDescription) ??
+    asStr(p.stopReasonName) ??
     asStr(p.stopDescription) ??
     asStr(p.stopReason) ??
     asStr(p.reasonDescription) ??
@@ -347,7 +348,7 @@ export function resolveStopFull(
   // Prioridade 2: live-state
   if (source === 'NONE') {
     const lsCode = asStr(live?.stopCode);
-    const lsDesc = asStr(live?.stopDescription) ?? asStr(live?.stopReason);
+    const lsDesc = asStr(live?.stopReasonDescription) ?? asStr(live?.stopReasonName) ?? asStr(live?.stopDescription) ?? asStr(live?.stopReason);
     if (lsCode !== null || lsDesc !== null) {
       code = lsCode;
       desc = lsDesc ?? (lsCode ? lookupStopDesc(lsCode, catalog) : null);
