@@ -86,6 +86,10 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   const costCenterName = data.costCenterName ?? data.costCenter ?? data.costCenterCode;
   const hourmeterCurrent = asValidHourmeter(data.hourmeterCurrent ?? data.currentHourmeter ?? data.hourmeter ?? data.horimeter ?? data.engineHours ?? data.horimetro ?? data.horimetroAtual);
 
+  const reasonCode = data.reasonCode ?? data.stopCode ?? data.stopReasonCode;
+  const reasonName = data.reasonName ?? data.stopDescription ?? data.stopReason ?? data.stopReasonName;
+  const reasonCategory = data.reasonCategory ?? data.category;
+
   putIfValid(target, 'operatorRegistration', operatorRegistration);
   putIfValid(target, 'registration', operatorRegistration);
   putIfValid(target, 'operatorId', operatorId);
@@ -103,9 +107,14 @@ function applyOperationalFields(target: Record<string, unknown>, data: Record<st
   putIfValid(target, 'implementCode', implementCode);
   putIfValid(target, 'implementId', implementId);
   putIfValid(target, 'implementName', implementName);
-  putIfValid(target, 'stopCode', data.stopCode);
-  putIfValid(target, 'stopDescription', data.stopDescription ?? data.stopReason);
-  putIfValid(target, 'stopReason', data.stopDescription ?? data.stopReason);
+
+  putIfValid(target, 'stopCode', reasonCode);
+  putIfValid(target, 'stopReasonCode', reasonCode);
+  putIfValid(target, 'stopDescription', reasonName);
+  putIfValid(target, 'stopReason', reasonName);
+  putIfValid(target, 'stopReasonName', reasonName);
+  putIfValid(target, 'stopReasonCategory', reasonCategory);
+
   putIfValid(target, 'journeyId', data.journeyId);
   putIfValid(target, 'hourmeterSource', data.hourmeterSource);
   putIfValid(target, 'hourmeterCurrent', hourmeterCurrent);
@@ -472,6 +481,7 @@ export async function POST(req: NextRequest) {
           liveUpdates.status = 'OPERANDO';
           liveUpdates.statusStartedAt = ts;
           journeyStarted = true;
+          stopActive = false;
           break;
 
         case 'POSITION_UPDATE':
@@ -486,10 +496,16 @@ export async function POST(req: NextRequest) {
             console.info(`[MOBILE_EVENTS_BATCH] POSITION_UPDATE lat=${gpsUpdates.latitude} lng=${gpsUpdates.longitude}`);
           }
           if (gpsUpdates.speedKmh !== undefined) liveUpdates.speedKmh = gpsUpdates.speedKmh;
+
           if (!stopActive && !isStopActive(liveUpdates)) {
             const s = asString(firstDefined(d.status, d.operationalStatus))?.toUpperCase();
             if (s && new Set(['OPERANDO','PARADO','AGUARDANDO_PARADA','PARADA_APONTADA']).has(s)) liveUpdates.status = s;
             else if (!liveUpdates.status && !currentLiveState?.status) liveUpdates.status = 'ONLINE';
+          } else {
+            // Se houver parada ativa, garantir status PARADO se não estiver em outro estado de parada
+            if (!isStopActive(liveUpdates)) {
+              liveUpdates.status = 'PARADO';
+            }
           }
           break;
 
@@ -501,13 +517,40 @@ export async function POST(req: NextRequest) {
           if (hCurr != null) liveUpdates.hourmeterCurrent = hCurr;
           break;
 
+        case 'STOP_STARTED':
         case 'STOP_REASON':
         case 'PARADA':
           applyOperationalFields(liveUpdates, d);
-          liveUpdates.status = 'PARADA_APONTADA';
-          const code = asString(d.stopReasonCode ?? d.stopCode ?? d.code);
-          if (code) { liveUpdates.stopReasonCode = code; liveUpdates.stopCode = code; }
+          liveUpdates.status = 'PARADO';
+          const code = asString(d.reasonCode ?? d.stopReasonCode ?? d.stopCode ?? d.code);
+          const name = asString(d.reasonName ?? d.stopDescription ?? d.stopReason);
+          if (code) {
+            liveUpdates.stopReasonCode = code;
+            liveUpdates.stopCode = code;
+          }
+          if (name) {
+            liveUpdates.stopDescription = name;
+            liveUpdates.stopReason = name;
+          }
+          console.info(`[MOBILE_EVENTS_BATCH] updated fleetCode=${resolvedFleetCode} status=PARADO reasonName=${name}`);
           liveUpdates.stopStartedAt = ts;
+          stopActive = true;
+          break;
+
+        case 'STOP_REASON_CHANGED':
+          applyOperationalFields(liveUpdates, d);
+          liveUpdates.status = 'PARADO';
+          const newCode = asString(d.reasonCode ?? d.stopReasonCode ?? d.stopCode ?? d.code);
+          const newName = asString(d.reasonName ?? d.stopDescription ?? d.stopReason);
+          if (newCode) {
+            liveUpdates.stopReasonCode = newCode;
+            liveUpdates.stopCode = newCode;
+          }
+          if (newName) {
+            liveUpdates.stopDescription = newName;
+            liveUpdates.stopReason = newName;
+          }
+          console.info(`[MOBILE_EVENTS_BATCH] reason_changed fleetCode=${resolvedFleetCode} status=PARADO reasonName=${newName}`);
           stopActive = true;
           break;
 
@@ -515,7 +558,7 @@ export async function POST(req: NextRequest) {
           const lastCode = asString(liveUpdates.stopReasonCode as string) || asString(currentLiveState?.stopReasonCode);
           if (lastCode) liveUpdates.lastStopReasonCode = lastCode;
           liveUpdates.lastStopEndedAt = ts;
-          stopEndedFieldsToDelete = ['stopReasonCode', 'stopCode', 'stopStartedAt'];
+          stopEndedFieldsToDelete = ['stopReasonCode', 'stopCode', 'stopDescription', 'stopReason', 'stopReasonName', 'stopReasonCategory', 'stopStartedAt'];
           liveUpdates.status = 'OPERANDO';
           stopActive = false;
           break;
