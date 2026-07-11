@@ -52,7 +52,7 @@ export const MapLegend = memo<MapLegendProps>(({ items }) => {
         boxShadow: '0 18px 44px rgba(0,0,0,0.42)',
       }}
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="mb-3 flex items-start gap-3">
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Layers3 size={15} />
@@ -62,9 +62,6 @@ export const MapLegend = memo<MapLegendProps>(({ items }) => {
             <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">Frota real sincronizada</p>
           </div>
         </div>
-        <span className="rounded-full border border-slate-600/40 bg-slate-900/70 px-2.5 py-1 text-[10px] font-black text-slate-100">
-          {items.length} {items.length === 1 ? 'equipamento' : 'equipamentos'}
-        </span>
       </div>
 
       <div className="space-y-2">
