@@ -161,7 +161,7 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CFG[status] ?? { label: status, cls: 'text-slate-300 bg-slate-500/10 border-slate-500/20' };
   return (
-    <span className={cn('px-2 py-0.5 rounded border text-[8px] font-black uppercase whitespace-nowrap', cfg.cls)}>
+    <span className={cn('px-2.5 py-1 rounded-md border text-[11px] leading-none font-black uppercase whitespace-nowrap', cfg.cls)}>
       {cfg.label}
     </span>
   );
@@ -170,9 +170,9 @@ function StatusBadge({ status }: { status: string }) {
 // ── KPI card ─────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, cls }: { label: string; value: number | string; cls?: string }) {
   return (
-    <div className="rounded-2xl border border-[#2d3647] bg-[#0a0e27]/60 p-4 min-w-[110px]">
-      <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1">{label}</p>
-      <p className={cn('text-2xl font-black font-mono', cls ?? 'text-white')}>{value}</p>
+    <div className="rounded-2xl border border-[#2d3647] bg-[#0a0e27]/60 px-5 py-4 min-w-[128px]">
+      <p className="text-[11px] font-black text-slate-300 uppercase tracking-wider mb-1.5">{label}</p>
+      <p className={cn('text-3xl leading-none font-black font-mono', cls ?? 'text-white')}>{value}</p>
     </div>
   );
 }
@@ -1152,7 +1152,7 @@ function FichaOperadorPage() {
           <div className="px-6 py-3 border-b border-[#2d3647]/50 flex items-center gap-3 flex-wrap shrink-0 bg-[#050812]/80">
             <div className="flex items-center gap-2">
               <Clipboard size={14} className="text-primary" />
-              <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">Ficha do Operador</span>
+              <span className="text-xs font-black text-slate-300 uppercase tracking-[0.25em]">Ficha do Operador</span>
             </div>
 
             {/* Date picker */}
@@ -1218,7 +1218,7 @@ function FichaOperadorPage() {
           )}
 
           {/* ── KPI cards ────────────────────────────────────────────────────── */}
-          <div className="px-6 py-3 border-b border-[#2d3647]/30 flex gap-3 overflow-x-auto shrink-0">
+          <div className="px-6 py-4 border-b border-[#2d3647]/30 flex gap-4 overflow-x-auto shrink-0">
             <KpiCard label="Total"        value={kpis.total} />
             <KpiCard label="Em Andamento" value={kpis.emAndamento}    cls="text-cyan-400" />
             <KpiCard label="Pendentes"    value={kpis.pendentes}      cls="text-amber-400" />
@@ -1252,7 +1252,7 @@ function FichaOperadorPage() {
               </div>
             )}
             {filtered.length > 0 && (
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[1540px] text-left border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#050812]/95 border-b border-[#2d3647]">
                     <Th>
@@ -1288,7 +1288,7 @@ function FichaOperadorPage() {
                     return (
                       <tr key={f.id}
                         className={cn(
-                          'border-b border-[#2d3647]/30 transition-colors hover:bg-[#1a1f3a]/30',
+                          'min-h-12 border-b border-[#2d3647]/30 transition-colors hover:bg-[#1a1f3a]/40',
                           isSelected && 'bg-primary/5',
                         )}
                       >
@@ -1314,33 +1314,33 @@ function FichaOperadorPage() {
                         <Td>
                           <div className="flex items-center gap-1 flex-col">
                             <StatusBadge status={fs} />
-                            {f.needsReexport && <span className="text-[7px] text-violet-400 font-bold">re-exportar</span>}
+                            {f.needsReexport && <span className="text-[10px] text-violet-300 font-bold">re-exportar</span>}
                           </div>
                         </Td>
                         <Td>
                           {blocking.length > 0 ? (
-                            <span className="flex items-center gap-1 text-[8px] font-bold text-red-400 uppercase">
-                              <AlertTriangle size={8} className="shrink-0" />
+                            <span className="flex items-center gap-1.5 text-xs font-extrabold text-red-300 uppercase">
+                              <AlertTriangle size={13} className="shrink-0" />
                               {blocking[0].replace(' (alerta)', '')}
                               {blocking.length > 1 && <span className="text-red-500">+{blocking.length - 1}</span>}
                             </span>
                           ) : (
-                            <span className="text-[8px] text-emerald-500 font-bold">OK</span>
+                            <span className="text-xs text-emerald-400 font-extrabold">OK</span>
                           )}
                         </Td>
                         <Td>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button onClick={() => setDetail(f)}
-                              className="px-2 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[8px] font-black uppercase hover:bg-primary/20 transition-all whitespace-nowrap">
+                              className="h-8 px-3 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[11px] font-black uppercase hover:bg-primary/20 transition-all whitespace-nowrap">
                               Detalhes
                             </button>
                             <button onClick={() => setCorrectionTarget(f)}
-                              className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[8px] font-black uppercase hover:bg-amber-500/20 transition-all whitespace-nowrap">
-                              <Edit3 size={9} />
+                              className="h-8 min-w-8 px-2 flex items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-all whitespace-nowrap" aria-label="Corrigir ficha">
+                              <Edit3 size={14} />
                             </button>
                             <button onClick={() => handleExport(f)}
-                              className="p-1 rounded-lg border border-[#2d3647] text-muted-foreground hover:text-white hover:bg-[#1a1f3a] transition-all">
-                              <Download size={10} />
+                              className="h-8 min-w-8 flex items-center justify-center rounded-lg border border-[#3a455a] text-slate-300 hover:text-white hover:bg-[#1a1f3a] transition-all" aria-label="Exportar ficha">
+                              <Download size={14} />
                             </button>
                           </div>
                         </Td>
@@ -1393,7 +1393,7 @@ function FichaOperadorPage() {
 // ── Table helpers ─────────────────────────────────────────────────────────────
 function Th({ children, cls }: { children: React.ReactNode; cls?: string }) {
   return (
-    <th className={cn('px-3 py-2.5 text-[7px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap', cls)}>
+    <th className={cn('px-3 py-3.5 text-xs font-black text-slate-300 uppercase tracking-wider whitespace-nowrap', cls)}>
       {children}
     </th>
   );
@@ -1401,7 +1401,7 @@ function Th({ children, cls }: { children: React.ReactNode; cls?: string }) {
 
 function Td({ children, cls }: { children: React.ReactNode; cls?: string }) {
   return (
-    <td className={cn('px-3 py-2.5 text-[9px] text-white/80 whitespace-nowrap', cls)}>
+    <td className={cn('px-3 py-3.5 text-[13px] leading-5 font-medium text-white/90 whitespace-nowrap', cls)}>
       {children}
     </td>
   );
