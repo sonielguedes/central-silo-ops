@@ -206,10 +206,11 @@ function FormField({ label, value, onChange, type = 'text', placeholder }: {
 }
 
 // ── Correction Modal ──────────────────────────────────────────────────────────
-function CorrectionModal({ ficha, onClose, onSave, loading }: {
+function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
   ficha: FichaDiaria;
   onClose: () => void;
   onSave: (updates: Record<string, unknown>, oldValues: Record<string, unknown>, reason: string) => Promise<void>;
+  onManualSave: () => Promise<void>;
   loading: boolean;
 }) {
   const [operatorName,          setOperatorName]          = useState(ficha.operatorName          ?? '');
@@ -224,22 +225,40 @@ function CorrectionModal({ ficha, onClose, onSave, loading }: {
   const [reasonError,           setReasonError]            = useState(false);
   const openJourneys = ficha.journeys.filter(j => !j.hasJourneyEnd);
   const [manualJourneyId, setManualJourneyId] = useState(openJourneys[0]?.journeyId ?? '');
-  const [manualEndedAt, setManualEndedAt] = useState('');
+  const [manualEndedAt, setManualEndedAt] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  });
   const [manualError, setManualError] = useState('');
   const [manualLoading, setManualLoading] = useState(false);
 
   const handleManualEnd = async () => {
-    if (!manualJourneyId || !manualEndedAt || !reason.trim()) { setManualError('Jornada, encerramento e motivo são obrigatórios.'); return; }
+    const journey = openJourneys.find(item => item.journeyId === manualJourneyId);
+    const endedAt = new Date(manualEndedAt);
+    if (!manualEndedAt || Number.isNaN(endedAt.getTime()) || !journey?.startedAt || endedAt.getTime() < new Date(journey.startedAt).getTime()) {
+      setManualError('Informe uma data/hora de encerramento válida.'); return;
+    }
+    if (!reason.trim()) { setReasonError(true); setManualError('Informe o motivo da correção.'); return; }
+    const normalizedHourmeter = hourmeterEnd.trim().replace(',', '.');
+    const finalHourmeter = normalizedHourmeter ? Number(normalizedHourmeter) : null;
+    const initialHourmeter = journey.hourmeterStart ?? ficha.hourmeterStart;
+    if (finalHourmeter !== null && (!Number.isFinite(finalHourmeter) || finalHourmeter < 0 || (initialHourmeter !== null && finalHourmeter < initialHourmeter))) {
+      setManualError('Informe um horímetro final válido, igual ou maior que o inicial.'); return;
+    }
+    if (!window.confirm('Confirma o encerramento administrativo desta jornada? Esta ação será registrada no histórico de correções.')) return;
     setManualLoading(true); setManualError('');
     try {
-      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(manualJourneyId)}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: new Date(manualEndedAt).toISOString(), hourmeterEnd: hourmeterEnd.trim() || null, reason }) });
+      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(manualJourneyId)}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: endedAt.toISOString(), hourmeterEnd: finalHourmeter, reason: reason.trim() }) });
       const body = await response.json() as { error?: string };
       if (!response.ok) { setManualError(body.error ?? 'Falha ao encerrar jornada.'); return; }
-      onClose(); window.location.reload();
+      await onManualSave();
+    } catch {
+      setManualError('Não foi possível registrar a correção. Tente novamente.');
     } finally { setManualLoading(false); }
   };
 
   const handleSave = async () => {
+    if (openJourneys.length > 0) { await handleManualEnd(); return; }
     if (!reason.trim()) { setReasonError(true); return; }
     setReasonError(false);
 
@@ -293,11 +312,10 @@ function CorrectionModal({ ficha, onClose, onSave, loading }: {
           )}
           {openJourneys.length > 0 && <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-3">
             <p className="text-[9px] font-black uppercase text-amber-300">Encerrar jornada manualmente</p>
-            <p className="text-[9px] text-amber-200/80">Esta ação não apaga eventos. Ela registra uma correção administrativa auditável.</p>
+            <p className="text-[9px] text-amber-200/80">Esta ação não apaga eventos. Ela registra uma correção administrativa auditável e encerra a jornada selecionada.</p>
             <select value={manualJourneyId} onChange={e => setManualJourneyId(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white">{openJourneys.map(j => <option key={j.journeyId ?? j.startedAt} value={j.journeyId ?? ''}>{j.journeyId ?? 'Sem ID'} · {j.startedAt ? fmtDT(j.startedAt) : 'Início ausente'}</option>)}</select>
-            <input type="datetime-local" value={manualEndedAt} onChange={e => setManualEndedAt(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white" />
+            <input aria-label="Data e hora de encerramento" type="datetime-local" required value={manualEndedAt} onChange={e => { setManualEndedAt(e.target.value); setManualError(''); }} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white" />
             {manualError && <p className="text-[9px] text-red-400">{manualError}</p>}
-            <button onClick={handleManualEnd} disabled={manualLoading} className="rounded-xl bg-amber-700 px-4 py-2 text-[9px] font-black uppercase text-white disabled:opacity-40">{manualLoading ? 'Encerrando...' : 'Encerrar jornada'}</button>
           </div>}
 
           {/* Identification */}
@@ -325,7 +343,7 @@ function CorrectionModal({ ficha, onClose, onSave, loading }: {
             <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-3">Horímetros</p>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Horímetro Inicial" value={hourmeterStart} onChange={setHourmeterStart} type="number" placeholder="0.0" />
-              <FormField label="Horímetro Final"   value={hourmeterEnd}   onChange={setHourmeterEnd}   type="number" placeholder="0.0" />
+              <FormField label="Horímetro Final (opcional)" value={hourmeterEnd} onChange={setHourmeterEnd} placeholder="Ex: 10,5" />
             </div>
           </div>
 
@@ -357,9 +375,9 @@ function CorrectionModal({ ficha, onClose, onSave, loading }: {
             className="px-4 py-2 rounded-xl border border-[#2d3647] text-muted-foreground hover:text-white hover:bg-[#1a1f3a] text-[9px] font-black uppercase transition-all">
             Cancelar
           </button>
-          <button onClick={handleSave} disabled={loading}
+          <button onClick={handleSave} disabled={loading || manualLoading}
             className="flex items-center gap-2 px-4 py-2 bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase hover:bg-amber-600 transition-all disabled:opacity-40">
-            {loading ? <Loader2 size={12} className="animate-spin" /> : <Edit3 size={12} />}
+            {(loading || manualLoading) ? <Loader2 size={12} className="animate-spin" /> : <Edit3 size={12} />}
             Salvar Correção
           </button>
         </div>
@@ -1295,6 +1313,11 @@ function FichaOperadorPage() {
           onSave={(updates, oldValues, reason) =>
             handleCorrect(correctionTarget, updates, oldValues, reason)
           }
+          onManualSave={async () => {
+            showToast('Correção registrada com sucesso.', 'success');
+            setCorrectionTarget(null);
+            await fetchFichas(date);
+          }}
           loading={actionLoad}
         />
       )}
