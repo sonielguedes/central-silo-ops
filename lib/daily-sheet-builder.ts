@@ -14,6 +14,7 @@ import { ServerStorage } from '@/lib/server-storage';
 import { CadastroStorage } from '@/lib/cadastro-storage';
 import type { MobileEvent } from '@/lib/server-storage';
 import type { TrailPoint } from '@/lib/types';
+import { calculateJourneyHourmeter } from '@/lib/operational/journey-hourmeter-calculator';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const GPS_GAP_LIMIT_MIN       = 30;   // gap > 30 min → tempo indeterminado
@@ -35,6 +36,7 @@ export const DAILY_INCONSISTENCY = {
   SEM_EVENTOS_GPS:                     'SEM_EVENTOS_GPS (alerta)',
   SEM_HEARTBEAT:                       'SEM_HEARTBEAT (alerta)',
   TEMPO_INDETERMINADO_ACIMA_LIMITE:    'TEMPO_INDETERMINADO_ACIMA_LIMITE (alerta)',
+  MULTIPLAS_JORNADAS_ATIVAS:           'MULTIPLAS_JORNADAS_ATIVAS',
   FROTA_NAO_IDENTIFICADA:              'FROTA_NAO_IDENTIFICADA',
 } as const;
 
@@ -293,14 +295,6 @@ function resolveCostCenter(
     // Se o cadastro não estiver disponível, mantém a regra local de exclusão.
   }
   return null;
-}
-
-function resolveHoursAndInconsistency(start: unknown, end: unknown): { totalHourmeter: number | null; isInvalid: boolean } {
-  const totalHourmeter = calculateTotalHours(start, end);
-  return {
-    totalHourmeter,
-    isInvalid: totalHourmeter === null && toNumber(start) !== null && toNumber(end) !== null,
-  };
 }
 
 // ── Period helpers (BRT-aware) ───────────────────────────────────────────────
@@ -811,10 +805,12 @@ export function buildDailySheet(params: {
   }
   hourmeterCurrent = hourmeterCurrent ?? liveM.hourmeterCurrent ?? liveM.hourmeter ?? null;
 
-  const hourmeterEnd = journeys.reduce<number|null>((a, j) => j.hourmeterEnd ?? a, null);
-
-  const hourmeterAnalysis = resolveHoursAndInconsistency(hourmeterStart, hourmeterEnd);
-  const totalHourmeter = hourmeterAnalysis.totalHourmeter;
+  const activeJourneyCount = journeys.filter(journey => !journey.hasJourneyEnd || !journey.endedAt).length;
+  const hasActiveJourney = activeJourneyCount > 0;
+  const rawHourmeterEnd = journeys.reduce<number|null>((a, j) => j.hourmeterEnd ?? a, null);
+  const hourmeterCalculation = calculateJourneyHourmeter({ status: hasActiveJourney ? 'EM_ANDAMENTO' : 'FINALIZADO', hourmeterStart, hourmeterCurrent, hourmeterEnd: rawHourmeterEnd });
+  const hourmeterEnd = hourmeterCalculation.end;
+  const totalHourmeter = hourmeterCalculation.total;
 
   const firstJourney = journeys[0];
   const startedAt = firstJourney?.startedAt ?? null;
@@ -822,10 +818,9 @@ export function buildDailySheet(params: {
 
   const timeData = analyseTime(sortedTrail, allStops, startedAt, endedAt, isDayOpen);
 
-  const hasActiveJourney = isDayOpen && journeys.some(j => !j.hasJourneyEnd);
-
   // ── Inconsistency engine ──────────────────────────────────────────────────
-  const inconsistencies: string[] = [];
+  const inconsistencies: string[] = [...hourmeterCalculation.warnings];
+  if (activeJourneyCount > 1) inconsistencies.push(DAILY_INCONSISTENCY.MULTIPLAS_JORNADAS_ATIVAS);
 
   if (!effectiveOpReg && !effectiveOpName)
     inconsistencies.push(DAILY_INCONSISTENCY.OPERADOR_NAO_IDENTIFICADO);
@@ -855,9 +850,6 @@ export function buildDailySheet(params: {
 
   if (!isDayOpen && !hasActiveJourney && hourmeterEnd === null && hourmeterStart !== null)
     inconsistencies.push(DAILY_INCONSISTENCY.SEM_HORIMETRO_FINAL_APOS_FECHAMENTO);
-
-  if (hourmeterAnalysis.isInvalid)
-    inconsistencies.push(DAILY_INCONSISTENCY.TOTAL_HORAS_INCONSISTENTE);
 
   if (trailSummary.points === 0)
     inconsistencies.push(DAILY_INCONSISTENCY.SEM_EVENTOS_GPS);

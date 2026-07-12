@@ -348,7 +348,7 @@ const DRAWER_TABS: { id: DrawerTab; label: string }[] = [
   { id: 'paradas',    label: 'Paradas'    },
   { id: 'validacao',  label: 'Validação'  },
   { id: 'exportacao', label: 'Exportação' },
-  { id: 'historico',  label: 'Histórico'  },
+  { id: 'historico',  label: 'Correções'  },
 ];
 
 // ── Detail drawer ─────────────────────────────────────────────────────────────
@@ -542,6 +542,7 @@ function ResumoTab({ ficha }: { ficha: FichaDiaria }) {
         <FieldRow label="Indeterminado"    value={fmtMin(ficha.minutesUndetermined)}
           highlight={ficha.pctUndetermined != null && ficha.pctUndetermined > 50 ? 'amber' : undefined} />
         <FieldRow label="% Indeterminado"  value={ficha.pctUndetermined != null ? ficha.pctUndetermined + '%' : NI} />
+        {ficha.pctUndetermined === 100 && <p className="mt-3 text-[9px] text-amber-300">Todo o período está indeterminado porque não há eventos suficientes para classificar tempo trabalhado/parado.</p>}
       </div>
     </div>
   );
@@ -731,7 +732,7 @@ function ExportacaoTab({ ficha, onExport, loading }: {
 
 function HistoricoTab({ ficha }: { ficha: FichaDiaria }) {
   if (!ficha.corrections || ficha.corrections.length === 0) {
-    return <EmptyState icon={<Clock size={24} />} msg="Nenhuma correção registrada" />;
+    return <EmptyState icon={<Clock size={24} />} msg="Nenhuma correção manual registrada." />;
   }
   const sorted = [...ficha.corrections].reverse();
   return (

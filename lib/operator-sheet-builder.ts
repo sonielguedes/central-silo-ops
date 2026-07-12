@@ -2,6 +2,7 @@ import { ServerStorage } from '@/lib/server-storage';
 import type { EquipmentLiveState, TrailPoint } from '@/lib/types';
 import { createLogger } from '@/lib/logger';
 import { calculateJourneyTimes } from '@/lib/operational/journey-time-calculator';
+import { calculateJourneyHourmeter } from '@/lib/operational/journey-hourmeter-calculator';
 
 // ── Inconsistency codes ───────────────────────────────────────────────────────
 export const INCONSISTENCY = {
@@ -316,7 +317,7 @@ export function buildOperatorSheet(params: {
   // machine.status === 'OFFLINE' means GPS signal loss — NOT end of journey.
   const journeyEnded = !!endedAt;
 
-  const hourmeterStart = (() => {
+  const rawHourmeterStart = (() => {
     if (typeof machine.hourmeterStart   === 'number' && machine.hourmeterStart   > 0) return machine.hourmeterStart;
     if (typeof machine.hourmeterInitial === 'number' && machine.hourmeterInitial > 0) return machine.hourmeterInitial;
     if (sp && typeof sp.hourmeterStart  === 'number' && (sp.hourmeterStart as number) > 0) return sp.hourmeterStart as number;
@@ -325,25 +326,27 @@ export function buildOperatorSheet(params: {
     return null;
   })();
 
-  const hourmeterCurrent =
+  const rawHourmeterCurrent =
     typeof machine.hourmeterCurrent === 'number' && machine.hourmeterCurrent > 0
       ? machine.hourmeterCurrent : null;
 
-  const hourmeterEnd = (() => {
+  const rawHourmeterEnd = (() => {
     if (typeof machine.hourmeterEnd   === 'number' && machine.hourmeterEnd   > 0) return machine.hourmeterEnd;
     if (typeof machine.hourmeterFinal === 'number' && machine.hourmeterFinal > 0) return machine.hourmeterFinal;
     if (ep && typeof ep.hourmeterEnd  === 'number' && (ep.hourmeterEnd as number) > 0) return ep.hourmeterEnd as number;
     return null;
   })();
 
-  const totalHourmeter = (() => {
-    if (typeof machine.totalHourmeter === 'number') return machine.totalHourmeter;
-    if (hourmeterEnd !== null && hourmeterStart !== null) {
-      const diff = Math.round((hourmeterEnd - hourmeterStart) * 100) / 100;
-      return diff >= 0 ? diff : null;
-    }
-    return null;
-  })();
+  const hourmeterCalculation = calculateJourneyHourmeter({
+    status: journeyEnded ? 'FINALIZADO' : String(machine.status ?? 'EM_ANDAMENTO'),
+    hourmeterStart: rawHourmeterStart,
+    hourmeterCurrent: rawHourmeterCurrent,
+    hourmeterEnd: rawHourmeterEnd,
+  });
+  const hourmeterStart = hourmeterCalculation.start;
+  const hourmeterCurrent = hourmeterCalculation.current;
+  const hourmeterEnd = hourmeterCalculation.end;
+  const totalHourmeter = hourmeterCalculation.total;
 
   // ── Time calculations ─────────────────────────────────────────────────────────
   // Duration: from startedAt to endedAt (or now if active)
@@ -359,7 +362,7 @@ export function buildOperatorSheet(params: {
       : null;
 
   // ── Inconsistency engine ──────────────────────────────────────────────────────
-  const inconsistencies: string[] = [...timeCalculation.warnings];
+  const inconsistencies: string[] = [...timeCalculation.warnings, ...hourmeterCalculation.warnings];
 
   if (!operatorRegistration && !operatorName)
     inconsistencies.push(INCONSISTENCY.OPERADOR_NAO_IDENTIFICADO);
