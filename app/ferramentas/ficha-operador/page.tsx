@@ -310,9 +310,9 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
 
     setManualLoading(true);
     try {
-      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(journey?.journeyId ?? journey?.id ?? '')}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: validation.endedAt, hourmeterEnd: validation.hourmeterEnd, reason: validation.reason }) });
-      const body = await response.json() as { error?: string };
-      if (!response.ok) { setManualError(body.error ?? 'Falha ao encerrar jornada.'); return; }
+      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(journey.journeyId ?? journey.id ?? '')}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: validation.endedAt, hourmeterEnd: validation.hourmeterEnd, reason: validation.reason, fleetCode: ficha.fleetCode, startedAtForCorrection: journey.startedAtForCorrection, correctionKey: selectedCorrectionJourneyKey, operatorName: journey.operatorName, operatorRegistration: journey.operatorRegistration }) });
+      const body = await response.json() as { error?: string; message?: string };
+      if (!response.ok) { setManualError(body.message ?? body.error ?? 'Falha ao encerrar jornada.'); return; }
       await onManualSave();
     } catch {
       setManualError('Não foi possível registrar a correção. Tente novamente.');
