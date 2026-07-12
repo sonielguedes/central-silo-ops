@@ -106,6 +106,10 @@ interface FichaDiaria {
   isDayOpen: boolean;
 }
 
+function hasSheetInconsistency(sheet: Pick<FichaDiaria, 'inconsistencies'>): boolean {
+  return Array.isArray(sheet.inconsistencies) && sheet.inconsistencies.length > 0;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const NI = '—';
 const fv = (v: unknown): string => (v === null || v === undefined || v === '') ? NI : String(v);
@@ -837,7 +841,7 @@ function FichaOperadorPage() {
       total:          fichas.length,
       emAndamento:    count('EM_ANDAMENTO'),
       pendentes:      count('PENDENTE'),
-      inconsistentes: count('INCONSISTENTE'),
+      inconsistentes: fichas.filter(hasSheetInconsistency).length,
       validados:      count('VALIDADO'),
       exportados:     count('EXPORTADO'),
       atualizados:    count('ATUALIZADO'),
