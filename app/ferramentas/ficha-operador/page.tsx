@@ -232,6 +232,16 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
   const [manualError, setManualError] = useState('');
   const [manualLoading, setManualLoading] = useState(false);
 
+  useEffect(() => {
+    const blockEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    document.addEventListener('keydown', blockEscape, true);
+    return () => document.removeEventListener('keydown', blockEscape, true);
+  }, []);
+
   const handleManualEnd = async () => {
     const journey = openJourneys.find(item => item.journeyId === manualJourneyId);
     const endedAt = new Date(manualEndedAt);
@@ -286,13 +296,13 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-[540px] max-w-full max-h-[92vh] overflow-y-auto bg-[#050812] border border-[#2d3647] rounded-2xl shadow-2xl">
+      <div aria-hidden="true" className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div role="dialog" aria-modal="true" aria-labelledby="correction-modal-title" className="relative z-10 w-[540px] max-w-full max-h-[92vh] overflow-y-auto bg-[#050812] border border-[#2d3647] rounded-2xl shadow-2xl">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#2d3647] flex items-center gap-3 sticky top-0 bg-[#050812] z-10">
           <Edit3 size={15} className="text-amber-400 shrink-0" />
           <div className="flex-1">
-            <h3 className="text-sm font-black text-white uppercase tracking-tight">Correção Manual</h3>
+            <h3 id="correction-modal-title" className="text-sm font-black text-white uppercase tracking-tight">Correção Manual</h3>
             <p className="text-[9px] text-muted-foreground">Frota {ficha.fleetCode} · {ficha.date}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg border border-[#2d3647] text-muted-foreground hover:text-white hover:bg-[#1a1f3a] transition-all">
