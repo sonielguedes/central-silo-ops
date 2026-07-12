@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
-import { parseCorrectionDateTime } from '@/lib/operational/journey-correction-validator';
+import { parseCorrectionDateTime, validateManualJourneyEnd } from '@/lib/operational/journey-correction-validator';
 
 // ── Types (local mirror of API response) ─────────────────────────────────────
 type FichaStatus =
@@ -255,23 +255,27 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
 
   const handleManualEnd = async () => {
     const journey = openJourneys.find(item => item.journeyId === manualJourneyId);
-    const endedAt = parseCorrectionDateTime(manualEndedAt);
-    const startedAt = parseCorrectionDateTime(journey?.startedAt);
-    if (!endedAt || !startedAt || endedAt.getTime() < startedAt.getTime()) {
-      setManualError('Informe uma data/hora de encerramento válida.'); return;
+    const validation = validateManualJourneyEnd({
+      startedAt: journey?.startedAt,
+      endedAt: manualEndedAt,
+      hourmeterStart: journey?.hourmeterStart ?? ficha.hourmeterStart,
+      hourmeterEnd,
+      reason,
+    });
+    if (!validation.ok) {
+      setReasonError(!reason.trim());
+      setManualError(validation.error);
+      return;
     }
-    if (!reason.trim()) { setReasonError(true); setManualError('Informe o motivo da correção.'); return; }
-    const normalizedHourmeter = hourmeterEnd.trim().replace(',', '.');
-    const finalHourmeter = normalizedHourmeter ? Number(normalizedHourmeter) : null;
-    const initialHourmeter = journey?.hourmeterStart ?? ficha.hourmeterStart;
-    if (finalHourmeter !== null && (!Number.isFinite(finalHourmeter) || finalHourmeter < 0 || (initialHourmeter !== null && finalHourmeter < initialHourmeter))) {
-      setManualError('Informe um horímetro final válido, igual ou maior que o inicial.'); return;
-    }
-    setManualError(''); setReasonError(false);
-    if (!window.confirm('Confirma o encerramento administrativo desta jornada? Esta ação será registrada no histórico de correções.')) return;
+
+    setManualError('');
+    setReasonError(false);
+    const confirmed = window.confirm('Confirma o encerramento administrativo desta jornada? Esta ação será registrada no histórico de correções.');
+    if (!confirmed) return;
+
     setManualLoading(true);
     try {
-      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(manualJourneyId)}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: endedAt.toISOString(), hourmeterEnd: finalHourmeter, reason: reason.trim() }) });
+      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(manualJourneyId)}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: validation.endedAt, hourmeterEnd: validation.hourmeterEnd, reason: validation.reason }) });
       const body = await response.json() as { error?: string };
       if (!response.ok) { setManualError(body.error ?? 'Falha ao encerrar jornada.'); return; }
       await onManualSave();
