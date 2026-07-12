@@ -222,6 +222,22 @@ function CorrectionModal({ ficha, onClose, onSave, loading }: {
   const [hourmeterEnd,          setHourmeterEnd]           = useState(ficha.hourmeterEnd   != null  ? String(ficha.hourmeterEnd)    : '');
   const [reason,                setReason]                 = useState('');
   const [reasonError,           setReasonError]            = useState(false);
+  const openJourneys = ficha.journeys.filter(j => !j.hasJourneyEnd);
+  const [manualJourneyId, setManualJourneyId] = useState(openJourneys[0]?.journeyId ?? '');
+  const [manualEndedAt, setManualEndedAt] = useState('');
+  const [manualError, setManualError] = useState('');
+  const [manualLoading, setManualLoading] = useState(false);
+
+  const handleManualEnd = async () => {
+    if (!manualJourneyId || !manualEndedAt || !reason.trim()) { setManualError('Jornada, encerramento e motivo são obrigatórios.'); return; }
+    setManualLoading(true); setManualError('');
+    try {
+      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(manualJourneyId)}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: new Date(manualEndedAt).toISOString(), hourmeterEnd: hourmeterEnd.trim() || null, reason }) });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) { setManualError(body.error ?? 'Falha ao encerrar jornada.'); return; }
+      onClose(); window.location.reload();
+    } finally { setManualLoading(false); }
+  };
 
   const handleSave = async () => {
     if (!reason.trim()) { setReasonError(true); return; }
@@ -275,6 +291,14 @@ function CorrectionModal({ ficha, onClose, onSave, loading }: {
               </span>
             </div>
           )}
+          {openJourneys.length > 0 && <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-3">
+            <p className="text-[9px] font-black uppercase text-amber-300">Encerrar jornada manualmente</p>
+            <p className="text-[9px] text-amber-200/80">Esta ação não apaga eventos. Ela registra uma correção administrativa auditável.</p>
+            <select value={manualJourneyId} onChange={e => setManualJourneyId(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white">{openJourneys.map(j => <option key={j.journeyId ?? j.startedAt} value={j.journeyId ?? ''}>{j.journeyId ?? 'Sem ID'} · {j.startedAt ? fmtDT(j.startedAt) : 'Início ausente'}</option>)}</select>
+            <input type="datetime-local" value={manualEndedAt} onChange={e => setManualEndedAt(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white" />
+            {manualError && <p className="text-[9px] text-red-400">{manualError}</p>}
+            <button onClick={handleManualEnd} disabled={manualLoading} className="rounded-xl bg-amber-700 px-4 py-2 text-[9px] font-black uppercase text-white disabled:opacity-40">{manualLoading ? 'Encerrando...' : 'Encerrar jornada'}</button>
+          </div>}
 
           {/* Identification */}
           <div>

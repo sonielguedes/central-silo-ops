@@ -61,7 +61,8 @@ function normalized(event: JourneyTimeEvent) {
     ?? text(data.type) ?? text(data.eventType) ?? '';
   const at = instant(event.occurredAt) ?? instant(event.timestamp) ?? instant(event.createdAt) ?? instant(event.receivedAt)
     ?? instant(payload.occurredAt) ?? instant(payload.timestamp) ?? instant(data.occurredAt) ?? instant(data.timestamp);
-  return { type: type.toUpperCase(), at, values: { ...data, ...payload } };
+  const normalizedType = type.toUpperCase();
+  return { type: normalizedType === 'MANUAL_JOURNEY_END' ? 'JOURNEY_END' : normalizedType, at, values: { ...data, ...payload } };
 }
 
 export function formatStopReason(code: unknown, name: unknown): string {

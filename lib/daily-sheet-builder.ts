@@ -394,7 +394,7 @@ function buildJourneySummary(tenantId: string, group: JourneyGroup): JourneySumm
   const { journeyId, events } = group;
 
   const startEv = events.find(e => e.type === 'JOURNEY_START');
-  const endEv   = [...events].reverse().find(e => e.type === 'JOURNEY_END');
+  const endEv   = [...events].reverse().find(e => e.type === 'JOURNEY_END' || e.type === 'MANUAL_JOURNEY_END');
 
   const sp = startEv?.payload as Record<string, unknown> | undefined;
   const ep = endEv?.payload   as Record<string, unknown> | undefined;
@@ -419,7 +419,7 @@ function buildJourneySummary(tenantId: string, group: JourneyGroup): JourneySumm
 
     const h = toNumber(p.hourmeterStart ?? p.hourmeter);
     if (h !== null && hStart === null) hStart = h;
-    if (ev.type === 'JOURNEY_END') {
+    if (ev.type === 'JOURNEY_END' || ev.type === 'MANUAL_JOURNEY_END') {
       const he = toNumber(p.hourmeterEnd ?? p.hourmeter);
       if (he !== null) hEnd = he;
     }

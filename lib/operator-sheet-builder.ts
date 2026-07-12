@@ -148,7 +148,8 @@ function eventPayload(event: { payload: unknown }): Record<string, unknown> {
 
 function eventType(event: { type: string; payload: unknown }): string {
   const payload = eventPayload(event);
-  return (cleanText(event.type) ?? cleanText(payload.eventType) ?? cleanText(payload.type) ?? '').toUpperCase();
+  const type = (cleanText(event.type) ?? cleanText(payload.eventType) ?? cleanText(payload.type) ?? '').toUpperCase();
+  return type === 'MANUAL_JOURNEY_END' ? 'JOURNEY_END' : type;
 }
 
 function eventTime(event?: { timestamp: string; receivedAt: string; payload: unknown }): string | null {
