@@ -984,7 +984,7 @@ function FichaOperadorPage() {
         }
         return;
       }
-      if (!res.ok) { showToast('Erro ao validar ficha', 'error'); return; }
+      if (!res.ok) { showToast(String(data.message ?? data.error ?? 'Erro ao validar ficha'), 'error'); return; }
       showToast('Ficha validada com sucesso!', 'success');
       await fetchFichas(date);
       if (detail?.id === ficha.id) setDetail(null);

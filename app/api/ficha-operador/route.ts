@@ -149,31 +149,30 @@ export async function PATCH(req: NextRequest) {
     const actor     = String(body.actor ?? body.user ?? 'sistema');
 
     if (!fleetCode || !date) {
-      return NextResponse.json({ error: 'fleetCode and date are required' }, { status: 400 });
+      return NextResponse.json({ ok: false, code: 'INVALID_VALIDATION_PAYLOAD', message: 'Frota e data são obrigatórias.', error: 'Frota e data são obrigatórias.' }, { status: 400 });
     }
 
     // ── validate ──────────────────────────────────────────────────────────────
     if (action === 'validate') {
       const sheetResult = buildDailySheet({ tenantId, fleetCode, date });
-      if (sheetResult.ok) {
-        const overlay = FichaStore.get(tenantId, fleetCode, date);
-        const merged = mergeFichaWithOverlay(sheetResult.ficha, tenantId);
-        const blockingList = getEffectiveBlockingInconsistencies(merged.inconsistencies, overlay);
+      if (!sheetResult.ok) {
+        return NextResponse.json({ ok: false, code: 'SHEET_NOT_FOUND', message: sheetResult.error, error: sheetResult.error }, { status: sheetResult.status });
+      }
+      const currentOverlay = FichaStore.get(tenantId, fleetCode, date);
+      const merged = mergeFichaWithOverlay(sheetResult.ficha, tenantId);
+      const blockingList = getEffectiveBlockingInconsistencies(merged.inconsistencies, currentOverlay);
 
-        if (merged.finalStatus === 'EM_ANDAMENTO') {
-          return NextResponse.json({
-            ok:      false,
-            warning: 'EM_ANDAMENTO',
-            message: 'Jornada em andamento. Aguarde a conclusão para validar a ficha.',
-          }, { status: 422 });
-        }
-        if (blockingList.length > 0) {
-          return NextResponse.json({
-            ok:         false,
-            error:      'Ficha possui inconsistências críticas. Corrija antes de validar.',
-            blocking:   blockingList,
-          }, { status: 422 });
-        }
+      if (merged.finalStatus === 'EM_ANDAMENTO') {
+        return NextResponse.json({
+          ok: false, code: 'JOURNEY_IN_PROGRESS', warning: 'EM_ANDAMENTO',
+          message: 'Jornada em andamento. Aguarde a conclusão para validar a ficha.',
+        }, { status: 422 });
+      }
+      if (blockingList.length > 0) {
+        const message = 'Ficha possui inconsistências críticas. Corrija antes de validar.';
+        return NextResponse.json({
+          ok: false, code: 'BLOCKING_INCONSISTENCIES', message, error: message, blocking: blockingList,
+        }, { status: 422 });
       }
       const overlay = FichaStore.validate(tenantId, fleetCode, date, actor);
       return NextResponse.json({ ok: true, overlay });
