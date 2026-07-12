@@ -233,6 +233,16 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
   const [manualError, setManualError] = useState('');
   const [manualLoading, setManualLoading] = useState(false);
 
+  const handleManualEndedAtChange = (value: string) => {
+    setManualEndedAt(value);
+    if (parseCorrectionDateTime(value)) setManualError('');
+  };
+
+  const handleManualJourneyChange = (journeyId: string) => {
+    setManualJourneyId(journeyId);
+    setManualError('');
+  };
+
   useEffect(() => {
     const blockEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -257,8 +267,9 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
     if (finalHourmeter !== null && (!Number.isFinite(finalHourmeter) || finalHourmeter < 0 || (initialHourmeter !== null && finalHourmeter < initialHourmeter))) {
       setManualError('Informe um horímetro final válido, igual ou maior que o inicial.'); return;
     }
+    setManualError(''); setReasonError(false);
     if (!window.confirm('Confirma o encerramento administrativo desta jornada? Esta ação será registrada no histórico de correções.')) return;
-    setManualLoading(true); setManualError('');
+    setManualLoading(true);
     try {
       const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(manualJourneyId)}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: endedAt.toISOString(), hourmeterEnd: finalHourmeter, reason: reason.trim() }) });
       const body = await response.json() as { error?: string };
@@ -325,8 +336,8 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
           {openJourneys.length > 0 && <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-3">
             <p className="text-[9px] font-black uppercase text-amber-300">Encerrar jornada manualmente</p>
             <p className="text-[9px] text-amber-200/80">Esta ação não apaga eventos. Ela registra uma correção administrativa auditável e encerra a jornada selecionada.</p>
-            <select value={manualJourneyId} onChange={e => setManualJourneyId(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white">{openJourneys.map(j => <option key={j.journeyId ?? j.startedAt} value={j.journeyId ?? ''}>{j.journeyId ?? 'Sem ID'} · {j.startedAt ? fmtDT(j.startedAt) : 'Início ausente'}</option>)}</select>
-            <input aria-label="Data e hora de encerramento" type="datetime-local" required value={manualEndedAt} onChange={e => { setManualEndedAt(e.target.value); setManualError(''); }} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white" />
+            <select value={manualJourneyId} onChange={e => handleManualJourneyChange(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white">{openJourneys.map(j => <option key={j.journeyId ?? j.startedAt} value={j.journeyId ?? ''}>{j.journeyId ?? 'Sem ID'} · {j.startedAt ? fmtDT(j.startedAt) : 'Início ausente'}</option>)}</select>
+            <input aria-label="Data e hora de encerramento" type="datetime-local" required value={manualEndedAt} onChange={e => handleManualEndedAtChange(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white" />
             {manualError && <p className="text-[9px] text-red-400">{manualError}</p>}
           </div>}
 
@@ -370,7 +381,7 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
             <textarea
               value={reason}
               onChange={e => { setReason(e.target.value); if (e.target.value.trim()) setReasonError(false); }}
-              placeholder="Descreva o motivo da correção (obrigatório)..."
+              placeholder="Ex: Jornada de teste esquecida aberta durante homologação."
               rows={3}
               className={cn(
                 'w-full bg-[#1a1f3a] border rounded-xl px-3 py-2 text-[10px] text-white placeholder:text-muted-foreground/30 focus:outline-none resize-none',
