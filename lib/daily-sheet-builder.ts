@@ -43,6 +43,7 @@ export const DAILY_INCONSISTENCY = {
 // ── Types ────────────────────────────────────────────────────────────────────
 export interface JourneySummary {
   journeyId: string | null;
+  startedAtForCorrection: string | null;
   startedAt: string | null;
   endedAt: string | null;
   hourmeterStart: number | null;
@@ -429,6 +430,7 @@ function buildJourneySummary(tenantId: string, group: JourneyGroup): JourneySumm
   if (hEnd   === null && ep) hEnd   = toNumber(ep.hourmeterEnd   ?? ep.hourmeter);
 
   const total = calculateTotalHours(hStart, hEnd);
+  const startedAtForCorrection = startEv?.timestamp ?? events[0]?.timestamp ?? null;
 
   const stopSeen = new Set<string>();
   const stops: StopDiaria[] = [];
@@ -454,7 +456,8 @@ function buildJourneySummary(tenantId: string, group: JourneyGroup): JourneySumm
 
   return {
     journeyId,
-    startedAt: startEv?.timestamp ?? events[0]?.timestamp ?? null,
+    startedAtForCorrection,
+    startedAt: startedAtForCorrection,
     endedAt:   endEv?.timestamp   ?? null,
     hourmeterStart: hStart,
     hourmeterEnd:   hEnd,
@@ -545,6 +548,7 @@ function buildFichaFromLiveState(
   // Journey de live-state (se tiver journeyId)
   const liveJourney: JourneySummary | null = machine.journeyId ? {
     journeyId: machine.journeyId,
+    startedAtForCorrection: machine.statusStartedAt ?? machine.updatedAt ?? null,
     startedAt: machine.statusStartedAt ?? machine.updatedAt ?? null,
     endedAt: machine.endedAt ?? null,
     hourmeterStart: machine.hourmeterStart ?? null,

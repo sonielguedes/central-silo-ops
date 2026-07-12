@@ -32,6 +32,7 @@ interface CorrectionEntry {
 interface JourneySummary {
   id?: string | null;
   journeyId: string | null;
+  startedAtForCorrection: string | null;
   startedAt: string | null;
   startedAtIso?: string | null;
   startTime?: string | null;

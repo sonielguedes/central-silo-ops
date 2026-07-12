@@ -70,6 +70,7 @@ export interface FichaOperador {
   minutesUndetermined: number | null;
   /** Percentual de tempo indeterminado */
   pctUndetermined: number | null;
+  startedAtForCorrection: string | null;
   startedAt: string | null;
   endedAt: string | null;
   stops: StopEntry[];
@@ -454,6 +455,7 @@ export function buildOperatorSheet(params: {
     minutesStopped: minutesStopped > 0 ? minutesStopped : null,
     minutesUndetermined,
     pctUndetermined,
+    startedAtForCorrection: startedAt,
     startedAt,
     endedAt,
     stops: enrichedStops,

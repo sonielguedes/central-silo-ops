@@ -27,10 +27,12 @@ export function parseCorrectionDateTime(value: unknown): Date | null {
 export function getJourneyStartDateTimeForCorrection(journey: unknown): Date | null {
   if (!journey || typeof journey !== 'object') return parseCorrectionDateTime(journey);
   const source = journey as Record<string, unknown>;
-  for (const value of [source.startedAtIso, source.startedAt, source.startTime, source.startedAtDisplay]) {
+  for (const value of [source.startedAtForCorrection, source.startedAtIso, source.startedAt, source.startTime]) {
     const parsed = parseCorrectionDateTime(value);
     if (parsed) return parsed;
   }
+  const display = parseCorrectionDateTime(source.startedAtDisplay);
+  if (display) return display;
   if (typeof source.label !== 'string') return null;
   const match = source.label.match(/(\d{2}\/\d{2}\/\d{2,4})[ ,T]+(\d{2}:\d{2})\s*$/);
   return match ? parseCorrectionDateTime(`${match[1]} ${match[2]}`) : null;
