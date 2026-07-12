@@ -1,6 +1,7 @@
 import { ServerStorage } from '@/lib/server-storage';
 import type { EquipmentLiveState, TrailPoint } from '@/lib/types';
 import { createLogger } from '@/lib/logger';
+import { calculateJourneyTimes } from '@/lib/operational/journey-time-calculator';
 
 // ── Inconsistency codes ───────────────────────────────────────────────────────
 export const INCONSISTENCY = {
@@ -122,20 +123,7 @@ function ageMinutes(ts: string | null | undefined): number | null {
   return Math.round((Date.now() - d) / 60000);
 }
 
-function minutesBetween(a: string | null | undefined, b: string | null | undefined): number | null {
-  if (!a || !b) return null;
-  const ta = new Date(a).getTime();
-  const tb = new Date(b).getTime();
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return null;
-  return Math.round((tb - ta) / 60000);
-}
-
 // ── Stop duration helper ──────────────────────────────────────────────────────
-function stopDurationMinutes(s: { startedAt: string; endedAt?: string }): number | undefined {
-  const m = minutesBetween(s.startedAt, s.endedAt ?? null);
-  return m != null && m >= 0 ? m : undefined;
-}
-
 function sameLabel(a: string | null | undefined, b: string | null | undefined): boolean {
   const left = String(a ?? '').trim().toUpperCase();
   const right = String(b ?? '').trim().toUpperCase();
@@ -240,46 +228,19 @@ export function buildOperatorSheet(params: {
   const endEvent = journeyEvents
     .filter(e => eventType(e) === 'JOURNEY_END').at(-1);
 
-  const startedAt = startEvent ? eventTime(startEvent) : null;
-  const endedAt   = endEvent ? eventTime(endEvent) : null;
+  const timeCalculation = calculateJourneyTimes({ events: journeyEvents });
+  const startedAt = timeCalculation.journeyStartedAt ?? null;
+  const endedAt = timeCalculation.journeyEndedAt ?? null;
 
-  // ── Stops ────────────────────────────────────────────────────────────────────
-  const stops: StopEntry[] = [];
-  const stopSeen = new Set<string>();
-  const stopEvents = journeyEvents
-    .filter(e => ['STOP_STARTED', 'STOP_REASON', 'PARADA', 'STOP_ENDED'].includes(eventType(e)));
-
-  for (const ev of stopEvents) {
-    const p = eventPayload(ev);
-    const type = eventType(ev);
-    const occurredAt = eventTime(ev);
-    if (!occurredAt) continue;
-    if (type === 'STOP_ENDED') {
-      const open = [...stops].reverse().find(stop => !stop.endedAt);
-      if (open) open.endedAt = cleanText(p.stopEndedAt) ?? cleanText(p.endedAt) ?? occurredAt;
-      continue;
-    }
-    const { code, description: desc } = stopFields(p);
-    const stopStartAt = cleanText(p.stopStartedAt) ?? occurredAt;
-    if (!code && !desc) continue;
-    const dedupKey = code + '|' + stopStartAt.slice(0, 16);
-    if (stopSeen.has(dedupKey)) continue;
-    stopSeen.add(dedupKey);
-    stops.push({ code, description: desc, startedAt: stopStartAt });
-  }
-
-  const machineStopEndedAt =
-    String((machine as unknown as Record<string, unknown>)['stopEndedAt'] ?? '').trim() || null;
-  if (machineStopEndedAt) {
-    const lastOpenStop = [...stops].reverse().find(stop => !stop.endedAt);
-    if (lastOpenStop) lastOpenStop.endedAt = machineStopEndedAt;
-  }
-
-  // Compute stop durations
-  const enrichedStops: StopEntry[] = stops.map(s => ({
-    ...s,
-    durationMinutes: stopDurationMinutes(s),
-  }));
+  const enrichedStops: StopEntry[] = timeCalculation.stops
+    .filter(stop => stop.status !== 'ORFA')
+    .map(stop => ({
+      code: stop.reasonCode ?? '',
+      description: stop.reasonName ?? '',
+      startedAt: stop.startedAt,
+      endedAt: stop.endedAt ?? undefined,
+      durationMinutes: Math.round(stop.durationMs / 60_000),
+    }));
 
   const eventLabels: Record<string, string> = {
     JOURNEY_START: 'Jornada iniciada',
@@ -386,52 +347,11 @@ export function buildOperatorSheet(params: {
 
   // ── Time calculations ─────────────────────────────────────────────────────────
   // Duration: from startedAt to endedAt (or now if active)
-  const endTs = endedAt ?? new Date().toISOString();
-  const durationMinutes = minutesBetween(startedAt, endTs);
+  const durationMinutes = Math.round(timeCalculation.totalMs / 60_000);
 
-  // minutesStopped: sum of stop durations for closed stops
-  let minutesStopped = 0;
-  for (const s of enrichedStops) {
-    const stopEnd = s.endedAt ?? (journeyEnded ? endedAt : null);
-    const dur = minutesBetween(s.startedAt, stopEnd ?? null);
-    if (dur != null && dur > 0) minutesStopped += dur;
-  }
-  const minutesStoppedFinal = minutesStopped > 0 ? minutesStopped : null;
-
-  // minutesOperating: derived from trail GPS points (best effort)
-  // Strategy: count minutes covered by GPS activity (1 GPS point per period = that period is "operating")
-  // For now use: durationMinutes - minutesStopped - indeterminado
-  // We know indeterminado = duration - operating - stopped
-  // Simplest correct derivation: operating = duration - stopped (if no GPS gaps)
-  // Mark time with no GPS as indeterminado
-  let minutesUndetermined: number | null = null;
-  let minutesOperating: number | null    = null;
-
-  if (durationMinutes !== null) {
-    // Undetermined = gaps where no GPS was received (> GPS_RECENTE_LIMITE_MIN minutes between points)
-    let undetermined = 0;
-    if (sortedTrail.length >= 2) {
-      for (let i = 1; i < sortedTrail.length; i++) {
-        const gap = minutesBetween(sortedTrail[i - 1].timestamp, sortedTrail[i].timestamp);
-        if (gap !== null && gap > GPS_RECENTE_LIMITE_MIN) {
-          undetermined += gap;
-        }
-      }
-    } else if (sortedTrail.length === 0) {
-      // No GPS at all — entire journey is undetermined
-      undetermined = durationMinutes;
-    } else {
-      // Single GPS point — time before first and after last is undetermined
-      const beforeFirst = minutesBetween(startedAt, sortedTrail[0]?.timestamp ?? null);
-      const afterLast   = minutesBetween(sortedTrail[sortedTrail.length - 1]?.timestamp ?? null, endTs);
-      undetermined = (beforeFirst ?? 0) + (afterLast ?? 0);
-    }
-    minutesUndetermined = Math.min(undetermined, durationMinutes);
-    const known = durationMinutes - minutesUndetermined;
-    const stopped = Math.min(minutesStopped, known);
-    minutesOperating = Math.max(0, known - stopped);
-    minutesStoppedFinal === null; // suppress unused-var; use stopped below
-  }
+  const minutesStopped = Math.round(timeCalculation.stoppedMs / 60_000);
+  const minutesUndetermined = Math.round(timeCalculation.indeterminateMs / 60_000);
+  const minutesOperating = Math.round(timeCalculation.workingMs / 60_000);
 
   const pctUndetermined =
     durationMinutes !== null && durationMinutes > 0 && minutesUndetermined !== null
@@ -439,7 +359,7 @@ export function buildOperatorSheet(params: {
       : null;
 
   // ── Inconsistency engine ──────────────────────────────────────────────────────
-  const inconsistencies: string[] = [];
+  const inconsistencies: string[] = [...timeCalculation.warnings];
 
   if (!operatorRegistration && !operatorName)
     inconsistencies.push(INCONSISTENCY.OPERADOR_NAO_IDENTIFICADO);
