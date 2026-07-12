@@ -43,6 +43,19 @@ export function resolveJourneyStartForCorrection(journey: unknown): Date | null 
 
 export const getJourneyStartDateTimeForCorrection = resolveJourneyStartForCorrection;
 
+export function normalizeJourneyForCorrection<T extends object>(journey: T): T & { startedAtForCorrection: string | null } {
+  const startedAt = resolveJourneyStartForCorrection(journey);
+  return { ...journey, startedAtForCorrection: startedAt?.toISOString() ?? null };
+}
+
+export function buildCorrectionJourneyKey(journey: object, index: number): string {
+  const source = journey as Record<string, unknown>;
+  const identity = source.journeyId ?? source.id;
+  if (typeof identity === 'string' && identity.trim()) return identity;
+  const start = source.startedAtForCorrection ?? source.startedAt ?? source.label;
+  return `no-id:${typeof start === 'string' && start.trim() ? start : index}`;
+}
+
 export function validateManualJourneyEnd(input: ManualJourneyEndInput): { ok: true; endedAt: string; hourmeterEnd: number | null; reason: string } | { ok: false; error: string } {
   const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
   if (!reason) return { ok: false, error: 'Informe o motivo da correção.' };

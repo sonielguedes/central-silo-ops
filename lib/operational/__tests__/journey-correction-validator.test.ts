@@ -1,4 +1,4 @@
-import { getJourneyStartDateTimeForCorrection, parseCorrectionDateTime, resolveJourneyStartForCorrection, validateManualJourneyEnd as validate } from '../journey-correction-validator';
+import { buildCorrectionJourneyKey, getJourneyStartDateTimeForCorrection, normalizeJourneyForCorrection, parseCorrectionDateTime, resolveJourneyStartForCorrection, validateManualJourneyEnd as validate } from '../journey-correction-validator';
 const base = { startedAt: '2026-07-12T10:00:00Z', endedAt: '2026-07-12T12:00:00Z', reason: 'Correção administrativa', hourmeterStart: 10 };
 test('rejeita motivo ausente', () => expect(validate({ ...base, reason: '' }).ok).toBe(false));
 test('rejeita fim anterior', () => expect(validate({ ...base, endedAt: '2026-07-12T09:00:00Z' }).ok).toBe(false));
@@ -29,3 +29,6 @@ test('rejeita encerramento anterior ao início técnico', () => expect(validate(
 test('resolve label com UUID e texto após a data', () => expect(resolveJourneyStartForCorrection({ label: 'd9a8acce-774f-4124-81b8-a4002a2b9786 - 12/07/26, 04:04 · aberta' })).not.toBeNull());
 test('resolve label com ano completo', () => expect(resolveJourneyStartForCorrection({ label: 'd9a8acce-774f - 12/07/2026 04:04' })).not.toBeNull());
 test('resolve campo display por regex', () => expect(resolveJourneyStartForCorrection({ display: 'Sem ID - 12/07/26, 03:31' })).not.toBeNull());
+test('normalização preserva objeto completo com ID', () => expect(normalizeJourneyForCorrection({ journeyId: 'uuid-com-hifens', label: 'uuid-com-hifens - 12/07/26, 04:04', hourmeterStart: 10 })).toMatchObject({ journeyId: 'uuid-com-hifens', hourmeterStart: 10, startedAtForCorrection: expect.any(String) }));
+test('normalização preserva objeto completo sem ID', () => expect(normalizeJourneyForCorrection({ journeyId: null, label: 'Sem ID - 12/07/26, 03:31', hourmeterStart: 10 })).toMatchObject({ journeyId: null, hourmeterStart: 10, startedAtForCorrection: expect.any(String) }));
+test('chave seleciona jornada correta', () => { const journeys = [{ journeyId: 'a', startedAtForCorrection: '2026-07-12T04:04:00Z' }, { journeyId: 'b', startedAtForCorrection: '2026-07-12T05:04:00Z' }]; const key = buildCorrectionJourneyKey(journeys[1], 1); expect(journeys.find((journey, index) => buildCorrectionJourneyKey(journey, index) === key)).toBe(journeys[1]); });
