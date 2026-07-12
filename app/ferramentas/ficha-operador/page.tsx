@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { withAuth } from '@/components/shared/with-auth';
+import { parseCorrectionDateTime } from '@/lib/operational/journey-correction-validator';
 
 // ── Types (local mirror of API response) ─────────────────────────────────────
 type FichaStatus =
@@ -244,14 +245,15 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
 
   const handleManualEnd = async () => {
     const journey = openJourneys.find(item => item.journeyId === manualJourneyId);
-    const endedAt = new Date(manualEndedAt);
-    if (!manualEndedAt || Number.isNaN(endedAt.getTime()) || !journey?.startedAt || endedAt.getTime() < new Date(journey.startedAt).getTime()) {
+    const endedAt = parseCorrectionDateTime(manualEndedAt);
+    const startedAt = parseCorrectionDateTime(journey?.startedAt);
+    if (!endedAt || !startedAt || endedAt.getTime() < startedAt.getTime()) {
       setManualError('Informe uma data/hora de encerramento válida.'); return;
     }
     if (!reason.trim()) { setReasonError(true); setManualError('Informe o motivo da correção.'); return; }
     const normalizedHourmeter = hourmeterEnd.trim().replace(',', '.');
     const finalHourmeter = normalizedHourmeter ? Number(normalizedHourmeter) : null;
-    const initialHourmeter = journey.hourmeterStart ?? ficha.hourmeterStart;
+    const initialHourmeter = journey?.hourmeterStart ?? ficha.hourmeterStart;
     if (finalHourmeter !== null && (!Number.isFinite(finalHourmeter) || finalHourmeter < 0 || (initialHourmeter !== null && finalHourmeter < initialHourmeter))) {
       setManualError('Informe um horímetro final válido, igual ou maior que o inicial.'); return;
     }
