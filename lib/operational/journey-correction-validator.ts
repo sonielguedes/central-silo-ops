@@ -24,10 +24,22 @@ export function parseCorrectionDateTime(value: unknown): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+export function getJourneyStartDateTimeForCorrection(journey: unknown): Date | null {
+  if (!journey || typeof journey !== 'object') return parseCorrectionDateTime(journey);
+  const source = journey as Record<string, unknown>;
+  for (const value of [source.startedAtIso, source.startedAt, source.startTime, source.startedAtDisplay]) {
+    const parsed = parseCorrectionDateTime(value);
+    if (parsed) return parsed;
+  }
+  if (typeof source.label !== 'string') return null;
+  const match = source.label.match(/(\d{2}\/\d{2}\/\d{2,4})[ ,T]+(\d{2}:\d{2})\s*$/);
+  return match ? parseCorrectionDateTime(`${match[1]} ${match[2]}`) : null;
+}
+
 export function validateManualJourneyEnd(input: ManualJourneyEndInput): { ok: true; endedAt: string; hourmeterEnd: number | null; reason: string } | { ok: false; error: string } {
   const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
   if (!reason) return { ok: false, error: 'Informe o motivo da correção.' };
-  const startedAt = parseCorrectionDateTime(input.startedAt);
+  const startedAt = getJourneyStartDateTimeForCorrection(input.startedAt);
   const endedAt = parseCorrectionDateTime(input.endedAt);
   if (!endedAt) return { ok: false, error: 'Informe uma data/hora de encerramento válida.' };
   if (!startedAt) return { ok: false, error: 'Início da jornada inválido.' };

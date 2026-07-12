@@ -30,8 +30,12 @@ interface CorrectionEntry {
 }
 
 interface JourneySummary {
+  id?: string | null;
   journeyId: string | null;
   startedAt: string | null;
+  startedAtIso?: string | null;
+  startTime?: string | null;
+  startedAtDisplay?: string | null;
   endedAt: string | null;
   hourmeterStart: number | null;
   hourmeterEnd: number | null;
@@ -225,7 +229,7 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
   const [reason,                setReason]                 = useState('');
   const [reasonError,           setReasonError]            = useState(false);
   const openJourneys = ficha.journeys.filter(j => !j.hasJourneyEnd);
-  const [manualJourneyId, setManualJourneyId] = useState(openJourneys[0]?.journeyId ?? '');
+  const [selectedManualJourney, setSelectedManualJourney] = useState<JourneySummary | null>(openJourneys[0] ?? null);
   const [manualEndedAt, setManualEndedAt] = useState(() => {
     const now = new Date();
     return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
@@ -238,8 +242,8 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
     if (parseCorrectionDateTime(value)) setManualError('');
   };
 
-  const handleManualJourneyChange = (journeyId: string) => {
-    setManualJourneyId(journeyId);
+  const handleManualJourneyChange = (journeyIndex: string) => {
+    setSelectedManualJourney(openJourneys[Number(journeyIndex)] ?? null);
     setManualError('');
   };
 
@@ -254,9 +258,9 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
   }, []);
 
   const handleManualEnd = async () => {
-    const journey = openJourneys.find(item => item.journeyId === manualJourneyId);
+    const journey = selectedManualJourney;
     const validation = validateManualJourneyEnd({
-      startedAt: journey?.startedAt,
+      startedAt: journey,
       endedAt: manualEndedAt,
       hourmeterStart: journey?.hourmeterStart ?? ficha.hourmeterStart,
       hourmeterEnd,
@@ -275,7 +279,7 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
 
     setManualLoading(true);
     try {
-      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(manualJourneyId)}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: validation.endedAt, hourmeterEnd: validation.hourmeterEnd, reason: validation.reason }) });
+      const response = await fetch(`/api/operacional/fichas/${encodeURIComponent(journey?.journeyId ?? journey?.id ?? '')}/correcoes/encerrar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endedAt: validation.endedAt, hourmeterEnd: validation.hourmeterEnd, reason: validation.reason }) });
       const body = await response.json() as { error?: string };
       if (!response.ok) { setManualError(body.error ?? 'Falha ao encerrar jornada.'); return; }
       await onManualSave();
@@ -340,7 +344,7 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
           {openJourneys.length > 0 && <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-3">
             <p className="text-[9px] font-black uppercase text-amber-300">Encerrar jornada manualmente</p>
             <p className="text-[9px] text-amber-200/80">Esta ação não apaga eventos. Ela registra uma correção administrativa auditável e encerra a jornada selecionada.</p>
-            <select value={manualJourneyId} onChange={e => handleManualJourneyChange(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white">{openJourneys.map(j => <option key={j.journeyId ?? j.startedAt} value={j.journeyId ?? ''}>{j.journeyId ?? 'Sem ID'} · {j.startedAt ? fmtDT(j.startedAt) : 'Início ausente'}</option>)}</select>
+            <select value={String(Math.max(0, selectedManualJourney ? openJourneys.indexOf(selectedManualJourney) : 0))} onChange={e => handleManualJourneyChange(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white">{openJourneys.map((j, index) => <option key={`${j.journeyId ?? j.id ?? 'no-id'}-${j.startedAt ?? index}`} value={String(index)}>{j.journeyId ?? j.id ?? 'Sem ID'} · {j.startedAt ? fmtDT(j.startedAt) : 'Início ausente'}</option>)}</select>
             <input aria-label="Data e hora de encerramento" type="datetime-local" required value={manualEndedAt} onChange={e => handleManualEndedAtChange(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white" />
             {manualError && <p className="text-[9px] text-red-400">{manualError}</p>}
           </div>}

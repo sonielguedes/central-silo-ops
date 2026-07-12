@@ -1,4 +1,4 @@
-import { parseCorrectionDateTime, validateManualJourneyEnd as validate } from '../journey-correction-validator';
+import { getJourneyStartDateTimeForCorrection, parseCorrectionDateTime, validateManualJourneyEnd as validate } from '../journey-correction-validator';
 const base = { startedAt: '2026-07-12T10:00:00Z', endedAt: '2026-07-12T12:00:00Z', reason: 'Correção administrativa', hourmeterStart: 10 };
 test('rejeita motivo ausente', () => expect(validate({ ...base, reason: '' }).ok).toBe(false));
 test('rejeita fim anterior', () => expect(validate({ ...base, endedAt: '2026-07-12T09:00:00Z' }).ok).toBe(false));
@@ -16,3 +16,8 @@ test.each([
 test('rejeita horário brasileiro anterior ao início', () => expect(validate({ ...base, startedAt: '12/07/2026 03:31', endedAt: '12/07/2026 02:00' }).ok).toBe(false));
 test.each(['', '31/02/2026 13:23', 'data quebrada'])('rejeita data/hora inválida %p', value => expect(parseCorrectionDateTime(value)).toBeNull());
 test('aceita horímetro 10.3 com inicial 10.0', () => expect(validate({ ...base, hourmeterStart: 10, hourmeterEnd: 10.3 }).ok).toBe(true));
+test('resolve início pelo label de jornada com ID', () => expect(validate({ ...base, startedAt: { label: 'd9a8acce-774f-4124-81b8-a4002a2b9786 - 12/07/26, 04:04' }, endedAt: '12/07/2026 17:00' }).ok).toBe(true));
+test('resolve início pelo label de jornada sem ID', () => expect(validate({ ...base, startedAt: { label: 'Sem ID - 12/07/26, 03:31' }, endedAt: '12/07/2026 17:00' }).ok).toBe(true));
+test('prioriza startedAt ISO técnico', () => expect(validate({ ...base, startedAt: { startedAt: '2026-07-12T04:04:00.000Z', label: 'inválido' }, endedAt: '12/07/2026 17:00' }).ok).toBe(true));
+test('rejeita início realmente ausente', () => expect(validate({ ...base, startedAt: {} })).toEqual({ ok: false, error: 'Início da jornada inválido.' }));
+test('helper rejeita label sem data', () => expect(getJourneyStartDateTimeForCorrection({ label: 'Sem ID - Início ausente' })).toBeNull());
