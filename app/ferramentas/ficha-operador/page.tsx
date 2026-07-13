@@ -205,9 +205,9 @@ function FormField({ label, value, onChange, type = 'text', placeholder }: {
 }) {
   return (
     <div>
-      <label className="block text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">{label}</label>
+      <label className="block text-xs md:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl px-3 py-2 text-[10px] text-white placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50" />
+        className="w-full h-12 md:h-14 bg-[#1a1f3a] border border-[#2d3647] rounded-xl px-4 text-sm md:text-base font-semibold text-white placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50" />
     </div>
   );
 }
@@ -347,43 +347,43 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 md:p-6">
       <div aria-hidden="true" className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div role="dialog" aria-modal="true" aria-labelledby="correction-modal-title" className="relative z-10 w-[540px] max-w-full max-h-[92vh] overflow-y-auto bg-[#050812] border border-[#2d3647] rounded-2xl shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="correction-modal-title" className="relative z-10 w-full max-w-[680px] max-h-[90vh] overflow-y-auto bg-[#050812] border border-[#2d3647] rounded-2xl shadow-2xl">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#2d3647] flex items-center gap-3 sticky top-0 bg-[#050812] z-10">
-          <Edit3 size={15} className="text-amber-400 shrink-0" />
+        <div className="px-4 md:px-6 py-4 border-b border-[#2d3647] flex items-center gap-3 sticky top-0 bg-[#050812] z-10">
+          <Edit3 size={20} className="text-amber-400 shrink-0" />
           <div className="flex-1">
-            <h3 id="correction-modal-title" className="text-sm font-black text-white uppercase tracking-tight">Correção Manual</h3>
-            <p className="text-[9px] text-muted-foreground">Frota {ficha.fleetCode} · {ficha.date}</p>
+            <h3 id="correction-modal-title" className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Correção Manual</h3>
+            <p className="text-sm md:text-base text-muted-foreground">Frota {ficha.fleetCode} · {ficha.date}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg border border-[#2d3647] text-muted-foreground hover:text-white hover:bg-[#1a1f3a] transition-all">
-            <X size={12} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5">
+        <div className="p-4 md:p-6 space-y-6">
           {ficha.exported && (
             <div className="flex items-start gap-2 bg-amber-950/40 border border-amber-500/30 rounded-xl px-4 py-3">
               <AlertTriangle size={12} className="text-amber-400 shrink-0 mt-0.5" />
-              <span className="text-[9px] text-amber-300 font-bold">
+              <span className="text-sm md:text-base leading-6 text-amber-200 font-bold">
                 Ficha já exportada — a correção gerará status ATUALIZADO e exigirá nova exportação.
               </span>
             </div>
           )}
           {openJourneys.length > 0 && <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-3">
-            <p className="text-[9px] font-black uppercase text-amber-300">Encerrar jornada manualmente</p>
-            <p className="text-[9px] text-amber-200/80">Esta ação não apaga eventos. Ela registra uma correção administrativa auditável e encerra a jornada selecionada.</p>
-            <select value={selectedCorrectionJourneyKey} onChange={e => handleManualJourneyChange(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white">{correctionJourneyOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}</select>
-            <input aria-label="Data e hora de encerramento" type="datetime-local" required value={manualEndedAt} onChange={e => handleManualEndedAtChange(e.target.value)} className="w-full rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-3 py-2 text-[10px] text-white" />
-            {manualError && <p className="text-[9px] text-red-400">{manualError}</p>}
+            <p className="text-base md:text-lg font-black uppercase text-amber-300">Encerrar jornada manualmente</p>
+            <p className="text-sm md:text-base leading-6 text-amber-100/90">Esta ação não apaga eventos. Ela registra uma correção administrativa auditável e encerra a jornada selecionada.</p>
+            <select value={selectedCorrectionJourneyKey} onChange={e => handleManualJourneyChange(e.target.value)} className="w-full h-12 md:h-14 rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-4 text-sm md:text-base font-semibold text-white">{correctionJourneyOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}</select>
+            <input aria-label="Data e hora de encerramento" type="datetime-local" required value={manualEndedAt} onChange={e => handleManualEndedAtChange(e.target.value)} className="w-full h-12 md:h-14 rounded-xl border border-[#2d3647] bg-[#1a1f3a] px-4 text-sm md:text-base font-semibold text-white" />
+            {manualError && <p className="text-sm text-red-400">{manualError}</p>}
           </div>}
 
           {/* Identification */}
           <div>
-            <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-3">Operador</p>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="text-sm md:text-base font-black text-primary uppercase tracking-wider mb-3">Operador</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Nome do Operador"  value={operatorName}         onChange={setOperatorName}         />
               <FormField label="Matrícula"          value={operatorRegistration}  onChange={setOperatorRegistration}  />
             </div>
@@ -391,8 +391,8 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
 
           {/* Operations */}
           <div>
-            <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-3">Operação</p>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="text-sm md:text-base font-black text-primary uppercase tracking-wider mb-3">Operação</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Código Operação"  value={operationCode}   onChange={setOperationCode}   />
               <FormField label="Nome Operação"    value={operationName}   onChange={setOperationName}   />
               <FormField label="O.S. / Ordem Serv."  value={workOrderNumber}  onChange={setWorkOrderNumber}  />
@@ -402,8 +402,8 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
 
           {/* Hourmeter */}
           <div>
-            <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-3">Horímetros</p>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="text-sm md:text-base font-black text-primary uppercase tracking-wider mb-3">Horímetros</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Horímetro Inicial" value={hourmeterStart} onChange={setHourmeterStart} type="number" placeholder="0.0" />
               <FormField label="Horímetro Final (opcional)" value={hourmeterEnd} onChange={setHourmeterEnd} placeholder="Ex: 10,5" />
             </div>
@@ -412,7 +412,7 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
           {/* Reason — mandatory */}
           <div>
             <label className={cn(
-              'block text-[8px] font-black uppercase tracking-widest mb-1.5',
+              'block text-xs md:text-sm font-bold uppercase tracking-wider mb-2',
               reasonError ? 'text-red-400' : 'text-muted-foreground',
             )}>
               Motivo da Correção *
@@ -423,22 +423,22 @@ function CorrectionModal({ ficha, onClose, onSave, onManualSave, loading }: {
               placeholder="Ex: Jornada de teste esquecida aberta durante homologação."
               rows={3}
               className={cn(
-                'w-full bg-[#1a1f3a] border rounded-xl px-3 py-2 text-[10px] text-white placeholder:text-muted-foreground/30 focus:outline-none resize-none',
+                'w-full min-h-24 bg-[#1a1f3a] border rounded-xl px-4 py-3 text-sm md:text-base leading-6 font-semibold text-white placeholder:text-muted-foreground/50 focus:outline-none resize-y',
                 reasonError ? 'border-red-500/60 focus:border-red-400' : 'border-[#2d3647] focus:border-primary/50',
               )}
             />
-            {reasonError && <p className="text-[8px] text-red-400 mt-1">Motivo é obrigatório</p>}
+            {reasonError && <p className="text-sm text-red-400 mt-1">Motivo é obrigatório</p>}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-[#2d3647] flex items-center justify-end gap-3 sticky bottom-0 bg-[#050812]">
+        <div className="px-4 md:px-6 py-4 border-t border-[#2d3647] flex items-center justify-end gap-3 sticky bottom-0 bg-[#050812]">
           <button onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-[#2d3647] text-muted-foreground hover:text-white hover:bg-[#1a1f3a] text-[9px] font-black uppercase transition-all">
+            className="h-11 md:h-12 px-6 rounded-xl border border-[#2d3647] text-muted-foreground hover:text-white hover:bg-[#1a1f3a] text-sm font-black uppercase transition-all">
             Cancelar
           </button>
           <button onClick={handleSave} disabled={loading || manualLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase hover:bg-amber-600 transition-all disabled:opacity-40">
+            className="h-11 md:h-12 flex items-center gap-2 px-6 bg-amber-700 text-white rounded-xl text-sm font-black uppercase hover:bg-amber-600 transition-all disabled:opacity-40">
             {(loading || manualLoading) ? <Loader2 size={12} className="animate-spin" /> : <Edit3 size={12} />}
             Salvar Correção
           </button>
