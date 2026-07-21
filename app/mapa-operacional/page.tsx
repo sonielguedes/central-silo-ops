@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle, CheckCircle2, ChevronDown, Clock, Filter,
   Globe, Hash, LayoutGrid, Map as MapIcon, Maximize2,
-  Menu, MoreVertical, Search, Settings2, X as CloseIcon,
+  Menu, MoreVertical, Pin, PinOff, Search, Settings2, X as CloseIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -71,6 +71,8 @@ function MapaOperacionalPage() {
   const searchParams = useSearchParams();
   const { toggle } = useSidebar();
   const [isFleetSidebarOpen, setIsFleetSidebarOpen] = React.useState(true);
+  const [isMainSidebarOpen, setIsMainSidebarOpen] = React.useState(false);
+  const [isFleetPinned, setIsFleetPinned] = React.useState(false);
   const [showFilters, setShowFilters]     = React.useState(false);
   const [allFleetData, setAllFleetData]   = React.useState<LiveMapItem[]>([]);
   const [counts, setCounts]               = React.useState<MapCounts>(EMPTY_COUNTS);
@@ -79,6 +81,46 @@ function MapaOperacionalPage() {
   const [filters, setFilters]             = React.useState<MapFilters>(EMPTY_FILTERS);
   const [trailPanelOpen, setTrailPanelOpen] = React.useState(false);
   const isTvMode = searchParams.get('modo') === 'tv' || searchParams.get('tv') === '1';
+  const fleetAutoHideRef = React.useRef<number | null>(null);
+
+  const clearFleetAutoHide = React.useCallback(() => {
+    if (fleetAutoHideRef.current) window.clearTimeout(fleetAutoHideRef.current);
+    fleetAutoHideRef.current = null;
+  }, []);
+
+  const scheduleFleetAutoHide = React.useCallback((delay = 10000) => {
+    if (!isTvMode || isFleetPinned || showFilters) return;
+    clearFleetAutoHide();
+    fleetAutoHideRef.current = window.setTimeout(() => setIsFleetSidebarOpen(false), delay);
+  }, [clearFleetAutoHide, isFleetPinned, isTvMode, showFilters]);
+
+  const openFleetPanel = React.useCallback((delay = 10000) => {
+    setIsFleetSidebarOpen(true);
+    scheduleFleetAutoHide(delay);
+  }, [scheduleFleetAutoHide]);
+
+  React.useEffect(() => {
+    if (isTvMode) {
+      setIsFleetSidebarOpen(false);
+      setIsMainSidebarOpen(false);
+      return;
+    }
+    setIsFleetSidebarOpen(true);
+    setIsFleetPinned(false);
+  }, [isTvMode]);
+
+  React.useEffect(() => {
+    if (!isTvMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setIsMainSidebarOpen(false);
+      if (!isFleetPinned) setIsFleetSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isFleetPinned, isTvMode]);
+
+  React.useEffect(() => () => clearFleetAutoHide(), [clearFleetAutoHide]);
 
   // Filtered fleet for sidebar display
   const filteredFleetData = React.useMemo(
@@ -155,18 +197,51 @@ function MapaOperacionalPage() {
   return (
     <div className="flex h-screen bg-[#050812] text-white overflow-hidden font-sans selection:bg-primary/30">
 
-      <Sidebar className="hidden lg:flex shrink-0" />
+      {!isTvMode && <Sidebar className="hidden lg:flex shrink-0" />}
+
+      {isTvMode && (
+        <>
+          <button
+            onClick={() => setIsMainSidebarOpen(true)}
+            className="absolute left-5 top-5 z-[1700] flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-[#08101f]/92 text-white shadow-2xl backdrop-blur-xl transition hover:border-primary/40 hover:bg-primary/15 hover:text-primary"
+            aria-label="Mostrar menu"
+          >
+            <Menu size={30} />
+          </button>
+          {isMainSidebarOpen && (
+            <div className="fixed inset-0 z-[2100] bg-black/45 backdrop-blur-sm" onClick={() => setIsMainSidebarOpen(false)}>
+              <div className="h-full w-[292px] shadow-[24px_0_70px_rgba(0,0,0,0.55)]" onClick={(event) => event.stopPropagation()}>
+                <Sidebar className="flex h-full shrink-0" />
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Fleet sidebar ──────────────────────────────────────────── */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 lg:static w-full bg-[#0a0e27]/96 border-r border-[#2d3647] flex flex-col z-[1500] shadow-[10px_0_40px_rgba(0,0,0,0.55)] transition-transform duration-300 lg:translate-x-0",
-        isTvMode ? "sm:w-[440px] xl:w-[460px]" : "sm:w-[392px]",
+        "fixed inset-y-0 left-0 w-full bg-[#0a0e27]/96 border-r border-[#2d3647] flex flex-col z-[1500] shadow-[10px_0_40px_rgba(0,0,0,0.55)] transition-transform duration-300",
+        !isTvMode && "lg:static lg:translate-x-0",
+        isTvMode ? "sm:w-[460px] xl:w-[480px]" : "sm:w-[392px]",
         isFleetSidebarOpen ? "translate-x-0" : "-translate-x-full lg:hidden"
-      )}>
+      )}
+        onMouseEnter={() => isTvMode && clearFleetAutoHide()}
+        onMouseMove={() => isTvMode && !isFleetPinned && scheduleFleetAutoHide(10000)}
+        onMouseLeave={() => isTvMode && scheduleFleetAutoHide(5000)}
+      >
         <button onClick={() => setIsFleetSidebarOpen(false)}
-          className="lg:hidden absolute right-4 top-6 p-2 text-muted-foreground">
+          className={cn("absolute right-4 top-6 p-2 text-muted-foreground hover:text-white", !isTvMode && "lg:hidden")}>
           <CloseIcon size={20} />
         </button>
+        {isTvMode && (
+          <button
+            onClick={() => setIsFleetPinned((value) => !value)}
+            className="absolute right-14 top-6 rounded-xl border border-white/10 bg-white/[0.04] p-2 text-muted-foreground hover:border-primary/35 hover:text-primary"
+            title={isFleetPinned ? 'Desafixar painel' : 'Fixar painel'}
+          >
+            {isFleetPinned ? <PinOff size={20} /> : <Pin size={20} />}
+          </button>
+        )}
 
         {/* Header */}
         <div className={cn("border-b border-[#2d3647] bg-gradient-to-b from-white/[0.02] to-transparent", isTvMode ? "p-7" : "p-6")}>
@@ -345,13 +420,27 @@ function MapaOperacionalPage() {
         </div>
       </aside>
 
+      {isTvMode && !isFleetSidebarOpen && (
+        <>
+          <div className="absolute left-0 top-0 z-[1350] h-full w-5" onMouseEnter={() => openFleetPanel(5000)} />
+          <button
+            onClick={() => openFleetPanel(10000)}
+            className="absolute left-5 top-1/2 z-[1600] flex h-32 w-16 -translate-y-1/2 flex-col items-center justify-center gap-2 rounded-r-2xl border border-l-0 border-primary/25 bg-[#08101f]/92 text-primary shadow-2xl backdrop-blur-xl transition hover:bg-primary/15"
+            aria-label="Mostrar frotas"
+          >
+            <LayoutGrid size={28} />
+            <span className="rotate-90 text-sm font-black uppercase tracking-[0.18em]">Frotas</span>
+          </button>
+        </>
+      )}
+
       {/* ── Map area ───────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
         <header className={cn("absolute left-4 right-4 z-[1400] rounded-2xl border border-white/8 bg-[#08101f]/88 px-4 sm:px-5 shadow-[0_22px_55px_rgba(0,0,0,0.48)] backdrop-blur-2xl", isTvMode ? "top-5 h-20" : "top-4 h-14")}>
           <div className="grid h-full grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-4">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
               <button
-                onClick={toggle}
+                onClick={() => isTvMode ? setIsMainSidebarOpen(true) : toggle()}
                 className="rounded-xl border border-white/5 bg-white/[0.03] p-2 text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-white lg:hidden"
               >
                 <Menu size={20} />
@@ -390,9 +479,10 @@ function MapaOperacionalPage() {
 
             <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
               <button
-                onClick={() => setIsFleetSidebarOpen(true)}
+                onClick={() => openFleetPanel(10000)}
                 className={cn(
-                  "lg:hidden rounded-xl border border-white/5 bg-white/[0.03] p-2 text-primary transition-colors hover:border-primary/30 hover:bg-primary/10",
+                  "rounded-xl border border-white/5 bg-white/[0.03] p-2 text-primary transition-colors hover:border-primary/30 hover:bg-primary/10",
+                  !isTvMode && "lg:hidden",
                   isFleetSidebarOpen && "hidden",
                 )}
               >

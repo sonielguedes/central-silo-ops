@@ -4,7 +4,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Activity, AlertTriangle, Clock, Maximize2, RadioTower, Satellite, Wifi, WifiOff } from 'lucide-react';
+import { Activity, AlertTriangle, Clock, LayoutGrid, Maximize2, PanelLeftClose, PanelLeftOpen, Pin, PinOff, RadioTower, Satellite, Wifi, WifiOff } from 'lucide-react';
 import { MapLegend } from '@/components/map/equipment-map-legend';
 import type { LiveMapItem, MapCounts } from '@/components/mapa/map-filters';
 import { withAuth } from '@/components/shared/with-auth';
@@ -78,8 +78,34 @@ function TvPage() {
   const [lastUpdate, setLastUpdate] = React.useState<Date | null>(null);
   const [now, setNow] = React.useState(() => new Date());
   const [error, setError] = React.useState<string | null>(null);
+  const [arePanelsOpen, setArePanelsOpen] = React.useState(false);
+  const [arePanelsPinned, setArePanelsPinned] = React.useState(false);
+  const [isLegendOpen, setIsLegendOpen] = React.useState(false);
+  const panelsAutoHideRef = React.useRef<number | null>(null);
 
   const isAdmin = userRole.includes('ADMIN') || userRole === 'GESTOR';
+
+  const clearPanelsAutoHide = React.useCallback(() => {
+    if (panelsAutoHideRef.current) window.clearTimeout(panelsAutoHideRef.current);
+    panelsAutoHideRef.current = null;
+  }, []);
+
+  const schedulePanelsAutoHide = React.useCallback((delay = 10000) => {
+    if (arePanelsPinned) return;
+    clearPanelsAutoHide();
+    panelsAutoHideRef.current = window.setTimeout(() => {
+      setArePanelsOpen(false);
+      setIsLegendOpen(false);
+    }, delay);
+  }, [arePanelsPinned, clearPanelsAutoHide]);
+
+  const openPanels = React.useCallback((delay = 10000) => {
+    setArePanelsOpen(true);
+    setIsLegendOpen(true);
+    schedulePanelsAutoHide(delay);
+  }, [schedulePanelsAutoHide]);
+
+  React.useEffect(() => () => clearPanelsAutoHide(), [clearPanelsAutoHide]);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -154,13 +180,29 @@ function TvPage() {
       {isMapOnly ? (
         <main className="relative flex-1">
           <FullMap onFleetUpdate={handleFleetUpdate} isTvMode />
-          <div className="absolute bottom-8 left-8 z-[1400]">
-            <MapLegend isTvMode items={fleet.map((m) => ({ iconType: m.iconType, iconSource: m.iconSource, iconLabel: m.iconLabel, resolvedIconType: m.resolvedIconType, status: m.status, label: m.implementName || m.equipmentModel || m.equipmentType || m.type || m.name }))} />
-          </div>
+          {!isLegendOpen && (
+            <button onClick={() => openPanels(10000)} className="absolute left-8 top-8 z-[1500] flex h-16 items-center gap-3 rounded-2xl border border-primary/25 bg-[#08101f]/92 px-5 text-lg font-black uppercase text-primary shadow-2xl backdrop-blur-xl hover:bg-primary/15">
+              <LayoutGrid size={26} /> Frotas
+            </button>
+          )}
+          {isLegendOpen && (
+            <div className="absolute bottom-8 left-8 z-[1400]" onMouseEnter={clearPanelsAutoHide} onMouseLeave={() => schedulePanelsAutoHide(5000)}>
+              <MapLegend isTvMode items={fleet.map((m) => ({ iconType: m.iconType, iconSource: m.iconSource, iconLabel: m.iconLabel, resolvedIconType: m.resolvedIconType, status: m.status, label: m.implementName || m.equipmentModel || m.equipmentType || m.type || m.name }))} />
+            </div>
+          )}
         </main>
       ) : (
-        <main className="grid flex-1 grid-cols-[320px_minmax(0,1fr)_390px] gap-5 overflow-hidden p-5">
-          <section className="grid grid-rows-6 gap-4">
+        <main className={cn("relative grid flex-1 overflow-hidden p-5 transition-[grid-template-columns] duration-300", arePanelsOpen ? "grid-cols-[320px_minmax(0,1fr)_390px] gap-5" : "grid-cols-[minmax(0,1fr)] gap-0")}>
+          {!arePanelsOpen && (
+            <button onClick={() => openPanels(10000)} className="absolute left-8 top-8 z-[1500] flex h-16 items-center gap-3 rounded-2xl border border-primary/25 bg-[#08101f]/92 px-5 text-lg font-black uppercase text-primary shadow-2xl backdrop-blur-xl hover:bg-primary/15">
+              <PanelLeftOpen size={26} /> Painéis
+            </button>
+          )}
+          <section
+            className={cn("grid grid-rows-6 gap-4 transition-transform duration-300", !arePanelsOpen && "hidden")}
+            onMouseEnter={clearPanelsAutoHide}
+            onMouseLeave={() => schedulePanelsAutoHide(5000)}
+          >
             <TvKpi label="Online" value={counts.online} tone="blue" icon={<Wifi />} />
             <TvKpi label="Operando" value={counts.operando} tone="green" icon={<Activity />} />
             <TvKpi label="Parado" value={counts.parado} tone="orange" icon={<AlertTriangle />} />
@@ -171,12 +213,24 @@ function TvPage() {
 
           <section className="relative min-w-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#08101f] shadow-[0_30px_80px_rgba(0,0,0,0.42)]">
             <FullMap onFleetUpdate={handleFleetUpdate} isTvMode />
-            <div className="absolute bottom-6 left-6 z-[1400]">
+            {arePanelsOpen && <div className="absolute right-6 top-6 z-[1500] flex gap-2">
+              <button onClick={() => setArePanelsPinned((value) => !value)} className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-[#08101f]/92 text-slate-200 shadow-2xl backdrop-blur-xl hover:border-primary/35 hover:text-primary">
+                {arePanelsPinned ? <PinOff size={22} /> : <Pin size={22} />}
+              </button>
+              <button onClick={() => setArePanelsOpen(false)} className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-[#08101f]/92 text-slate-200 shadow-2xl backdrop-blur-xl hover:border-primary/35 hover:text-primary">
+                <PanelLeftClose size={24} />
+              </button>
+            </div>}
+            {arePanelsOpen && <div className="absolute bottom-6 left-6 z-[1400]" onMouseEnter={clearPanelsAutoHide} onMouseLeave={() => schedulePanelsAutoHide(5000)}>
               <MapLegend isTvMode items={fleet.map((m) => ({ iconType: m.iconType, iconSource: m.iconSource, iconLabel: m.iconLabel, resolvedIconType: m.resolvedIconType, status: m.status, label: m.implementName || m.equipmentModel || m.equipmentType || m.type || m.name }))} />
-            </div>
+            </div>}
           </section>
 
-          <aside className="flex min-w-0 flex-col gap-5 overflow-hidden">
+          <aside
+            className={cn("flex min-w-0 flex-col gap-5 overflow-hidden transition-transform duration-300", !arePanelsOpen && "hidden")}
+            onMouseEnter={clearPanelsAutoHide}
+            onMouseLeave={() => schedulePanelsAutoHide(5000)}
+          >
             <TvPanel title="Frotas criticas" subtitle="Somente leitura">
               {criticalFleet.length === 0 ? (
                 <EmptyState text={fleet.length === 0 ? 'Nenhuma frota ativa no periodo.' : 'Sem criticidade operacional no momento.'} />
