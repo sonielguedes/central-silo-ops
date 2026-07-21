@@ -73,6 +73,8 @@ function MapaOperacionalPage() {
   const [isFleetSidebarOpen, setIsFleetSidebarOpen] = React.useState(true);
   const [isMainSidebarOpen, setIsMainSidebarOpen] = React.useState(false);
   const [isFleetPinned, setIsFleetPinned] = React.useState(false);
+  const [isLegendOpen, setIsLegendOpen] = React.useState(false);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [showFilters, setShowFilters]     = React.useState(false);
   const [allFleetData, setAllFleetData]   = React.useState<LiveMapItem[]>([]);
   const [counts, setCounts]               = React.useState<MapCounts>(EMPTY_COUNTS);
@@ -121,6 +123,21 @@ function MapaOperacionalPage() {
   }, [isFleetPinned, isTvMode]);
 
   React.useEffect(() => () => clearFleetAutoHide(), [clearFleetAutoHide]);
+
+  React.useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = React.useCallback(() => {
+    if (typeof document === 'undefined') return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => null);
+      return;
+    }
+    document.documentElement.requestFullscreen?.().catch(() => null);
+  }, []);
 
   // Filtered fleet for sidebar display
   const filteredFleetData = React.useMemo(
@@ -436,7 +453,7 @@ function MapaOperacionalPage() {
 
       {/* ── Map area ───────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        <header className={cn("absolute left-4 right-4 z-[1400] rounded-2xl border border-white/8 bg-[#08101f]/88 px-4 sm:px-5 shadow-[0_22px_55px_rgba(0,0,0,0.48)] backdrop-blur-2xl", isTvMode ? "top-5 h-20" : "top-4 h-14")}>
+        <header className={cn("absolute right-4 z-[1400] rounded-2xl border border-white/8 bg-[#08101f]/88 px-4 sm:px-5 shadow-[0_22px_55px_rgba(0,0,0,0.48)] backdrop-blur-2xl", isTvMode ? "left-24 top-5 h-20" : "left-4 top-4 h-14")}>
           <div className="grid h-full grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-4">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
               <button
@@ -452,10 +469,10 @@ function MapaOperacionalPage() {
                 </div>
                 <div className="min-w-0">
                   <span className={cn("block truncate font-black uppercase tracking-[0.22em] text-white", isTvMode ? "text-base" : "text-[10px]")}>
-                    Vis?o Geoespacial
+                    VISÃO GEOSPACIAL
                   </span>
                   <span className={cn("block truncate font-bold uppercase tracking-[0.18em] text-muted-foreground", isTvMode ? "text-xs" : "text-[8px]")}>
-                    Central operacional ao vivo
+                    CENTRAL OPERACIONAL AO VIVO
                   </span>
                 </div>
               </div>
@@ -489,14 +506,27 @@ function MapaOperacionalPage() {
                 <LayoutGrid size={18} />
               </button>
               <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1.5 sm:flex">
+                {isTvMode && (
+                  <>
+                    <button onClick={() => openFleetPanel(10000)} className="h-12 rounded-xl border border-primary/20 bg-primary/10 px-3 text-sm font-black uppercase tracking-[0.12em] text-primary hover:bg-primary/20">
+                      Frotas
+                    </button>
+                    <button onClick={() => setIsLegendOpen((value) => !value)} className="h-12 rounded-xl border border-primary/20 bg-primary/10 px-3 text-sm font-black uppercase tracking-[0.12em] text-primary hover:bg-primary/20">
+                      Legenda
+                    </button>
+                    <button onClick={toggleFullscreen} className="h-12 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-black uppercase tracking-[0.12em] text-slate-200 hover:border-primary/30 hover:text-primary">
+                      {isFullscreen ? 'Sair tela cheia' : 'Tela cheia'}
+                    </button>
+                  </>
+                )}
                 <button onClick={toggleTvMode} className={cn("rounded-xl border border-primary/20 bg-primary/10 px-3 font-black uppercase tracking-[0.12em] text-primary hover:bg-primary/20", isTvMode ? "h-12 text-sm" : "h-8 text-[10px]")}>
                   {isTvMode ? 'Sair TV' : 'Modo TV'}
                 </button>
-                <MapControl icon={<Maximize2 size={isTvMode ? 20 : 15} />} isTvMode={isTvMode} />
+                {!isTvMode && <MapControl icon={<Maximize2 size={15} />} isTvMode={false} />}
                 <MapControl icon={<MapIcon size={isTvMode ? 20 : 15} />} isTvMode={isTvMode} />
                 <MapControl icon={<Settings2 size={isTvMode ? 20 : 15} />} isTvMode={isTvMode} />
               </div>
-              <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-2.5 py-1.5">
+              <div className={cn("min-w-0 items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-2.5 py-1.5", isTvMode ? "hidden xl:flex" : "flex")}>
                 <div className="hidden min-w-0 text-right sm:block">
                   <p className="truncate text-[11px] font-black italic uppercase tracking-tighter text-white leading-none">Joao Oliveira</p>
                   <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-primary">Admin</p>
@@ -521,8 +551,8 @@ function MapaOperacionalPage() {
           </div>
         )}
 
-        {allFleetData.length > 0 && !trailPanelOpen && (
-          <div className="absolute bottom-8 left-4 z-[1400]">
+        {allFleetData.length > 0 && !trailPanelOpen && (!isTvMode || isLegendOpen) && (
+          <div className={cn("absolute z-[1400]", isTvMode ? "bottom-6 right-6" : "bottom-8 left-4")}>
             <MapLegend isTvMode={isTvMode} items={filteredFleetData.map(m => ({
               iconType: m.iconType,
               iconSource: m.iconSource,

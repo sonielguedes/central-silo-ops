@@ -81,6 +81,7 @@ function TvPage() {
   const [arePanelsOpen, setArePanelsOpen] = React.useState(false);
   const [arePanelsPinned, setArePanelsPinned] = React.useState(false);
   const [isLegendOpen, setIsLegendOpen] = React.useState(false);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
   const panelsAutoHideRef = React.useRef<number | null>(null);
 
   const isAdmin = userRole.includes('ADMIN') || userRole === 'GESTOR';
@@ -106,6 +107,22 @@ function TvPage() {
   }, [schedulePanelsAutoHide]);
 
   React.useEffect(() => () => clearPanelsAutoHide(), [clearPanelsAutoHide]);
+
+  React.useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (!arePanelsPinned) setArePanelsOpen(false);
+      setIsLegendOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [arePanelsPinned]);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -147,6 +164,11 @@ function TvPage() {
   const footer = `${fleet.length} frotas monitoradas • ${counts.online} online • ${counts.offline} offline • ${counts.staleHeartbeat} sem heartbeat`;
 
   const requestFullscreen = React.useCallback(() => {
+    if (typeof document === 'undefined') return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => null);
+      return;
+    }
     document.documentElement.requestFullscreen?.().catch(() => null);
   }, []);
 
@@ -167,7 +189,7 @@ function TvPage() {
             <span className={cn("text-sm font-bold uppercase", error ? "text-orange-300" : "text-slate-400")}>{error || formatAgo(lastUpdate, now)}</span>
           </div>
           <button onClick={requestFullscreen} className="flex h-[60px] items-center gap-3 rounded-2xl border border-primary/25 bg-primary/10 px-5 text-base font-black uppercase text-primary hover:bg-primary/20">
-            <Maximize2 size={22} /> Tela cheia
+            <Maximize2 size={22} /> {isFullscreen ? 'Sair tela cheia' : 'Tela cheia'}
           </button>
           {isAdmin && (
             <Link href="/mapa-operacional" className="flex h-[60px] items-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-base font-black uppercase text-slate-200 hover:bg-white/[0.08]">
