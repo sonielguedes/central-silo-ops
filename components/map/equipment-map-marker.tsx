@@ -56,6 +56,9 @@ export const EquipmentMapMarker = React.memo(({
   const alert = alertTheme(alertLevel);
   const iconSize = Math.round(pinSize * 0.56);
   const imageSize = Math.round(pinSize * 0.7);
+  const labelFontSize = Math.max(9, Math.round(pinSize * 0.18));
+  const labelMaxWidth = Math.round(pinSize * 1.45);
+  const alertSize = Math.max(16, Math.round(pinSize * 0.31));
   const headingDeg = normalizeHeading(heading);
   const coreSize = Math.round(pinSize * 0.9);
   const fleetLabel = String(fleetCode || '—').toUpperCase();
@@ -172,8 +175,8 @@ export const EquipmentMapMarker = React.memo(({
               position: 'absolute',
               top: '2px',
               right: '2px',
-              minWidth: '16px',
-              height: '16px',
+              minWidth: `${alertSize}px`,
+              height: `${alertSize}px`,
               padding: '0 4px',
               borderRadius: '999px',
               display: 'flex',
@@ -181,7 +184,7 @@ export const EquipmentMapMarker = React.memo(({
               justifyContent: 'center',
               background: alert.bg,
               color: '#fff',
-              fontSize: '10px',
+              fontSize: `${Math.max(10, Math.round(pinSize * 0.18))}px`,
               fontWeight: 900,
               border: '1px solid rgba(255,255,255,0.25)',
               boxShadow: '0 4px 10px rgba(0,0,0,0.35)',
@@ -195,9 +198,9 @@ export const EquipmentMapMarker = React.memo(({
       <div
         style={{
           marginTop: '-2px',
-          minWidth: '44px',
-          maxWidth: '72px',
-          padding: '2px 8px 3px',
+          minWidth: `${Math.round(pinSize * 0.85)}px`,
+          maxWidth: `${labelMaxWidth}px`,
+          padding: pinSize >= 64 ? '4px 12px 5px' : '2px 8px 3px',
           borderRadius: '999px',
           border: `1px solid ${theme.ring}55`,
           background: 'rgba(8,13,30,0.94)',
@@ -208,7 +211,7 @@ export const EquipmentMapMarker = React.memo(({
         <div
           style={{
             color: '#fff',
-            fontSize: '9px',
+            fontSize: `${labelFontSize}px`,
             fontWeight: 900,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',

@@ -551,11 +551,13 @@ export default function FullMapEnterprise({
   onTrailOpenChange,
   selectedId,
   filters,
+  isTvMode = false,
 }: {
   onFleetUpdate?: (data: { fleet: LiveMapItem[]; counts: MapCounts }) => void;
   onTrailOpenChange?: (open: boolean) => void;
   selectedId?: string | null;
   filters?: MapFilters;
+  isTvMode?: boolean;
 }) {
   const [allFleet, setAllFleet]     = useState<LiveMapItem[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -761,6 +763,7 @@ export default function FullMapEnterprise({
                 heading: typeof heading === 'number' ? heading : undefined,
                 alertLevel: alertLevel ?? undefined,
                 selected: selectedId === machine.id,
+                pinSize: isTvMode ? 68 : undefined,
               })}
               zIndexOffset={selectedId === machine.id ? 1000 : 0}
               eventHandlers={{

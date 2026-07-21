@@ -6,6 +6,7 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle, CheckCircle2, ChevronDown, Clock, Filter,
   Globe, Hash, LayoutGrid, Map as MapIcon, Maximize2,
@@ -66,6 +67,8 @@ const FullMap = dynamic(
 /* ── Main page ─────────────────────────────────────────────────────────── */
 
 function MapaOperacionalPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { toggle } = useSidebar();
   const [isFleetSidebarOpen, setIsFleetSidebarOpen] = React.useState(true);
   const [showFilters, setShowFilters]     = React.useState(false);
@@ -75,6 +78,7 @@ function MapaOperacionalPage() {
   const [noGpsCode, setNoGpsCode]         = React.useState<string | null>(null);
   const [filters, setFilters]             = React.useState<MapFilters>(EMPTY_FILTERS);
   const [trailPanelOpen, setTrailPanelOpen] = React.useState(false);
+  const isTvMode = searchParams.get('modo') === 'tv' || searchParams.get('tv') === '1';
 
   // Filtered fleet for sidebar display
   const filteredFleetData = React.useMemo(
@@ -126,6 +130,19 @@ function MapaOperacionalPage() {
     setShowFilters(false);
   }, []);
 
+  const toggleTvMode = React.useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (isTvMode) {
+      next.delete('modo');
+      next.delete('tv');
+    } else {
+      next.set('modo', 'tv');
+      next.delete('tv');
+    }
+    const query = next.toString();
+    router.push(query ? `/mapa-operacional?${query}` : '/mapa-operacional');
+  }, [isTvMode, router, searchParams]);
+
   const kpis = [
     { label: 'Online',           value: String(counts.online),         color: 'text-blue-500'    },
     { label: 'Operando',         value: String(counts.operando),       color: 'text-emerald-500' },
@@ -142,7 +159,8 @@ function MapaOperacionalPage() {
 
       {/* ── Fleet sidebar ──────────────────────────────────────────── */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 lg:static w-full sm:w-[392px] bg-[#0a0e27]/96 border-r border-[#2d3647] flex flex-col z-[1500] shadow-[10px_0_40px_rgba(0,0,0,0.55)] transition-transform duration-300 lg:translate-x-0",
+        "fixed inset-y-0 left-0 lg:static w-full bg-[#0a0e27]/96 border-r border-[#2d3647] flex flex-col z-[1500] shadow-[10px_0_40px_rgba(0,0,0,0.55)] transition-transform duration-300 lg:translate-x-0",
+        isTvMode ? "sm:w-[440px] xl:w-[460px]" : "sm:w-[392px]",
         isFleetSidebarOpen ? "translate-x-0" : "-translate-x-full lg:hidden"
       )}>
         <button onClick={() => setIsFleetSidebarOpen(false)}
@@ -151,47 +169,48 @@ function MapaOperacionalPage() {
         </button>
 
         {/* Header */}
-        <div className="p-6 border-b border-[#2d3647] bg-gradient-to-b from-white/[0.02] to-transparent">
+        <div className={cn("border-b border-[#2d3647] bg-gradient-to-b from-white/[0.02] to-transparent", isTvMode ? "p-7" : "p-6")}>
           <div className="flex items-center justify-between mb-1">
-            <h1 className="text-lg font-black tracking-tighter">
+            <h1 className={cn("font-black tracking-tighter", isTvMode ? "text-2xl" : "text-lg")}>
               SILO <span className="text-primary italic">OPS</span> <span className="font-normal opacity-40">Central</span>
             </h1>
             <Settings2 size={18} className="text-muted-foreground hover:text-white cursor-pointer transition-colors" />
           </div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Monitoramento de Frota</p>
+          <p className={cn("text-muted-foreground uppercase tracking-widest font-bold", isTvMode ? "text-sm" : "text-[10px]")}>Monitoramento de Frota</p>
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-2 p-4 bg-[#050812]/65">
+        <div className={cn("grid grid-cols-3 bg-[#050812]/65", isTvMode ? "gap-3 p-5" : "gap-2 p-4")}>
           {kpis.map((kpi) => (
             <div key={kpi.label}
-              className="bg-[#1a1f3a]/30 border border-[#2d3647] p-3 rounded-xl flex flex-col items-center group hover:border-primary/30 transition-all cursor-pointer">
-              <span className="text-[9px] text-muted-foreground uppercase font-black tracking-tighter mb-1 group-hover:text-primary transition-colors">{kpi.label}</span>
-              <span className={cn("text-2xl font-black italic tracking-tighter leading-none", kpi.color)}>{kpi.value}</span>
+              className={cn("bg-[#1a1f3a]/30 border border-[#2d3647] rounded-xl flex flex-col items-center justify-center group hover:border-primary/30 transition-all cursor-pointer", isTvMode ? "min-h-24 p-4" : "p-3")}>
+              <span className={cn("text-muted-foreground uppercase font-black tracking-tighter mb-1 group-hover:text-primary transition-colors", isTvMode ? "text-[13px]" : "text-[9px]")}>{kpi.label}</span>
+              <span className={cn("font-black italic tracking-tighter leading-none", isTvMode ? "text-4xl" : "text-2xl", kpi.color)}>{kpi.value}</span>
             </div>
           ))}
         </div>
 
         {/* Search + filter toggle */}
-        <div className="p-4 space-y-3">
+        <div className={cn("space-y-3", isTvMode ? "p-5" : "p-4")}>
           <div className="relative group">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Search size={isTvMode ? 22 : 16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input type="text"
               value={filters.search}
               onChange={handleSearchChange}
               placeholder="Pesquise por frota, operador, operacao..."
-              className="w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl py-3 pl-11 pr-4 text-xs focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40 text-white font-medium shadow-inner" />
+              className={cn("w-full bg-[#1a1f3a] border border-[#2d3647] rounded-xl pl-11 pr-4 focus:outline-none focus:border-primary/50 transition-all placeholder:text-muted-foreground/40 text-white font-medium shadow-inner", isTvMode ? "py-4 text-base" : "py-3 text-xs")} />
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2.5 border rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg",
+                "flex-1 flex items-center justify-center gap-2 border rounded-xl font-black uppercase tracking-widest transition-all shadow-lg",
+                isTvMode ? "py-4 text-sm" : "py-2.5 text-[11px]",
                 showFilters
                   ? "bg-primary/10 border-primary/40 text-primary"
                   : "bg-[#1a1f3a] border-[#2d3647] hover:bg-[#252d4a] hover:border-primary/30"
               )}>
-              <Filter size={14} />
+              <Filter size={isTvMode ? 18 : 14} />
               Filtros
               {activeFilterCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 bg-primary/20 rounded-full text-[9px] font-black text-primary">{activeFilterCount}</span>
@@ -201,7 +220,7 @@ function MapaOperacionalPage() {
             {activeFilterCount > 0 && (
               <button
                 onClick={clearFilters}
-                className="px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-[11px] font-black uppercase text-red-400 hover:bg-red-500/20 transition-all">
+                className={cn("px-4 bg-red-500/10 border border-red-500/30 rounded-xl font-black uppercase text-red-400 hover:bg-red-500/20 transition-all", isTvMode ? "py-4 text-sm" : "py-2.5 text-[11px]")}>
                 Limpar
               </button>
             )}
@@ -273,10 +292,10 @@ function MapaOperacionalPage() {
         )}
 
         {/* ── Fleet list ─────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-6 space-y-3">
+        <div className={cn("flex-1 overflow-y-auto custom-scrollbar pb-6", isTvMode ? "px-5 space-y-4" : "px-4 space-y-3")}>
           <div className="flex items-center justify-between py-2 sticky top-0 bg-[#0a0e27] z-10 mb-1">
-            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Frota Ativa</h3>
-            <span className="text-[10px] text-primary font-black uppercase">
+            <h3 className={cn("font-black text-muted-foreground uppercase tracking-[0.2em]", isTvMode ? "text-sm" : "text-[10px]")}>Frota Ativa</h3>
+            <span className={cn("text-primary font-black uppercase", isTvMode ? "text-sm" : "text-[10px]")}>
               {filteredFleetData.length === allFleetData.length
                 ? allFleetData.length + ' UNIDADES'
                 : filteredFleetData.length + ' / ' + allFleetData.length + ' UNIDADES'}
@@ -289,6 +308,7 @@ function MapaOperacionalPage() {
                 key={machine.id}
                 machine={machine}
                 isSelected={selectedId === machine.id}
+                isTvMode={isTvMode}
                 onSelect={handleMachineSelect}
               />
             ))
@@ -327,7 +347,7 @@ function MapaOperacionalPage() {
 
       {/* ── Map area ───────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        <header className="absolute top-4 left-4 right-4 z-[1400] h-14 rounded-2xl border border-white/8 bg-[#08101f]/88 px-4 sm:px-5 shadow-[0_22px_55px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+        <header className={cn("absolute left-4 right-4 z-[1400] rounded-2xl border border-white/8 bg-[#08101f]/88 px-4 sm:px-5 shadow-[0_22px_55px_rgba(0,0,0,0.48)] backdrop-blur-2xl", isTvMode ? "top-5 h-20" : "top-4 h-14")}>
           <div className="grid h-full grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)] items-center gap-4">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
               <button
@@ -339,13 +359,13 @@ function MapaOperacionalPage() {
 
               <div className="hidden min-w-0 items-center gap-3 sm:flex">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                  <Globe size={16} />
+                  <Globe size={isTvMode ? 24 : 16} />
                 </div>
                 <div className="min-w-0">
-                  <span className="block truncate text-[10px] font-black uppercase tracking-[0.22em] text-white">
+                  <span className={cn("block truncate font-black uppercase tracking-[0.22em] text-white", isTvMode ? "text-base" : "text-[10px]")}>
                     Vis?o Geoespacial
                   </span>
-                  <span className="block truncate text-[8px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  <span className={cn("block truncate font-bold uppercase tracking-[0.18em] text-muted-foreground", isTvMode ? "text-xs" : "text-[8px]")}>
                     Central operacional ao vivo
                   </span>
                 </div>
@@ -354,15 +374,15 @@ function MapaOperacionalPage() {
 
             <div className="hidden min-w-0 items-center justify-center gap-3 md:flex">
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Data</span>
-                <span className="text-[11px] font-black uppercase tracking-tight text-white">
+                <span className={cn("font-bold uppercase tracking-[0.22em] text-muted-foreground", isTvMode ? "text-sm" : "text-[9px]")}>Data</span>
+                <span className={cn("font-black uppercase tracking-tight text-white", isTvMode ? "text-lg" : "text-[11px]")}>
                   {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </span>
               </div>
               <div className="h-8 w-px bg-white/8" />
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Hora</span>
-                <span className="text-[18px] font-black italic tracking-tighter leading-none text-white">
+                <span className={cn("font-bold uppercase tracking-[0.22em] text-muted-foreground", isTvMode ? "text-sm" : "text-[9px]")}>Hora</span>
+                <span className={cn("font-black italic tracking-tighter leading-none text-white", isTvMode ? "text-[28px]" : "text-[18px]")}>
                   {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
               </div>
@@ -379,9 +399,12 @@ function MapaOperacionalPage() {
                 <LayoutGrid size={18} />
               </button>
               <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1.5 sm:flex">
-                <MapControl icon={<Maximize2 size={15} />} />
-                <MapControl icon={<MapIcon size={15} />} />
-                <MapControl icon={<Settings2 size={15} />} />
+                <button onClick={toggleTvMode} className={cn("rounded-xl border border-primary/20 bg-primary/10 px-3 font-black uppercase tracking-[0.12em] text-primary hover:bg-primary/20", isTvMode ? "h-12 text-sm" : "h-8 text-[10px]")}>
+                  {isTvMode ? 'Sair TV' : 'Modo TV'}
+                </button>
+                <MapControl icon={<Maximize2 size={isTvMode ? 20 : 15} />} isTvMode={isTvMode} />
+                <MapControl icon={<MapIcon size={isTvMode ? 20 : 15} />} isTvMode={isTvMode} />
+                <MapControl icon={<Settings2 size={isTvMode ? 20 : 15} />} isTvMode={isTvMode} />
               </div>
               <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-2.5 py-1.5">
                 <div className="hidden min-w-0 text-right sm:block">
@@ -396,7 +419,7 @@ function MapaOperacionalPage() {
           </div>
         </header>
 
-        <FullMap onFleetUpdate={handleFleetUpdate} onTrailOpenChange={setTrailPanelOpen} selectedId={selectedId} filters={filters} />
+        <FullMap onFleetUpdate={handleFleetUpdate} onTrailOpenChange={setTrailPanelOpen} selectedId={selectedId} filters={filters} isTvMode={isTvMode} />
 
         {noGpsCode && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1450] flex items-center gap-2 bg-[#1a0f08] border border-orange-500/40 text-orange-300 px-4 py-2.5 rounded-xl shadow-2xl text-[11px] font-bold uppercase tracking-wide">
@@ -410,7 +433,7 @@ function MapaOperacionalPage() {
 
         {allFleetData.length > 0 && !trailPanelOpen && (
           <div className="absolute bottom-8 left-4 z-[1400]">
-            <MapLegend items={filteredFleetData.map(m => ({
+            <MapLegend isTvMode={isTvMode} items={filteredFleetData.map(m => ({
               iconType: m.iconType,
               iconSource: m.iconSource,
               iconLabel: m.iconLabel,
@@ -428,12 +451,12 @@ function MapaOperacionalPage() {
 
         <div className={cn(
           "absolute right-4 flex flex-col gap-2 z-[1400] transition-all duration-300",
-          trailPanelOpen ? "top-24" : "bottom-8",
+          trailPanelOpen ? (isTvMode ? "top-32" : "top-24") : "bottom-8",
         )}>
-          <div className="bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] rounded-xl p-1.5 flex flex-col gap-1.5 shadow-2xl">
-            <button className="w-10 h-7 rounded-lg bg-primary text-[#0a0e27] flex items-center justify-center font-black text-[9px] shadow-md shadow-primary/20 hover:scale-105 transition-transform">SAT</button>
-            <button className="w-10 h-7 rounded-lg bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black text-[9px] border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase">Op</button>
-            <button className="w-10 h-7 rounded-lg bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black text-[9px] border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase">Tal</button>
+          <div className={cn("bg-[#0a0e27]/90 backdrop-blur-xl border border-[#2d3647] rounded-xl flex flex-col shadow-2xl", isTvMode ? "p-2.5 gap-2.5" : "p-1.5 gap-1.5")}>
+            <button className={cn("rounded-lg bg-primary text-[#0a0e27] flex items-center justify-center font-black shadow-md shadow-primary/20 hover:scale-105 transition-transform", isTvMode ? "h-16 w-16 text-sm" : "w-10 h-7 text-[9px]")}>SAT</button>
+            <button className={cn("rounded-lg bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase", isTvMode ? "h-16 w-16 text-sm" : "w-10 h-7 text-[9px]")}>Op</button>
+            <button className={cn("rounded-lg bg-[#1a1f3a] text-white/40 flex items-center justify-center font-black border border-white/5 hover:text-white hover:bg-primary/20 transition-all uppercase", isTvMode ? "h-16 w-16 text-sm" : "w-10 h-7 text-[9px]")}>Tal</button>
           </div>
         </div>
       </main>
@@ -467,7 +490,7 @@ function FilterToggle({ label, active, onClick }: { label: string; active: boole
   );
 }
 
-function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapItem; isSelected: boolean; onSelect: (machine: LiveMapItem) => void }) {
+function EquipmentMapCard({ machine, isSelected, isTvMode, onSelect }: { machine: LiveMapItem; isSelected: boolean; isTvMode: boolean; onSelect: (machine: LiveMapItem) => void }) {
   // Campos separados: status operacional (badge principal) e status de comunicação (secundário)
   type ExtMachine = LiveMapItem & { operationalStatus?: string; communicationStatus?: string; isOnline?: boolean };
   const ext = machine as ExtMachine;
@@ -484,53 +507,54 @@ function EquipmentMapCard({ machine, isSelected, onSelect }: { machine: LiveMapI
   return (
     <button type="button" onClick={() => onSelect(machine)}
       className={cn(
-        "group w-full relative flex items-center gap-4 p-4 border rounded-2xl transition-all cursor-pointer shadow-lg overflow-hidden text-left",
+        "group w-full relative flex items-center border rounded-2xl transition-all cursor-pointer shadow-lg overflow-hidden text-left",
+        isTvMode ? "min-h-[118px] gap-5 p-5" : "gap-4 p-4",
         isSelected ? "bg-primary/10 border-primary/70 shadow-[0_0_0_1px_rgba(34,197,94,0.25),0_0_24px_rgba(34,197,94,0.12)] ring-1 ring-primary/30" : "bg-[#1a1f3a]/30 border-[#2d3647] hover:border-primary/50 hover:bg-[#1a1f3a]/50"
       )}>
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 opacity-80 transition-all group-hover:w-2", status.tailwind, isSelected && "w-2")} />
-      <div className={cn("p-2.5 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-110", status.tailwind.replace('bg-', 'bg-').replace('500', '500/10'), status.text.replace('text-', 'border-').replace('500', '500/20'))}>
-              <EquipmentIcon type={machine.iconType} size={20} />
+      <div className={cn("rounded-xl border flex items-center justify-center transition-transform group-hover:scale-110", isTvMode ? "p-4" : "p-2.5", status.tailwind.replace('bg-', 'bg-').replace('500', '500/10'), status.text.replace('text-', 'border-').replace('500', '500/20'))}>
+              <EquipmentIcon type={machine.iconType} size={isTvMode ? 34 : 20} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <span className={cn("text-sm font-black italic tracking-tighter leading-none transition-colors", isSelected ? "text-primary" : "text-white group-hover:text-primary")}>{machine.code}</span>
+            <span className={cn("font-black italic tracking-tighter leading-none transition-colors", isTvMode ? "text-xl" : "text-sm", isSelected ? "text-primary" : "text-white group-hover:text-primary")}>{machine.code}</span>
             <div className="h-3 w-[1px] bg-white/10" />
-            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">
+            <span className={cn("text-muted-foreground uppercase font-black tracking-widest", isTvMode ? "text-sm" : "text-[9px]")}>
               {formatLiveValue(machine.implementName || machine.equipmentModel || machine.equipmentType || machine.type || machine.name)}
             </span>
           </div>
-          <span className="text-[8px] text-muted-foreground font-bold uppercase">{formatLiveTime(machine.lastHeartbeatAt || machine.lastGpsAt)}</span>
+          <span className={cn("text-muted-foreground font-bold uppercase", isTvMode ? "text-xs" : "text-[8px]")}>{formatLiveTime(machine.lastHeartbeatAt || machine.lastGpsAt)}</span>
         </div>
-        <p className="text-[10px] text-white/60 font-bold uppercase truncate mb-1 tracking-tight">{machine.displayOperation}</p>
-        <div className="flex items-center gap-3">
+        <p className={cn("text-white/60 font-bold uppercase truncate mb-1 tracking-tight", isTvMode ? "text-base" : "text-[10px]")}>{machine.displayOperation}</p>
+        <div className={cn("flex items-center", isTvMode ? "gap-4" : "gap-3")}>
           {/* Status operacional — badge PRINCIPAL */}
           <div className="flex items-center gap-1">
-            <div className={cn("w-1.5 h-1.5 rounded-full", status.tailwind)} />
-            <span className={cn("text-[9px] font-black uppercase tracking-tighter", status.text)}>{status.label}</span>
+            <div className={cn(isTvMode ? "h-2.5 w-2.5" : "w-1.5 h-1.5", "rounded-full", status.tailwind)} />
+            <span className={cn("font-black uppercase tracking-tighter", isTvMode ? "text-sm" : "text-[9px]", status.text)}>{status.label}</span>
           </div>
           {/* Status de comunicação — SECUNDÁRIO */}
-          <span className={cn("text-[8px] font-bold uppercase tracking-tighter",
+          <span className={cn("font-bold uppercase tracking-tighter", isTvMode ? "text-xs" : "text-[8px]",
             isOnline ? "text-blue-400/60" : "text-gray-500"
           )}>
             {isOnline ? 'Online' : 'Offline'}
           </span>
-          {!hasGps && (<div className="flex items-center gap-1 text-[9px] text-orange-400 font-bold"><AlertTriangle size={9} /><span>Sem GPS</span></div>)}
-          {hasGps && (<div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold"><Clock size={10} /><span>{machine.hourmeterCurrent != null
+          {!hasGps && (<div className={cn("flex items-center gap-1 text-orange-400 font-bold", isTvMode ? "text-xs" : "text-[9px]")}><AlertTriangle size={isTvMode ? 13 : 9} /><span>Sem GPS</span></div>)}
+          {hasGps && (<div className={cn("flex items-center gap-1 text-muted-foreground font-bold", isTvMode ? "text-xs" : "text-[9px]")}><Clock size={isTvMode ? 14 : 10} /><span>{machine.hourmeterCurrent != null
                 ? (Number(machine.hourmeterCurrent).toFixed(1).replace('.', ',') + ' h')
                 : NOT_INFORMED}</span></div>)}
-          {machine.hourmeterInconsistent && (<div className="flex items-center gap-1 text-[9px] text-red-400 font-bold"><AlertTriangle size={9} /><span>Incons.</span></div>)}
-          {isSelected && (<div className="ml-auto flex items-center gap-1 text-[9px] text-primary font-bold"><Hash size={9} /><span>Selecionado</span></div>)}
+          {machine.hourmeterInconsistent && (<div className={cn("flex items-center gap-1 text-red-400 font-bold", isTvMode ? "text-xs" : "text-[9px]")}><AlertTriangle size={isTvMode ? 13 : 9} /><span>Incons.</span></div>)}
+          {isSelected && (<div className={cn("ml-auto flex items-center gap-1 text-primary font-bold", isTvMode ? "text-xs" : "text-[9px]")}><Hash size={isTvMode ? 13 : 9} /><span>Selecionado</span></div>)}
         </div>
       </div>
-      <div className="p-1.5 text-muted-foreground"><MoreVertical size={16} /></div>
+      <div className="p-1.5 text-muted-foreground"><MoreVertical size={isTvMode ? 22 : 16} /></div>
     </button>
   );
 }
 
-function MapControl({ icon }: { icon: React.ReactNode }) {
+function MapControl({ icon, isTvMode = false }: { icon: React.ReactNode; isTvMode?: boolean }) {
   return (
-    <button className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-[#0a0e27]/70 text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-primary/20">
+    <button className={cn("flex items-center justify-center rounded-xl border border-white/5 bg-[#0a0e27]/70 text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-primary/20", isTvMode ? "h-12 w-12" : "h-8 w-8")}>
       {icon}
     </button>
   );
