@@ -1,4 +1,9 @@
-import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
+import {
+  getFallbackEquipmentIconSrc,
+  isKnownEquipmentIconSrc,
+  resolveEquipmentIcon,
+  resolveSafeEquipmentIconSrc,
+} from '@/lib/equipment-icon-resolver';
 
 describe('resolveEquipmentIcon', () => {
   it('colhedora online -> colhedora.png', () => {
@@ -39,5 +44,21 @@ describe('resolveEquipmentIcon', () => {
 
   it('status FINALIZADO usa versao offline/off', () => {
     expect(resolveEquipmentIcon({ type: 'Trator', status: 'FINALIZADO' }).src).toBe('/icons/equipamentos/trator-off.png');
+  });
+
+  it('fallback generico online/offline fica centralizado no resolver', () => {
+    expect(getFallbackEquipmentIconSrc()).toBe('/icons/equipamentos/generico.png');
+    expect(getFallbackEquipmentIconSrc({ status: 'INATIVO' })).toBe('/icons/equipamentos/generico-off.png');
+  });
+
+  it('aceita somente src operacional conhecido do pacote SILO', () => {
+    expect(isKnownEquipmentIconSrc('/icons/equipamentos/trator.png')).toBe(true);
+    expect(isKnownEquipmentIconSrc('/icons/equipamentos/inexistente.png')).toBe(false);
+    expect(isKnownEquipmentIconSrc('https://cdn.exemplo.com/trator.png')).toBe(false);
+  });
+
+  it('src invalido cai para icone resolvido ou generico', () => {
+    expect(resolveSafeEquipmentIconSrc('/icons/equipamentos/inexistente.png', { type: 'Colhedora' })).toBe('/icons/equipamentos/colhedora.png');
+    expect(resolveSafeEquipmentIconSrc(null, { type: 'Tipo XPTO' })).toBe('/icons/equipamentos/generico.png');
   });
 });

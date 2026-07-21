@@ -16,6 +16,24 @@ export type EquipmentIconResolution = {
 };
 
 const ICON_BASE = '/icons/equipamentos';
+const GENERIC_KIND = 'generico';
+const KNOWN_ICON_KINDS = new Set([
+  'caminhao',
+  'caminhao-borracheiro',
+  'caminhao-cavalo-vazio',
+  'caminhao-prancha',
+  'colhedora',
+  'comboio',
+  'distribuidor-solidos',
+  'escavadeira-garra',
+  'motobomba',
+  'pulverizador',
+  'trator',
+  'trator-transbordo',
+  'trator-esteira',
+  'vinhaca',
+  GENERIC_KIND,
+]);
 
 const ICON_LABELS: Record<string, string> = {
   caminhao: 'Caminhao',
@@ -49,7 +67,7 @@ export function normalizeEquipmentIconKey(value?: string | null): string {
 }
 
 function resolveKind(text: string): string {
-  if (!text) return 'generico';
+  if (!text) return GENERIC_KIND;
   if (text.includes('transbordo')) return 'trator-transbordo';
   if (text.includes('esteira') || text.includes('dozer')) return 'trator-esteira';
   if (text.includes('borracheiro')) return 'caminhao-borracheiro';
@@ -64,7 +82,7 @@ function resolveKind(text: string): string {
   if (text.includes('motobomba') || text.includes('bomba')) return 'motobomba';
   if (text.includes('caminhao') || text.includes('truck')) return 'caminhao';
   if (text.includes('trator') || text.includes('tractor')) return 'trator';
-  return 'generico';
+  return GENERIC_KIND;
 }
 
 function resolveOffline(input: EquipmentIconResolverInput): boolean {
@@ -81,7 +99,8 @@ export function resolveEquipmentIcon(input: EquipmentIconResolverInput): Equipme
     input.equipmentType,
     input.fleetCode,
   ].filter(Boolean).join(' '));
-  const kind = resolveKind(text);
+  const resolvedKind = resolveKind(text);
+  const kind = KNOWN_ICON_KINDS.has(resolvedKind) ? resolvedKind : GENERIC_KIND;
   const isOffline = resolveOffline(input);
   const suffix = isOffline ? '-off' : '';
 
@@ -91,4 +110,21 @@ export function resolveEquipmentIcon(input: EquipmentIconResolverInput): Equipme
     kind,
     isOffline,
   };
+}
+
+export function getFallbackEquipmentIconSrc(input?: Pick<EquipmentIconResolverInput, 'status' | 'online' | 'isOffline'>): string {
+  const isOffline = resolveOffline(input ?? {});
+  return `${ICON_BASE}/${GENERIC_KIND}${isOffline ? '-off' : ''}.png`;
+}
+
+export function isKnownEquipmentIconSrc(src?: string | null): boolean {
+  const match = String(src ?? '').match(/^\/icons\/equipamentos\/([a-z0-9-]+?)(-off)?\.png$/);
+  return Boolean(match && KNOWN_ICON_KINDS.has(match[1]));
+}
+
+export function resolveSafeEquipmentIconSrc(
+  src: string | null | undefined,
+  fallbackInput: EquipmentIconResolverInput = {},
+): string {
+  return isKnownEquipmentIconSrc(src) ? String(src) : resolveEquipmentIcon(fallbackInput).src;
 }

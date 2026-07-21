@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import {
   resolveIconType,
   resolveMapStatus,
@@ -10,6 +9,7 @@ import {
   type EquipmentIconType,
   type EquipmentMapStatus,
 } from '@/lib/equipment-icon-types';
+import { resolveEquipmentIcon, resolveSafeEquipmentIconSrc } from '@/lib/equipment-icon-resolver';
 
 type AlertLevel = 'INFO' | 'WARNING' | 'ALARM' | 'HEARTBEAT' | 'OFFLINE' | string;
 
@@ -54,7 +54,6 @@ export const EquipmentMapMarker = React.memo(({
   const resolvedStatus = resolveMapStatus(status);
   const theme = STATUS_COLORS[resolvedStatus];
   const alert = alertTheme(alertLevel);
-  const iconSize = Math.round(pinSize * 0.56);
   const imageSize = Math.round(pinSize * 0.7);
   const labelFontSize = Math.max(9, Math.round(pinSize * 0.18));
   const labelMaxWidth = Math.round(pinSize * 1.45);
@@ -62,7 +61,8 @@ export const EquipmentMapMarker = React.memo(({
   const headingDeg = normalizeHeading(heading);
   const coreSize = Math.round(pinSize * 0.9);
   const fleetLabel = String(fleetCode || '—').toUpperCase();
-  const iconSvg = renderToString(<EquipmentIcon type={resolvedIcon} size={iconSize} color="#ffffff" />);
+  const operationalIcon = resolveEquipmentIcon({ type: iconType, fleetCode, status });
+  const safeIconSrc = resolveSafeEquipmentIconSrc(iconSrc, { type: iconType, fleetCode, status });
 
   return (
     <div
@@ -139,19 +139,15 @@ export const EquipmentMapMarker = React.memo(({
               boxShadow: selected ? `0 0 0 1px ${theme.ring}55, inset 0 0 18px rgba(255,255,255,0.04)` : 'inset 0 0 18px rgba(255,255,255,0.03)',
             }}
           >
-            {iconSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={iconSrc}
-                alt={iconLabel || resolvedIcon}
-                width={imageSize}
-                height={imageSize}
-                style={{ width: `${imageSize}px`, height: `${imageSize}px`, objectFit: 'contain' }}
-                draggable={false}
-              />
-            ) : (
-              <span dangerouslySetInnerHTML={{ __html: iconSvg }} />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={safeIconSrc}
+              alt={iconLabel || operationalIcon.label || resolvedIcon}
+              width={imageSize}
+              height={imageSize}
+              style={{ width: `${imageSize}px`, height: `${imageSize}px`, objectFit: 'contain' }}
+              draggable={false}
+            />
           </div>
           <div
             style={{

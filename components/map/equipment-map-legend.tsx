@@ -14,7 +14,7 @@ import {
   resolveIconType,
   resolveMapStatus,
 } from '@/lib/equipment-icon-types';
-import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
+import { getFallbackEquipmentIconSrc, resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 
 /* ── MapLegend ──────────────────────────────────────────────────────────── */
 
@@ -32,10 +32,11 @@ export const MapLegend = memo<MapLegendProps>(({ items, isTvMode = false }) => {
       const st = resolveMapStatus(item.status);
       statusCounts[st] = (statusCounts[st] || 0) + 1;
 
-      const it = resolveIconType(item.iconType);
-      const operationalIcon = item.iconSource
-        ? { src: item.iconSource, label: item.iconLabel || item.label?.trim() || EQUIPMENT_ICON_LABELS[it] || it }
-        : resolveEquipmentIcon({ type: item.resolvedIconType || item.iconType, status: item.status });
+      const operationalIcon = resolveEquipmentIcon({
+        type: item.resolvedIconType || item.iconType || item.label,
+        status: item.status,
+      });
+      const it = resolveIconType(operationalIcon.kind);
       const label = item.iconLabel || item.label?.trim() || operationalIcon.label || EQUIPMENT_ICON_LABELS[it] || it;
       const current = typeCounts[label];
       typeCounts[label] = current
@@ -106,7 +107,15 @@ export const MapLegend = memo<MapLegendProps>(({ items, isTvMode = false }) => {
               <div className="flex min-w-0 items-center gap-2">
                 <span className={isTvMode ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-slate-100" : "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/5 text-slate-100"}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={meta.iconSource} alt={meta.iconLabel} className={isTvMode ? "h-8 w-8 object-contain" : "h-5 w-5 object-contain"} draggable={false} />
+                  <img
+                    src={meta.iconSource}
+                    alt={meta.iconLabel}
+                    className={isTvMode ? "h-8 w-8 object-contain" : "h-5 w-5 object-contain"}
+                    draggable={false}
+                    onError={(event) => {
+                      event.currentTarget.src = getFallbackEquipmentIconSrc();
+                    }}
+                  />
                 </span>
                 <span className={isTvMode ? "truncate text-base font-bold text-slate-100" : "truncate text-xs font-bold text-slate-100"}>
                   {label}

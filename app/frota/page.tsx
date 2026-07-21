@@ -27,7 +27,7 @@ import {
   ClipboardCheck
 } from 'lucide-react';
 
-import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
+import { getFallbackEquipmentIconSrc, resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 import { withAuth } from '@/components/shared/with-auth';
 
 function FleetPage() {
@@ -204,7 +204,15 @@ function FleetPage() {
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-[#1a1f3a] flex items-center justify-center text-primary border border-[#2d3647]">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={icon.src} alt={icon.label} className="h-8 w-8 object-contain" draggable={false} />
+                          <img
+                            src={icon.src}
+                            alt={icon.label}
+                            className="h-8 w-8 object-contain"
+                            draggable={false}
+                            onError={(event) => {
+                              event.currentTarget.src = getFallbackEquipmentIconSrc({ status: item.status });
+                            }}
+                          />
                         </div>
                         <div>
                           <h3 className="text-sm font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors leading-none">{item.code}</h3>

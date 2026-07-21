@@ -39,7 +39,7 @@ import {
   MapPinned,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
+import { getFallbackEquipmentIconSrc, resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 import { withAuth } from '@/components/shared/with-auth';
 
 type ConnectivityFilter = 'ALL' | 'MOBILE_ENABLED' | 'MOBILE_DISABLED' | 'TELEMETRY_ACTIVE' | 'WAITING_LINK' | 'NO_LINK' | 'NO_CONFIG';
@@ -630,7 +630,15 @@ function EquipamentosPage() {
                         <div className="flex items-start gap-4 min-w-0">
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#1a1f3a] text-primary shadow-inner shadow-black/20">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={icon.src} alt={icon.label} className="h-8 w-8 object-contain" draggable={false} />
+                            <img
+                              src={icon.src}
+                              alt={icon.label}
+                              className="h-8 w-8 object-contain"
+                              draggable={false}
+                              onError={(event) => {
+                                event.currentTarget.src = getFallbackEquipmentIconSrc({ status: operationalStatus });
+                              }}
+                            />
                           </div>
                             <div className="min-w-0">
                               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-muted-foreground">Frota</p>

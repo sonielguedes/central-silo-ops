@@ -6,7 +6,6 @@ import { Header } from '@/components/layout/header';
 import { PageHeader } from '@/components/shared/page-header';
 import { FormField } from '@/components/shared/form-field';
 import { EquipmentIconPicker } from '@/components/icons/equipment-icon-picker';
-import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EquipmentTypeService } from '@/services/api-service';
@@ -14,6 +13,7 @@ import { EquipmentType } from '@/lib/types';
 import { withAuth } from '@/components/shared/with-auth';
 import { cn } from '@/lib/utils';
 import { resolveIconType, EQUIPMENT_ICON_LABELS } from '@/lib/equipment-icon-types';
+import { getFallbackEquipmentIconSrc, resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 import {
   DEFAULT_PRIMARY_METRIC_BY_CATEGORY,
   DEFAULT_GROUP_BY_CATEGORY,
@@ -306,9 +306,26 @@ function TypesPage() {
                       <tr><td colSpan={12} className="px-6 py-12 text-center text-muted-foreground text-xs font-bold uppercase">Nenhum tipo encontrado</td></tr>
                     ) : filtered.map((item) => {
                       const iconType = resolveIconType(item.iconType);
+                      const icon = resolveEquipmentIcon({
+                        type: item.iconType || item.name,
+                        category: item.category,
+                        equipmentType: item.name,
+                        status: item.active === false ? 'INATIVO' : 'ATIVO',
+                      });
                       return (
                         <tr key={item.id} className="hover:bg-primary/5 transition-colors group">
-                          <td className="px-4 py-3"><div className="w-9 h-9 rounded-xl bg-[#1a1f3a] flex items-center justify-center text-primary border border-[#2d3647]"><EquipmentIcon type={iconType} size={20} /></div></td>
+                          <td className="px-4 py-3"><div className="w-9 h-9 rounded-xl bg-[#1a1f3a] flex items-center justify-center text-primary border border-[#2d3647]">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={icon.src}
+                              alt={icon.label}
+                              className="h-6 w-6 object-contain"
+                              draggable={false}
+                              onError={(event) => {
+                                event.currentTarget.src = getFallbackEquipmentIconSrc({ status: item.active === false ? 'INATIVO' : 'ATIVO' });
+                              }}
+                            />
+                          </div></td>
                           <td className="px-4 py-3"><span className="text-xs font-black text-white uppercase tracking-widest">{item.code}</span></td>
                           <td className="px-4 py-3">
                             <div className="flex flex-col">

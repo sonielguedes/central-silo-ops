@@ -170,7 +170,7 @@ const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => {
   const record = item as unknown as Record<string, string>;
   const typeText = item.implementName || item.type || item.name || record.equipmentType || record.equipmentModel;
   const resolvedOperationalIcon = resolveEquipmentIcon({
-    type: item.type,
+    type: record.iconType || item.type,
     category: record.equipmentCategory,
     equipmentType: record.equipmentType || item.implementName || record.equipmentModel,
     fleetCode: item.fleetCode,
