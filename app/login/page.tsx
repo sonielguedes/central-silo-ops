@@ -14,6 +14,16 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
 
+  const resolveRedirectTarget = (role: string) => {
+    const next = typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('next');
+    const isSafeNext = next && next.startsWith('/') && !next.startsWith('//');
+    if (isSafeNext) return next;
+    if (role === 'SALA_OPERACIONAL') return '/tv';
+    return '/dashboard';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -25,7 +35,7 @@ export default function LoginPage() {
       if (session.mustChangePassword) {
         router.push('/trocar-senha');
       } else {
-        router.push('/dashboard');
+        router.push(resolveRedirectTarget(session.role));
       }
     } catch (err: unknown) {
       setError((err as { message?: string }).message || 'Falha na autenticacao');

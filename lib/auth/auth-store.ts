@@ -27,6 +27,7 @@ export type AuthRole =
   | 'MANUTENCAO'
   | 'CLIENTE_RELATORIOS'
   | 'OPERADOR_APK'
+  | 'SALA_OPERACIONAL'
   | 'CONSULTA'
   | 'AUDITOR';
 
@@ -93,6 +94,8 @@ export function roleFromAccessGroupId(accessGroupId: string): AuthRole {
     case 'role-manutencao':         return 'MANUTENCAO';
     case 'role-cliente-relatorios': return 'CLIENTE_RELATORIOS';
     case 'role-operador-apk':       return 'OPERADOR_APK';
+    case 'role-sala-operacional':   return 'SALA_OPERACIONAL';
+    case 'ag-sala-operacional':     return 'SALA_OPERACIONAL';
     case 'role-auditor':            return 'AUDITOR';
     default:                        return 'CONSULTA';
   }

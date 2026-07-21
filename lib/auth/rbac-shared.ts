@@ -11,6 +11,7 @@ export type SystemRole =
   | 'MANUTENCAO'          // acesso a equipamentos e ordens de serviço
   | 'CLIENTE_RELATORIOS'  // só relatórios e exportação
   | 'OPERADOR_APK'        // só mobile, sem acesso web
+  | 'SALA_OPERACIONAL'    // acesso TV/sala operacional somente leitura
   | 'CONSULTA'
   | 'AUDITOR';
 
@@ -76,6 +77,7 @@ const ROLE_LEVEL: Record<SystemRole, number> = {
   MANUTENCAO:          25,
   CLIENTE_RELATORIOS:  15,
   OPERADOR_APK:        10,
+  SALA_OPERACIONAL:    18,
   CONSULTA:            20,
   AUDITOR:             30,
 };
@@ -182,6 +184,11 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     { module: 'audit-log', actions: READ_EXPORT },
     { module: 'alertas', actions: ALL_READ },
   ],
+  SALA_OPERACIONAL: [
+    { module: 'dashboard', actions: ALL_READ },
+    { module: 'mapa', actions: ALL_READ },
+    { module: 'alertas', actions: ALL_READ },
+  ],
   // ── roles aliased via canonicalRole() — entradas dummy para satisfazer o tipo Record ──
   GESTOR_COA:         [],  // → GESTOR (resolvido em canonicalRole)
   SUPERVISOR_FRENTE:  [],  // → CONSULTA
@@ -250,6 +257,8 @@ export const MODULE_ALIAS: Record<string, Module> = {
   IMPLEMENTOS:          'equipamentos',
   MAPA:                 'mapa',
   MAPA_OPERACIONAL:     'mapa',
+  SALA_OPERACIONAL:     'mapa',
+  TV:                   'mapa',
   MODELOS:              'equipamentos',
   MODELOS_FROTA:        'equipamentos',
   OPERACOES:            'operacoes',
@@ -269,6 +278,7 @@ export const MODULE_ALIAS: Record<string, Module> = {
 
 export const ROUTE_MODULE_MAP: Array<{ pattern: RegExp; module: Module }> = [
   { pattern: /^\/dashboard/, module: 'dashboard' },
+  { pattern: /^\/tv/, module: 'mapa' },
   { pattern: /^\/mapa-operacional/, module: 'mapa' },
   { pattern: /^\/monitoramento/, module: 'dashboard' },
   { pattern: /^\/frota/, module: 'equipamentos' },
@@ -299,6 +309,15 @@ export function moduleFromPath(pathname: string): Module | null {
 export function canAccessRoute(role: SystemRole, href: string): boolean {
   if (role === 'SUPER_ADMIN' || role === 'SUPER_ADMIN_SILO') return true;
 
+  if (role === 'SALA_OPERACIONAL') {
+    return (
+      /^\/tv(?:\/|$|\?)/.test(href) ||
+      /^\/mapa-operacional(?:\/|$|\?)/.test(href) ||
+      /^\/monitoramento\/conectividade(?:\/|$|\?)/.test(href) ||
+      /^\/alertas(?:\/|$|\?)/.test(href)
+    );
+  }
+
   for (const entry of ROUTE_MODULE_MAP) {
     if (entry.pattern.test(href)) {
       return canAccessModule(role, entry.module);
@@ -326,6 +345,7 @@ export const SYSTEM_ROLES: Array<{
   { id: 'role-manutencao',          role: 'MANUTENCAO',           name: 'Manutencao',              description: 'Acesso a equipamentos e ordens de servico. Sem cadastros gerais.' },
   { id: 'role-cliente-relatorios',  role: 'CLIENTE_RELATORIOS',   name: 'Cliente (Relatorios)',    description: 'Somente acesso a relatorios e exportacao. Sem dados operacionais.' },
   { id: 'role-operador-apk',        role: 'OPERADOR_APK',         name: 'Operador APK',            description: 'Somente mobile. Sem acesso ao portal web.' },
+  { id: 'role-sala-operacional',    role: 'SALA_OPERACIONAL',     name: 'Sala Operacional',        description: 'Acesso somente leitura para TV, mapa operacional e conectividade.' },
   { id: 'role-consulta',            role: 'CONSULTA',             name: 'Consulta',                description: 'Somente leitura em dashboard e relatorios.' },
   { id: 'role-auditor',             role: 'AUDITOR',              name: 'Auditor',                  description: 'Acesso ao audit-log e relatorios de auditoria. Sem escrita.' },
 ];

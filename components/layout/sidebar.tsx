@@ -60,6 +60,7 @@ interface MenuGroup {
 const menuItems: MenuGroup[] = [
   { group: 'Monitoramento', items: [
     { icon: LayoutDashboard, label: translateUiLabel('Dashboard'), href: '/dashboard' },
+    { icon: Activity, label: 'Sala Operacional', href: '/tv' },
     { icon: MapIcon, label: 'Mapa Operacional', href: '/mapa-operacional' },
     { icon: Activity, label: 'Conectividade', href: '/monitoramento/conectividade' },
   ]},

@@ -47,6 +47,7 @@ function roleLabel(role?: string) {
     case 'GESTOR_COA': return 'Gestor COA';
     case 'GESTOR': return 'Gestor';
     case 'COA': return 'COA';
+    case 'SALA_OPERACIONAL': return 'Sala Operacional';
     case 'CONSULTA': return 'Consulta';
     default: return 'Acesso';
   }

@@ -162,6 +162,18 @@ export const INITIAL_ACCESS_GROUPS: AccessGroup[] = [
     permissions: [
       { module: 'MONITORAMENTO', actions: ['visualizar'] }
     ]
+  },
+  {
+    ...DEFAULT_AUDIT,
+    id: 'role-sala-operacional',
+    name: 'Sala Operacional',
+    description: 'Acesso TV somente leitura para sala operacional.',
+    status: 'ATIVO',
+    permissions: [
+      { module: 'MAPA', actions: ['visualizar'] },
+      { module: 'CONECTIVIDADE', actions: ['visualizar'] },
+      { module: 'ALERTAS', actions: ['visualizar'] }
+    ]
   }
 ];
 

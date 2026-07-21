@@ -84,7 +84,7 @@ function TvPage() {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const panelsAutoHideRef = React.useRef<number | null>(null);
 
-  const isAdmin = userRole.includes('ADMIN') || userRole === 'GESTOR';
+  const canExitTv = userRole !== 'OPERADOR_APK';
 
   const clearPanelsAutoHide = React.useCallback(() => {
     if (panelsAutoHideRef.current) window.clearTimeout(panelsAutoHideRef.current);
@@ -191,7 +191,7 @@ function TvPage() {
           <button onClick={requestFullscreen} className="flex h-[60px] items-center gap-3 rounded-2xl border border-primary/25 bg-primary/10 px-5 text-base font-black uppercase text-primary hover:bg-primary/20">
             <Maximize2 size={22} /> {isFullscreen ? 'Sair tela cheia' : 'Tela cheia'}
           </button>
-          {isAdmin && (
+          {canExitTv && (
             <Link href="/mapa-operacional" className="flex h-[60px] items-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-base font-black uppercase text-slate-200 hover:bg-white/[0.08]">
               Sair TV
             </Link>

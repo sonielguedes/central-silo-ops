@@ -62,6 +62,8 @@ function resolveRole(accessGroupId: string | undefined): SystemRole {
     'ag-gestor': 'GESTOR',
     'role-coa': 'COA',
     'ag-coa': 'COA',
+    'role-sala-operacional': 'SALA_OPERACIONAL',
+    'ag-sala-operacional': 'SALA_OPERACIONAL',
     'role-consulta': 'CONSULTA',
     'ag-consulta': 'CONSULTA',
     'role-auditor': 'AUDITOR',
