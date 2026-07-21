@@ -14,7 +14,6 @@ import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
 import { ChecklistExecutionDrawer } from '@/components/checklist/checklist-execution-drawer';
 import {
-  Truck,
   Search,
   Filter,
   Plus,
@@ -24,12 +23,11 @@ import {
   X,
   Save,
   Ban,
-  Tractor,
-  Zap,
   ChevronRight,
   ClipboardCheck
 } from 'lucide-react';
 
+import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 import { withAuth } from '@/components/shared/with-auth';
 
 function FleetPage() {
@@ -147,16 +145,6 @@ function FleetPage() {
            model.toLowerCase().includes(search.toLowerCase());
   });
 
-  const getIcon = (typeId: string) => {
-    const type = types.find(t => t.id === typeId);
-    switch (type?.icon) {
-      case 'Tractor': return <Tractor size={24} />;
-      case 'Truck': return <Truck size={24} />;
-      case 'Zap': return <Zap size={24} />;
-      default: return <Truck size={24} />;
-    }
-  };
-
   return (
     <div className="flex h-screen bg-[#050812] text-white overflow-hidden font-sans">
       <Sidebar className="hidden lg:flex shrink-0" />
@@ -202,13 +190,21 @@ function FleetPage() {
                 const type = types.find(t => t.id === item.typeId);
                 const model = models.find(m => m.id === item.modelId);
                 const group = groups.find(g => g.id === item.groupId);
+                const icon = resolveEquipmentIcon({
+                  type: type?.iconType || type?.icon || type?.name || model?.iconType || model?.name,
+                  category: group?.name,
+                  equipmentType: type?.name || model?.name,
+                  fleetCode: item.code,
+                  status: item.status,
+                });
 
                 return (
                   <div key={item.id} className="bg-[#0a0e27]/60 border border-[#2d3647] rounded-2xl p-4 hover:border-primary/40 transition-all group relative">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-[#1a1f3a] flex items-center justify-center text-primary border border-[#2d3647]">
-                          {getIcon(item.typeId)}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={icon.src} alt={icon.label} className="h-8 w-8 object-contain" draggable={false} />
                         </div>
                         <div>
                           <h3 className="text-sm font-black italic tracking-tighter text-white uppercase group-hover:text-primary transition-colors leading-none">{item.code}</h3>

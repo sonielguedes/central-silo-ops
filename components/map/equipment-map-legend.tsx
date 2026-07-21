@@ -6,7 +6,6 @@
 
 import React, { memo, useMemo } from 'react';
 import { Layers3 } from 'lucide-react';
-import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import {
   type EquipmentIconType,
   STATUS_COLORS,
@@ -15,28 +14,32 @@ import {
   resolveIconType,
   resolveMapStatus,
 } from '@/lib/equipment-icon-types';
+import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 
 /* ── MapLegend ──────────────────────────────────────────────────────────── */
 
 interface MapLegendProps {
-  items: Array<{ iconType?: string | null; status?: string | null; label?: string | null }>;
+  items: Array<{ iconType?: string | null; iconSource?: string | null; iconLabel?: string | null; resolvedIconType?: string | null; status?: string | null; label?: string | null }>;
 }
 
 export const MapLegend = memo<MapLegendProps>(({ items }) => {
   const grouped = useMemo(() => {
     const statusCounts: Record<string, number> = {};
-    const typeCounts: Record<string, { iconType: EquipmentIconType; count: number }> = {};
+    const typeCounts: Record<string, { iconType: EquipmentIconType; iconSource: string; iconLabel: string; count: number }> = {};
 
     items.forEach(item => {
       const st = resolveMapStatus(item.status);
       statusCounts[st] = (statusCounts[st] || 0) + 1;
 
       const it = resolveIconType(item.iconType);
-      const label = item.label?.trim() || EQUIPMENT_ICON_LABELS[it] || it;
+      const operationalIcon = item.iconSource
+        ? { src: item.iconSource, label: item.iconLabel || item.label?.trim() || EQUIPMENT_ICON_LABELS[it] || it }
+        : resolveEquipmentIcon({ type: item.resolvedIconType || item.iconType, status: item.status });
+      const label = item.iconLabel || item.label?.trim() || operationalIcon.label || EQUIPMENT_ICON_LABELS[it] || it;
       const current = typeCounts[label];
       typeCounts[label] = current
-        ? { iconType: current.iconType, count: current.count + 1 }
-        : { iconType: it, count: 1 };
+        ? { iconType: current.iconType, iconSource: current.iconSource, iconLabel: current.iconLabel, count: current.count + 1 }
+        : { iconType: it, iconSource: operationalIcon.src, iconLabel: operationalIcon.label, count: 1 };
     });
 
     return { statusCounts, typeCounts };
@@ -99,7 +102,8 @@ export const MapLegend = memo<MapLegendProps>(({ items }) => {
             <div key={label} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.03] px-2.5 py-2">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/5 text-slate-100">
-                  <EquipmentIcon type={meta.iconType} size={15} />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={meta.iconSource} alt={meta.iconLabel} className="h-5 w-5 object-contain" draggable={false} />
                 </span>
                 <span className="truncate text-xs font-bold text-slate-100">
                   {label}

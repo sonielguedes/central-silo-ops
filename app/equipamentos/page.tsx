@@ -15,7 +15,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { equipmentSchema, EquipmentFormData } from '@/lib/validations/master-schemas';
 import { FormField } from '@/components/shared/form-field';
 import { EntityAuditInfo } from '@/components/shared/entity-audit-info';
-import { EquipmentIcon } from '@/components/icons/equipment-icons';
 import { ActionFeedback, type ActionFeedbackMessage } from '@/components/shared/action-feedback';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { MasterDataShell } from '@/components/master-data/master-data-shell';
@@ -40,6 +39,7 @@ import {
   MapPinned,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 import { withAuth } from '@/components/shared/with-auth';
 
 type ConnectivityFilter = 'ALL' | 'MOBILE_ENABLED' | 'MOBILE_DISABLED' | 'TELEMETRY_ACTIVE' | 'WAITING_LINK' | 'NO_LINK' | 'NO_CONFIG';
@@ -609,21 +609,28 @@ function EquipamentosPage() {
                   const group = groups.find((g) => g.id === item.groupId);
                   const connectivity = getConnectivityInfo(item, type);
                   const operational = resolveOperationalStatus(item.status);
-                  const iconType = item.iconType || model?.iconType || type?.iconType || 'PADRAO_GENERICO';
+                  const code = resolveEquipmentCode(item);
+                  const operationalStatus = resolveEquipmentStatus(item);
+                  const icon = resolveEquipmentIcon({
+                    type: item.iconType || model?.iconType || type?.iconType || type?.name || model?.name,
+                    category: group?.name,
+                    equipmentType: type?.name || model?.name,
+                    fleetCode: code,
+                    status: operationalStatus,
+                  });
                   const frontLabel = resolveFrontLabel(item, group);
                   const syncLabel = readOptionalText(item, ['lastSyncAt', 'lastHeartbeat']) || item.lastSignal || 'Não informado';
                   const measureLabel = formatMetricLabel(item.measurementMode || type?.primaryMetric || null);
                   const technicalLink = readOptionalText(item, ['deviceId', 'trackerId']);
-                  const code = resolveEquipmentCode(item);
                   const title = resolveEquipmentTitle(item, type, model);
-                  const operationalStatus = resolveEquipmentStatus(item);
 
                   return (
                     <article key={item.id} className="group rounded-3xl border border-[#2d3647] bg-[#0a0e27]/70 p-5 shadow-[0_20px_40px_rgba(0,0,0,0.18)] transition-all hover:border-primary/35 hover:shadow-primary/10">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-4 min-w-0">
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#1a1f3a] text-primary shadow-inner shadow-black/20">
-                            <EquipmentIcon type={iconType} size={30} />
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={icon.src} alt={icon.label} className="h-8 w-8 object-contain" draggable={false} />
                           </div>
                             <div className="min-w-0">
                               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-muted-foreground">Frota</p>

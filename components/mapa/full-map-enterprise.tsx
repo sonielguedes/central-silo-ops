@@ -22,6 +22,7 @@ import { EquipmentLiveState, TrailPoint } from '@/lib/types';
 import type { TrailQualitySummary } from '@/lib/trail-quality';
 import { TrailTimelinePanel } from '@/components/mapa/trail-timeline-panel';
 import { createEquipmentMarkerIcon } from '@/components/map/equipment-map-marker';
+import { resolveEquipmentIcon } from '@/lib/equipment-icon-resolver';
 import { resolveEquipmentIconTypeFromContext } from '@/lib/equipment-icon-resolution';
 import type { FichaOperador } from '@/lib/operator-sheet-builder';
 import {
@@ -165,44 +166,61 @@ const getStatus = (status: string) => {
   return STATUS_CONFIG[key] || STATUS_CONFIG.offline;
 };
 
-const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => ({
+const normalizeLiveItem = (item: EquipmentLiveState): LiveMapItem => {
+  const record = item as unknown as Record<string, string>;
+  const typeText = item.implementName || item.type || item.name || record.equipmentType || record.equipmentModel;
+  const resolvedOperationalIcon = resolveEquipmentIcon({
+    type: item.type,
+    category: record.equipmentCategory,
+    equipmentType: record.equipmentType || item.implementName || record.equipmentModel,
+    fleetCode: item.fleetCode,
+    status: item.operationalStatus || item.status,
+    online: (item as unknown as { isOnline?: boolean }).isOnline,
+    isOffline: item.status === 'OFFLINE',
+  });
+
+  return {
   ...item,
   id:               item.equipmentId,
   code:             item.fleetCode || item.equipmentId,
   pos:              hasValidPosition(item) ? [item.latitude, item.longitude] : null,
-  type:             item.implementName || item.type || item.name || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel,
-  typeIcon:         getTypeIcon(item.implementName || item.type || (item as unknown as Record<string, string>).equipmentType || (item as unknown as Record<string, string>).equipmentModel),
+  type:             typeText,
+  typeIcon:         getTypeIcon(typeText),
   iconType:         resolveEquipmentIconTypeFromContext(
     {
       type: item.type,
-      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
-      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
-      metadata: { equipmentType: (item as unknown as Record<string, string>).equipmentType ?? null },
+      model: record.equipmentModel ?? null,
+      category: record.equipmentCategory ?? null,
+      metadata: { equipmentType: record.equipmentType ?? null },
       name: item.name,
       brand: item.currentOperation ?? item.operationName ?? null,
       code: item.fleetCode,
-      iconType: (item as unknown as Record<string, string>).iconType ?? null,
+      iconType: record.iconType ?? null,
       implementName: item.implementName ?? null,
       implementCode: item.implementCode ?? null,
       operation: item.operationName ?? null,
       currentOperation: item.currentOperation ?? null,
     },
     {
-      iconType: (item as unknown as Record<string, string>).iconType ?? null,
+      iconType: record.iconType ?? null,
       type: item.type,
       name: item.name,
-      model: (item as unknown as Record<string, string>).equipmentModel ?? null,
-      category: (item as unknown as Record<string, string>).equipmentCategory ?? null,
+      model: record.equipmentModel ?? null,
+      category: record.equipmentCategory ?? null,
       brand: item.currentOperation ?? item.operationName ?? null,
       manufacturer: item.currentOperator ?? item.operatorName ?? null,
     },
   ),
-  equipmentType:    (item as unknown as Record<string, string>).equipmentType,
-  equipmentModel:   (item as unknown as Record<string, string>).equipmentModel,
-  equipmentCategory: (item as unknown as Record<string, string>).equipmentCategory,
+  equipmentType:    record.equipmentType,
+  equipmentModel:   record.equipmentModel,
+  equipmentCategory: record.equipmentCategory,
+  iconSource:       resolvedOperationalIcon.src,
+  iconLabel:        resolvedOperationalIcon.label,
+  resolvedIconType: resolvedOperationalIcon.kind,
   displayOperator:  formatValue(item.currentOperator || item.operatorName),
   displayOperation: formatValue(item.currentOperation || item.operationName),
-});
+  };
+};
 
 export const buildLiveMapCounts = (items: EquipmentLiveState[]): MapCounts => {
   type ExtItem = EquipmentLiveState & {
@@ -738,6 +756,8 @@ export default function FullMapEnterprise({
                 iconType: machine.iconType,
                 status: machine.operationalStatus || machine.status,
                 fleetCode: machine.code,
+                iconSrc: machine.iconSource,
+                iconLabel: machine.iconLabel,
                 heading: typeof heading === 'number' ? heading : undefined,
                 alertLevel: alertLevel ?? undefined,
                 selected: selectedId === machine.id,

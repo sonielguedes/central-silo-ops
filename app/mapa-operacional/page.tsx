@@ -412,6 +412,9 @@ function MapaOperacionalPage() {
           <div className="absolute bottom-8 left-4 z-[1400]">
             <MapLegend items={filteredFleetData.map(m => ({
               iconType: m.iconType,
+              iconSource: m.iconSource,
+              iconLabel: m.iconLabel,
+              resolvedIconType: m.resolvedIconType,
               status: m.status,
               label: m.implementName || m.equipmentModel || m.equipmentType || m.type || m.name,
             }))} />

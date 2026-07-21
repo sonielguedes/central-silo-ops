@@ -53,6 +53,9 @@ export type LiveMapItem = EquipmentLiveState & {
   equipmentType?: string;
   equipmentModel?: string;
   equipmentCategory?: string;
+  iconSource?: string;
+  iconLabel?: string;
+  resolvedIconType?: string;
   heading?: number;
   alertLevel?: string;
   displayOperator: string;

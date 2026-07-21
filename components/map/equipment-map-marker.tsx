@@ -18,6 +18,8 @@ export interface EquipmentMapMarkerProps {
   status?: EquipmentMapStatus | string | null | undefined;
   heading?: number | null | undefined;
   fleetCode?: string | null | undefined;
+  iconSrc?: string | null | undefined;
+  iconLabel?: string | null | undefined;
   alertLevel?: AlertLevel | null | undefined;
   selected?: boolean;
   pinSize?: number;
@@ -42,6 +44,8 @@ export const EquipmentMapMarker = React.memo(({
   status,
   heading,
   fleetCode,
+  iconSrc,
+  iconLabel,
   alertLevel,
   selected = false,
   pinSize = 52,
@@ -51,6 +55,7 @@ export const EquipmentMapMarker = React.memo(({
   const theme = STATUS_COLORS[resolvedStatus];
   const alert = alertTheme(alertLevel);
   const iconSize = Math.round(pinSize * 0.56);
+  const imageSize = Math.round(pinSize * 0.7);
   const headingDeg = normalizeHeading(heading);
   const coreSize = Math.round(pinSize * 0.9);
   const fleetLabel = String(fleetCode || '—').toUpperCase();
@@ -130,8 +135,21 @@ export const EquipmentMapMarker = React.memo(({
               border: `1px solid ${theme.ring}55`,
               boxShadow: selected ? `0 0 0 1px ${theme.ring}55, inset 0 0 18px rgba(255,255,255,0.04)` : 'inset 0 0 18px rgba(255,255,255,0.03)',
             }}
-            dangerouslySetInnerHTML={{ __html: iconSvg }}
-          />
+          >
+            {iconSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={iconSrc}
+                alt={iconLabel || resolvedIcon}
+                width={imageSize}
+                height={imageSize}
+                style={{ width: `${imageSize}px`, height: `${imageSize}px`, objectFit: 'contain' }}
+                draggable={false}
+              />
+            ) : (
+              <span dangerouslySetInnerHTML={{ __html: iconSvg }} />
+            )}
+          </div>
           <div
             style={{
               position: 'absolute',
